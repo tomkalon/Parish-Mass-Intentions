@@ -1,11 +1,8 @@
-package main
+package intentions
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
-	"net/http"
 	"reflect"
 	"strings"
 	"time"
@@ -13,7 +10,7 @@ import (
 	"github.com/go-playground/validator/v10"
 )
 
-func newValidator() *validator.Validate {
+func NewValidator() *validator.Validate {
 	validate := validator.New()
 
 	validate.RegisterTagNameFunc(func(fld reflect.StructField) string {
@@ -30,7 +27,7 @@ func newValidator() *validator.Validate {
 }
 
 func isQuarterHour(fl validator.FieldLevel) bool {
-	t, err := time.Parse(massAtLayout, fl.Field().String())
+	t, err := time.Parse(MassAtLayout, fl.Field().String())
 	if err != nil {
 		return false
 	}
@@ -38,22 +35,18 @@ func isQuarterHour(fl validator.FieldLevel) bool {
 	return t.Minute()%15 == 0
 }
 
-func writeValidationError(w http.ResponseWriter, err error) {
+func ValidationMessages(err error) (map[string]string, bool) {
 	var validationErrs validator.ValidationErrors
 	if !errors.As(err, &validationErrs) {
-		log.Printf("unexpected validation error: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
-		return
+		return nil, false
 	}
 
-	errs := make(map[string]string)
+	messages := make(map[string]string)
 	for _, fe := range validationErrs {
-		errs[fe.Field()] = validationMessage(fe)
+		messages[fe.Field()] = validationMessage(fe)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusBadRequest)
-	json.NewEncoder(w).Encode(map[string]any{"errors": errs})
+	return messages, true
 }
 
 func validationMessage(fe validator.FieldError) string {

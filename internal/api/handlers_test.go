@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"encoding/json"
@@ -9,8 +9,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	"go-parafia/internal/intentions"
 )
 
 func newTestRouter(t *testing.T) (http.Handler, *gorm.DB) {
@@ -21,12 +24,15 @@ func newTestRouter(t *testing.T) (http.Handler, *gorm.DB) {
 		t.Fatalf("opening test database: %v", err)
 	}
 
-	err = db.AutoMigrate(&Intention{})
+	err = db.AutoMigrate(&intentions.Intention{})
 	if err != nil {
 		t.Fatalf("migrating test database: %v", err)
 	}
 
-	return newRouter(db), db
+	router := chi.NewRouter()
+	RegisterRoutes(router, db)
+
+	return router, db
 }
 
 func doRequest(t *testing.T, router http.Handler, method, path, body string) *httptest.ResponseRecorder {
@@ -42,7 +48,7 @@ func doRequest(t *testing.T, router http.Handler, method, path, body string) *ht
 func massAt(t *testing.T, value string) time.Time {
 	t.Helper()
 
-	parsed, err := time.ParseInLocation(massAtLayout, value, parishLocation)
+	parsed, err := time.ParseInLocation(intentions.MassAtLayout, value, intentions.TimeZone)
 	if err != nil {
 		t.Fatalf("parsing mass time %q: %v", value, err)
 	}
@@ -50,17 +56,17 @@ func massAt(t *testing.T, value string) time.Time {
 	return parsed
 }
 
-func equalIntention(a, b Intention) bool {
+func equalIntention(a, b intentions.Intention) bool {
 	return a.ID == b.ID &&
 		a.MassAt.Equal(b.MassAt) &&
 		a.Content == b.Content &&
 		a.IsOutsideParish == b.IsOutsideParish
 }
 
-func seedIntention(t *testing.T, db *gorm.DB) Intention {
+func seedIntention(t *testing.T, db *gorm.DB) intentions.Intention {
 	t.Helper()
 
-	intention := Intention{MassAt: massAt(t, "2026-11-01 08:00"), Content: "za śp. Jana", IsOutsideParish: true}
+	intention := intentions.Intention{MassAt: massAt(t, "2026-11-01 08:00"), Content: "za śp. Jana", IsOutsideParish: true}
 	err := db.Create(&intention).Error
 	if err != nil {
 		t.Fatalf("creating intention: %v", err)
@@ -69,10 +75,10 @@ func seedIntention(t *testing.T, db *gorm.DB) Intention {
 	return intention
 }
 
-func decodeIntention(t *testing.T, rec *httptest.ResponseRecorder) Intention {
+func decodeIntention(t *testing.T, rec *httptest.ResponseRecorder) intentions.Intention {
 	t.Helper()
 
-	var intention Intention
+	var intention intentions.Intention
 	err := json.NewDecoder(rec.Body).Decode(&intention)
 	if err != nil {
 		t.Fatalf("decoding response: %v", err)
@@ -81,10 +87,10 @@ func decodeIntention(t *testing.T, rec *httptest.ResponseRecorder) Intention {
 	return intention
 }
 
-func loadIntention(t *testing.T, db *gorm.DB, id int) Intention {
+func loadIntention(t *testing.T, db *gorm.DB, id int) intentions.Intention {
 	t.Helper()
 
-	var intention Intention
+	var intention intentions.Intention
 	err := db.First(&intention, id).Error
 	if err != nil {
 		t.Fatalf("loading intention %d: %v", id, err)
@@ -97,7 +103,7 @@ func countIntentions(t *testing.T, db *gorm.DB) int64 {
 	t.Helper()
 
 	var count int64
-	err := db.Model(&Intention{}).Count(&count).Error
+	err := db.Model(&intentions.Intention{}).Count(&count).Error
 	if err != nil {
 		t.Fatalf("counting intentions: %v", err)
 	}
@@ -116,7 +122,7 @@ func TestList(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 
-	var got []Intention
+	var got []intentions.Intention
 	err := json.NewDecoder(rec.Body).Decode(&got)
 	if err != nil {
 		t.Fatalf("decoding response: %v", err)
@@ -145,7 +151,7 @@ func TestListEmpty(t *testing.T) {
 func TestShow(t *testing.T) {
 	router, db := newTestRouter(t)
 
-	want := Intention{MassAt: massAt(t, "2026-11-01 08:00"), Content: "za śp. Jana"}
+	want := intentions.Intention{MassAt: massAt(t, "2026-11-01 08:00"), Content: "za śp. Jana"}
 	err := db.Create(&want).Error
 	if err != nil {
 		t.Fatalf("creating intention: %v", err)
@@ -159,7 +165,7 @@ func TestShow(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 
-	var got Intention
+	var got intentions.Intention
 	err = json.NewDecoder(rec.Body).Decode(&got)
 	if err != nil {
 		t.Fatalf("decoding response: %v", err)
@@ -189,7 +195,10 @@ func TestShowDatabaseError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("getting sql.DB: %v", err)
 	}
-	sqlDB.Close()
+	err = sqlDB.Close()
+	if err != nil {
+		t.Fatalf("closing database: %v", err)
+	}
 
 	rec := doRequest(t, router, http.MethodGet, "/intentions/1", "")
 
@@ -205,7 +214,10 @@ func TestCreateDatabaseError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("getting sql.DB: %v", err)
 	}
-	sqlDB.Close()
+	err = sqlDB.Close()
+	if err != nil {
+		t.Fatalf("closing database: %v", err)
+	}
 
 	rec := doRequest(t, router, http.MethodPost, "/intentions",
 		`{"mass_at":"2026-11-01 08:00","content":"za śp. Jana"}`)
@@ -225,7 +237,7 @@ func TestCreate(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusCreated)
 	}
 
-	want := Intention{ID: 1, MassAt: massAt(t, "2026-11-01 08:00"), Content: "za śp. Jana", IsOutsideParish: true}
+	want := intentions.Intention{ID: 1, MassAt: massAt(t, "2026-11-01 08:00"), Content: "za śp. Jana", IsOutsideParish: true}
 
 	got := decodeIntention(t, rec)
 	if !equalIntention(got, want) {
@@ -281,7 +293,7 @@ func TestPut(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 
-	want := Intention{ID: 1, MassAt: massAt(t, "2026-11-02 18:00"), Content: "za zdrowie Anny", IsOutsideParish: false}
+	want := intentions.Intention{ID: 1, MassAt: massAt(t, "2026-11-02 18:00"), Content: "za zdrowie Anny", IsOutsideParish: false}
 
 	got := decodeIntention(t, rec)
 	if !equalIntention(got, want) {
@@ -298,27 +310,27 @@ func TestPatch(t *testing.T) {
 	tests := []struct {
 		name string
 		body string
-		want Intention
+		want intentions.Intention
 	}{
 		{
 			name: "content only, trimmed",
 			body: `{"content":"  za zdrowie Anny  "}`,
-			want: Intention{ID: 1, MassAt: massAt(t, "2026-11-01 08:00"), Content: "za zdrowie Anny", IsOutsideParish: true},
+			want: intentions.Intention{ID: 1, MassAt: massAt(t, "2026-11-01 08:00"), Content: "za zdrowie Anny", IsOutsideParish: true},
 		},
 		{
 			name: "false overrides true",
 			body: `{"is_outside_parish":false}`,
-			want: Intention{ID: 1, MassAt: massAt(t, "2026-11-01 08:00"), Content: "za śp. Jana", IsOutsideParish: false},
+			want: intentions.Intention{ID: 1, MassAt: massAt(t, "2026-11-01 08:00"), Content: "za śp. Jana", IsOutsideParish: false},
 		},
 		{
 			name: "id in body is ignored",
 			body: `{"id":500,"content":"za zdrowie Anny"}`,
-			want: Intention{ID: 1, MassAt: massAt(t, "2026-11-01 08:00"), Content: "za zdrowie Anny", IsOutsideParish: true},
+			want: intentions.Intention{ID: 1, MassAt: massAt(t, "2026-11-01 08:00"), Content: "za zdrowie Anny", IsOutsideParish: true},
 		},
 		{
 			name: "empty object changes nothing",
 			body: `{}`,
-			want: Intention{ID: 1, MassAt: massAt(t, "2026-11-01 08:00"), Content: "za śp. Jana", IsOutsideParish: true},
+			want: intentions.Intention{ID: 1, MassAt: massAt(t, "2026-11-01 08:00"), Content: "za śp. Jana", IsOutsideParish: true},
 		},
 	}
 

@@ -7,24 +7,19 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"gorm.io/gorm"
+
+	"go-parafia/internal/api"
 )
 
 func newRouter(db *gorm.DB) http.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.RedirectSlashes)
 
-	h := &intentionHandler{db: db, validate: newValidator()}
-
 	router.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, "Witaj w systemie parafialnym!")
+		_, _ = fmt.Fprintln(w, "Witaj w systemie parafialnym!")
 	})
 
-	router.Get("/intentions", h.list)
-	router.Get("/intentions/{id}", h.show)
-	router.Put("/intentions/{id}", h.put)
-	router.Patch("/intentions/{id}", h.patch)
-	router.Delete("/intentions/{id}", h.delete)
-	router.Post("/intentions", h.create)
+	api.RegisterRoutes(router, db)
 
 	return router
 }

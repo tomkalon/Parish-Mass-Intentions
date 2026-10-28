@@ -3,10 +3,11 @@ package main
 import (
 	"log"
 	"net/http"
-	_ "time/tzdata" // embeds time zone data, so Europe/Warsaw works on Windows without Go installed
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	"go-parafia/internal/intentions"
 )
 
 func main() {
@@ -15,7 +16,7 @@ func main() {
 		log.Fatalf("error opening database: %v", err)
 	}
 
-	err = db.AutoMigrate(&Intention{})
+	err = db.AutoMigrate(&intentions.Intention{})
 	if err != nil {
 		log.Fatalf("error migrating database: %v", err)
 	}

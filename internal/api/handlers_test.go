@@ -195,7 +195,10 @@ func TestShowDatabaseError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("getting sql.DB: %v", err)
 	}
-	sqlDB.Close()
+	err = sqlDB.Close()
+	if err != nil {
+		t.Fatalf("closing database: %v", err)
+	}
 
 	rec := doRequest(t, router, http.MethodGet, "/intentions/1", "")
 
@@ -211,7 +214,10 @@ func TestCreateDatabaseError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("getting sql.DB: %v", err)
 	}
-	sqlDB.Close()
+	err = sqlDB.Close()
+	if err != nil {
+		t.Fatalf("closing database: %v", err)
+	}
 
 	rec := doRequest(t, router, http.MethodPost, "/intentions",
 		`{"mass_at":"2026-11-01 08:00","content":"za śp. Jana"}`)

@@ -42,12 +42,7 @@ func (h *intentionHandler) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-
-	err = json.NewEncoder(w).Encode(all)
-	if err != nil {
-		log.Printf("error encoding intentions: %v", err)
-	}
+	writeJSON(w, http.StatusOK, all)
 }
 
 func (h *intentionHandler) findIntention(w http.ResponseWriter, r *http.Request) (intentions.Intention, bool) {
@@ -80,8 +75,7 @@ func (h *intentionHandler) show(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(intention)
+	writeJSON(w, http.StatusOK, intention)
 }
 
 func (h *intentionHandler) put(w http.ResponseWriter, r *http.Request) {
@@ -113,8 +107,7 @@ func (h *intentionHandler) put(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(intention)
+	writeJSON(w, http.StatusOK, intention)
 }
 
 func (h *intentionHandler) patch(w http.ResponseWriter, r *http.Request) {
@@ -151,8 +144,7 @@ func (h *intentionHandler) patch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(intention)
+	writeJSON(w, http.StatusOK, intention)
 }
 
 func (h *intentionHandler) delete(w http.ResponseWriter, r *http.Request) {
@@ -196,7 +188,5 @@ func (h *intentionHandler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(intention)
+	writeJSON(w, http.StatusCreated, intention)
 }

@@ -16,7 +16,7 @@ func newRouter(db *gorm.DB) http.Handler {
 	router.Use(middleware.RedirectSlashes)
 
 	router.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, "Witaj w systemie parafialnym!")
+		_, _ = fmt.Fprintln(w, "Witaj w systemie parafialnym!")
 	})
 
 	api.RegisterRoutes(router, db)

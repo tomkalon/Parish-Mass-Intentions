@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	_ "time/tzdata" // embeds time zone data, so Europe/Warsaw works on Windows without Go installed
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"

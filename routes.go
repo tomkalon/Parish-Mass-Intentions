@@ -13,7 +13,7 @@ func newRouter(db *gorm.DB) http.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.RedirectSlashes)
 
-	h := &intentionHandler{db: db}
+	h := &intentionHandler{db: db, validate: newValidator()}
 
 	router.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "Witaj w systemie parafialnym!")
@@ -21,6 +21,10 @@ func newRouter(db *gorm.DB) http.Handler {
 
 	router.Get("/intentions", h.list)
 	router.Get("/intentions/{id}", h.show)
+	router.Put("/intentions/{id}", h.put)
+	router.Patch("/intentions/{id}", h.patch)
+	router.Delete("/intentions/{id}", h.delete)
+	router.Post("/intentions", h.create)
 
 	return router
 }

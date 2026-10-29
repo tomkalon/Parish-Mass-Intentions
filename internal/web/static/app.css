@@ -251,7 +251,7 @@ h1 {
 
 .intention {
 	display: grid;
-	grid-template-columns: 28px 1fr;
+	grid-template-columns: 28px 1fr auto;
 	padding: 5px 8px;
 	border-radius: 6px;
 	font-size: 17px;
@@ -287,6 +287,37 @@ h1 {
 
 .number {
 	font-weight: 700;
+}
+
+.intention-actions {
+	display: flex;
+	align-items: flex-start;
+	gap: 2px;
+	margin-left: 12px;
+}
+
+.action {
+	padding: 2px 8px;
+	border-radius: var(--radius);
+	color: var(--muted);
+	font-size: 14px;
+	line-height: 22px;
+	text-decoration: none;
+	white-space: nowrap;
+}
+
+.action:hover {
+	background: #EFE7DA;
+	color: var(--ink);
+}
+
+.action-delete:hover {
+	background: var(--danger-bg);
+	color: var(--danger);
+}
+
+.action-delete:focus-visible {
+	outline-color: var(--danger);
 }
 
 .outside-label {

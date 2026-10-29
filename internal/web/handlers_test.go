@@ -178,9 +178,12 @@ func TestWeekShowsIntentions(t *testing.T) {
 	for _, want := range []string{
 		`<h3 class="mass-time">6:30</h3>`,
 		// html/template escapes "+" as "&#43;"; the browser still shows "+".
-		`<li class="intention" id="i-1"><span class="number">1.</span> <span>&#43;&#43; Jan i Rozalia Leżanka</span></li>`,
+		`<span>&#43;&#43; Jan i Rozalia Leżanka</span>`,
+		`<a class="action" href="/?edit=1&amp;week=2026-11-02" aria-label="Edytuj intencję 1. z godz. 6:30">Edytuj</a>`,
+		`<a class="action action-delete" href="/?delete=1&amp;week=2026-11-02" aria-label="Usuń intencję 1. z godz. 6:30">Usuń</a>`,
 		`<p class="outside-label">Poza Parafią:</p>`,
-		`<li class="intention" id="i-2"><span class="number">1.</span> <span>&#43; Anna Kutyba (greg.)</span></li>`,
+		`<span>&#43; Anna Kutyba (greg.)</span>`,
+		`<a class="action" href="/?edit=2&amp;week=2026-11-02" aria-label="Edytuj intencję poza parafią 1. z godz. 6:30">Edytuj</a>`,
 		`<h3 class="mass-time">18:00</h3>`,
 		"&lt;script&gt;alert(1)&lt;/script&gt;",
 		`<a class="button button-primary toolbar-add" href="/?new=1&amp;week=2026-11-02">+ Dodaj intencję</a>`,

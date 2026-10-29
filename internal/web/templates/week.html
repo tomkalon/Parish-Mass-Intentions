@@ -36,6 +36,7 @@
 					<a class="button-small" href="{{.NewURL}}" aria-label="Dodaj intencję – {{.Label}}">+ Dodaj</a>
 				</div>
 				{{- range .Masses}}
+				{{- $time := .Time}}
 				<div class="mass{{if .IsSelected}} is-selected{{end}}">
 					<div class="mass-side">
 						<h3 class="mass-time">{{.Time}}</h3>
@@ -45,7 +46,14 @@
 						{{- if .Parish}}
 						<ol class="intentions">
 							{{- range .Parish}}
-							<li class="intention{{if .IsSaved}} is-saved{{end}}" id="i-{{.ID}}"><span class="number">{{.Number}}.</span> <span>{{.Content}}</span></li>
+							<li class="intention{{if .IsSaved}} is-saved{{end}}" id="i-{{.ID}}">
+								<span class="number">{{.Number}}.</span>
+								<span>{{.Content}}</span>
+								<span class="intention-actions">
+									<a class="action" href="{{.EditURL}}" aria-label="Edytuj intencję {{.Number}}. z godz. {{$time}}">Edytuj</a>
+									<a class="action action-delete" href="{{.DeleteURL}}" aria-label="Usuń intencję {{.Number}}. z godz. {{$time}}">Usuń</a>
+								</span>
+							</li>
 							{{- end}}
 						</ol>
 						{{- end}}
@@ -53,7 +61,14 @@
 						<p class="outside-label">Poza Parafią:</p>
 						<ol class="intentions outside">
 							{{- range .Outside}}
-							<li class="intention{{if .IsSaved}} is-saved{{end}}" id="i-{{.ID}}"><span class="number">{{.Number}}.</span> <span>{{.Content}}</span></li>
+							<li class="intention{{if .IsSaved}} is-saved{{end}}" id="i-{{.ID}}">
+								<span class="number">{{.Number}}.</span>
+								<span>{{.Content}}</span>
+								<span class="intention-actions">
+									<a class="action" href="{{.EditURL}}" aria-label="Edytuj intencję poza parafią {{.Number}}. z godz. {{$time}}">Edytuj</a>
+									<a class="action action-delete" href="{{.DeleteURL}}" aria-label="Usuń intencję poza parafią {{.Number}}. z godz. {{$time}}">Usuń</a>
+								</span>
+							</li>
 							{{- end}}
 						</ol>
 						{{- end}}

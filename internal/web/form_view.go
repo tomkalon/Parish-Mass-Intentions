@@ -22,6 +22,7 @@ type formView struct {
 	Time            string
 	Content         string
 	IsOutsideParish bool
+	Errors          map[string]string
 
 	dayIndex int
 }

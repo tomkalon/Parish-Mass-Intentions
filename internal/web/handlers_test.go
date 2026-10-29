@@ -3,6 +3,7 @@ package web
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -28,7 +29,7 @@ func newTestHandler(t *testing.T, now time.Time) *handler {
 		t.Fatalf("migrating test database: %v", err)
 	}
 
-	return &handler{db: db, now: func() time.Time { return now }}
+	return &handler{db: db, now: func() time.Time { return now }, validate: intentions.NewValidator()}
 }
 
 func getWeek(t *testing.T, h *handler, target string) *httptest.ResponseRecorder {
@@ -260,5 +261,191 @@ func TestStaticFiles(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "--accent: #7A1F2B;") {
 		t.Error("app.css does not contain the --accent token")
+	}
+}
+
+func postIntention(t *testing.T, h *handler, form url.Values) *httptest.ResponseRecorder {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodPost, "/intentions", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	h.create(rec, req)
+
+	return rec
+}
+
+func validForm() url.Values {
+	return url.Values{
+		"week":    {"2026-11-02"},
+		"day":     {"2026-11-03"},
+		"time":    {"18:00"},
+		"content": {"  + Jan Kowalski  "},
+		"outside": {"on"},
+	}
+}
+
+func countIntentions(t *testing.T, db *gorm.DB) int64 {
+	t.Helper()
+
+	var count int64
+	err := db.Model(&intentions.Intention{}).Count(&count).Error
+	if err != nil {
+		t.Fatalf("counting intentions: %v", err)
+	}
+
+	return count
+}
+
+func TestCreateIntention(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	rec := postIntention(t, h, validForm())
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if got, want := rec.Header().Get("Location"), "/?week=2026-11-02&saved=1#i-1"; got != want {
+		t.Errorf("Location = %q, want %q", got, want)
+	}
+
+	var saved []intentions.Intention
+	err := h.db.Find(&saved).Error
+	if err != nil {
+		t.Fatalf("finding intentions: %v", err)
+	}
+	if len(saved) != 1 {
+		t.Fatalf("intentions in db = %d, want 1", len(saved))
+	}
+
+	got := saved[0]
+	if want := time.Date(2026, 11, 3, 18, 0, 0, 0, intentions.TimeZone); !got.MassAt.Equal(want) {
+		t.Errorf("MassAt = %v, want %v", got.MassAt, want)
+	}
+	if want := "+ Jan Kowalski"; got.Content != want {
+		t.Errorf("Content = %q, want %q", got.Content, want)
+	}
+	if !got.IsOutsideParish {
+		t.Error("IsOutsideParish = false, want true")
+	}
+}
+
+func TestCreateIntentionRedirectsToWeekOfTheDay(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	form := validForm()
+	form.Set("day", "2026-11-15")
+
+	rec := postIntention(t, h, form)
+
+	if got, want := rec.Header().Get("Location"), "/?week=2026-11-09&saved=1#i-1"; got != want {
+		t.Errorf("Location = %q, want %q", got, want)
+	}
+}
+
+func TestCreateIntentionInvalid(t *testing.T) {
+	tests := []struct {
+		name   string
+		change func(form url.Values)
+		want   []string
+	}{
+		{
+			name: "nothing filled in",
+			change: func(form url.Values) {
+				form.Del("day")
+				form.Del("time")
+				form.Set("content", "")
+			},
+			want: []string{
+				`<p class="field-error" id="day-error">Pole jest wymagane.</p>`,
+				`<p class="field-error" id="time-error">Pole jest wymagane.</p>`,
+				`<p class="field-error" id="content-error">Pole jest wymagane.</p>`,
+			},
+		},
+		{
+			name:   "time not on a quarter hour keeps the other values",
+			change: func(form url.Values) { form.Set("time", "18:10") },
+			want: []string{
+				`<p class="field-error" id="time-error">Godzina musi być pełnym kwadransem (:00, :15, :30, :45).</p>`,
+				`aria-invalid="true" aria-describedby="time-error"`,
+				`<option value="18:10" selected>18:10</option>`,
+				`value="2026-11-03" checked`,
+				`&#43; Jan Kowalski`,
+				`name="outside" checked`,
+			},
+		},
+		{
+			name:   "whitespace only content",
+			change: func(form url.Values) { form.Set("content", "   ") },
+			want: []string{
+				`<p class="field-error" id="content-error">Pole jest wymagane.</p>`,
+				`aria-invalid="true" aria-describedby="content-error"`,
+			},
+		},
+		{
+			name:   "content too long",
+			change: func(form url.Values) { form.Set("content", strings.Repeat("a", 501)) },
+			want: []string{
+				`<p class="field-error" id="content-error">Maksymalnie 500 znaków.</p>`,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+			form := validForm()
+			tt.change(form)
+
+			rec := postIntention(t, h, form)
+
+			if rec.Code != http.StatusUnprocessableEntity {
+				t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
+			}
+
+			body := rec.Body.String()
+			want := append([]string{
+				`<div class="form-alert" role="alert">`,
+				"<h1>INTENCJE MSZY ŚWIĘTYCH – 2.11.2026 r. – 8.11.2026 r.</h1>",
+			}, tt.want...)
+			for _, w := range want {
+				if !strings.Contains(body, w) {
+					t.Errorf("body does not contain %q", w)
+				}
+			}
+
+			if count := countIntentions(t, h.db); count != 0 {
+				t.Errorf("intentions in db = %d, want 0", count)
+			}
+		})
+	}
+}
+
+func TestCreateIntentionDatabaseError(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	err := h.db.Migrator().DropTable(&intentions.Intention{})
+	if err != nil {
+		t.Fatalf("dropping intentions table: %v", err)
+	}
+
+	rec := postIntention(t, h, validForm())
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestCreateIntentionRoute(t *testing.T) {
+	db := newTestHandler(t, time.Now()).db
+	router := chi.NewRouter()
+	RegisterRoutes(router, db)
+
+	req := httptest.NewRequest(http.MethodPost, "/intentions", strings.NewReader(validForm().Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
 }

@@ -49,10 +49,12 @@ func ValidationMessages(err error) (map[string]string, bool) {
 	return messages, true
 }
 
+const RequiredMessage = "Pole jest wymagane."
+
 func validationMessage(fe validator.FieldError) string {
 	switch fe.Tag() {
 	case "required":
-		return "Pole jest wymagane."
+		return RequiredMessage
 	case "datetime":
 		return "Nieprawidłowy format, oczekiwano RRRR-MM-DD GG:MM."
 	case "quarter_hour":

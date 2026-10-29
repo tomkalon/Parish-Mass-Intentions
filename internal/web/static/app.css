@@ -511,3 +511,52 @@ h1 {
 	font-size: 13px;
 	font-weight: 600;
 }
+
+/* Form errors */
+
+.form-alert {
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+	padding: 12px 14px;
+	border: 1px solid #E7B7B1;
+	border-radius: var(--radius);
+	background: var(--danger-bg);
+	color: var(--danger-hover);
+	font-size: 15px;
+}
+
+.form-alert p {
+	margin: 0;
+}
+
+.form-alert-icon {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	border-radius: 50%;
+	background: var(--danger);
+	color: #fff;
+	font-size: 14px;
+	font-weight: 700;
+}
+
+.field-error {
+	margin: 6px 0 0;
+	color: var(--danger);
+	font-size: 15px;
+	font-weight: 600;
+}
+
+.select.is-invalid,
+.textarea.is-invalid {
+	border: 1.5px solid var(--danger);
+	background: var(--danger-field);
+}
+
+.field.is-invalid .day-tile label {
+	border-color: var(--danger);
+}

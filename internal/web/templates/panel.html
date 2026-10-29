@@ -7,9 +7,16 @@
 		</header>
 
 		<div class="panel-body">
+			{{- if .Errors}}
+			<div class="form-alert" role="alert">
+				<span class="form-alert-icon" aria-hidden="true">!</span>
+				<p>Nie zapisano. Popraw zaznaczone pola — pozostałe dane zostały zachowane.</p>
+			</div>
+			{{- end}}
+
 			<input type="hidden" name="week" value="{{.Week}}">
 
-			<fieldset class="field">
+			<fieldset class="field{{if .Errors.day}} is-invalid{{end}}"{{if .Errors.day}} aria-describedby="day-error"{{end}}>
 				<legend class="label">Dzień · {{.Legend}}</legend>
 				<div class="day-tiles">
 					{{- range .Days}}
@@ -19,22 +26,31 @@
 					</div>
 					{{- end}}
 				</div>
+				{{- with .Errors.day}}
+				<p class="field-error" id="day-error">{{.}}</p>
+				{{- end}}
 				<p class="hint">Inny tydzień? Użyj strzałek „Poprzedni / Następny” w widoku w tle.</p>
 			</fieldset>
 
 			<div class="field">
 				<label class="label" for="time">Godzina</label>
-				<select class="select" id="time" name="time" required>
+				<select class="select{{if .Errors.time}} is-invalid{{end}}" id="time" name="time" required{{if .Errors.time}} aria-invalid="true" aria-describedby="time-error"{{end}}>
 					<option value="">wybierz</option>
 					{{- range .Times}}
 					<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
 					{{- end}}
 				</select>
+				{{- with .Errors.time}}
+				<p class="field-error" id="time-error">{{.}}</p>
+				{{- end}}
 			</div>
 
 			<div class="field">
 				<label class="label" for="content">Treść intencji</label>
-				<textarea class="textarea" id="content" name="content" maxlength="500" required autofocus>{{.Content}}</textarea>
+				<textarea class="textarea{{if .Errors.content}} is-invalid{{end}}" id="content" name="content" maxlength="500" required autofocus{{if .Errors.content}} aria-invalid="true" aria-describedby="content-error"{{end}}>{{.Content}}</textarea>
+				{{- with .Errors.content}}
+				<p class="field-error" id="content-error">{{.}}</p>
+				{{- end}}
 			</div>
 
 			<label class="checkbox"><input type="checkbox" name="outside"{{if .IsOutsideParish}} checked{{end}}> Poza parafią</label>

@@ -61,7 +61,7 @@ func (v weekView) urlFor(start time.Time) string {
 		day = start.AddDate(0, 0, v.Form.dayIndex).Format(intentions.DateLayout)
 	}
 
-	return newIntentionURL(week, day, v.Form.Time)
+	return formURL(week, day, v.Form.Time, v.Form.EditID)
 }
 
 func (v weekView) IsEmpty() bool {
@@ -75,14 +75,26 @@ func (v weekView) IsEmpty() bool {
 }
 
 func markSaved(days []dayView, id int) {
+	forEachIntention(days, func(intention *intentionView) {
+		intention.IsSaved = intention.ID == id
+	})
+}
+
+func markEditing(days []dayView, id int) {
+	forEachIntention(days, func(intention *intentionView) {
+		intention.IsEditing = intention.ID == id
+	})
+}
+
+func forEachIntention(days []dayView, fn func(intention *intentionView)) {
 	for i := range days {
 		for j := range days[i].Masses {
 			mass := &days[i].Masses[j]
 			for k := range mass.Parish {
-				mass.Parish[k].IsSaved = mass.Parish[k].ID == id
+				fn(&mass.Parish[k])
 			}
 			for k := range mass.Outside {
-				mass.Outside[k].IsSaved = mass.Outside[k].ID == id
+				fn(&mass.Outside[k])
 			}
 		}
 	}

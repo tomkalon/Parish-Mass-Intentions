@@ -111,6 +111,7 @@ func TestWeekViewURLsWithOpenForm(t *testing.T) {
 		name     string
 		day      string
 		massTime string
+		editID   int
 		wantPrev string
 		wantNext string
 	}{
@@ -126,12 +127,21 @@ func TestWeekViewURLsWithOpenForm(t *testing.T) {
 			wantPrev: "/?new=1&week=2026-10-26",
 			wantNext: "/?new=1&week=2026-11-09",
 		},
+		{
+			name:     "edit form stays in edit mode",
+			day:      "2026-11-03",
+			massTime: "18:00",
+			editID:   7,
+			wantPrev: "/?day=2026-10-27&edit=7&time=18%3A00&week=2026-10-26",
+			wantNext: "/?day=2026-11-10&edit=7&time=18%3A00&week=2026-11-09",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			view := newWeekView(start, nil)
 			form := newFormView(start, tt.day, tt.massTime)
+			form.EditID = tt.editID
 			view.Form = &form
 
 			if got := view.PrevURL(); got != tt.wantPrev {
@@ -261,5 +271,28 @@ func TestWeekViewIntentionURLs(t *testing.T) {
 	}
 	if want := "/?delete=7&week=2026-11-02"; intention.DeleteURL != want {
 		t.Errorf("DeleteURL = %q, want %q", intention.DeleteURL, want)
+	}
+}
+
+func TestFormViewTitleActionAndDeleteURL(t *testing.T) {
+	form := newFormView(time.Date(2026, 11, 2, 0, 0, 0, 0, intentions.TimeZone), "", "")
+
+	if got, want := form.Title(), "Nowa intencja"; got != want {
+		t.Errorf("new form Title() = %q, want %q", got, want)
+	}
+	if got, want := form.Action(), "/intentions"; got != want {
+		t.Errorf("new form Action() = %q, want %q", got, want)
+	}
+
+	form.EditID = 42
+
+	if got, want := form.Title(), "Edycja intencji"; got != want {
+		t.Errorf("edit form Title() = %q, want %q", got, want)
+	}
+	if got, want := form.Action(), "/intentions/42"; got != want {
+		t.Errorf("edit form Action() = %q, want %q", got, want)
+	}
+	if got, want := form.DeleteURL(), "/?delete=42&week=2026-11-02"; got != want {
+		t.Errorf("edit form DeleteURL() = %q, want %q", got, want)
 	}
 }

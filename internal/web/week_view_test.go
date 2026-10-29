@@ -177,3 +177,21 @@ func TestMarkSaved(t *testing.T) {
 		t.Error("intention 2 is not saved")
 	}
 }
+
+func TestMarkEditing(t *testing.T) {
+	start := time.Date(2026, 11, 2, 0, 0, 0, 0, intentions.TimeZone)
+	view := newWeekView(start, []intentions.Intention{
+		newIntention(t, 1, "2026-11-02 06:30", false, "A"),
+		newIntention(t, 2, "2026-11-02 06:30", true, "B"),
+	})
+
+	markEditing(view.Days, 1)
+
+	mass := view.Days[0].Masses[0]
+	if !mass.Parish[0].IsEditing {
+		t.Error("intention 1 is not marked as edited")
+	}
+	if mass.Outside[0].IsEditing {
+		t.Error("intention 2 is marked as edited, want only 1")
+	}
+}

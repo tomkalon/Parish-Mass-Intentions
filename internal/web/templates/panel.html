@@ -1,8 +1,8 @@
 {{define "panel" -}}
 <aside class="panel" role="complementary" aria-labelledby="panel-title">
-	<form class="panel-form" method="post" action="/intentions">
+	<form class="panel-form" method="post" action="{{.Action}}">
 		<header class="panel-header">
-			<h2 class="panel-title" id="panel-title">Nowa intencja</h2>
+			<h2 class="panel-title" id="panel-title">{{.Title}}</h2>
 			<a class="panel-close" href="{{.CloseURL}}" aria-label="Zamknij">×</a>
 		</header>
 
@@ -59,6 +59,9 @@
 		<footer class="panel-footer">
 			<button class="button button-primary" type="submit">Zapisz</button>
 			<a class="button" href="{{.CloseURL}}">Anuluj</a>
+			{{- if .EditID}}
+			<a class="delete-link" href="{{.DeleteURL}}">Usuń intencję</a>
+			{{- end}}
 		</footer>
 	</form>
 </aside>

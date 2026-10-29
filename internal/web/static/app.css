@@ -285,6 +285,11 @@ h1 {
 	background: var(--row-hover);
 }
 
+.intention.is-editing {
+	background: var(--accent-soft);
+	box-shadow: inset 0 0 0 2px var(--accent);
+}
+
 .number {
 	font-weight: 700;
 }
@@ -410,6 +415,23 @@ h1 {
 
 .panel-footer .button-primary {
 	padding: 0 28px;
+}
+
+.delete-link {
+	align-self: center;
+	margin-left: auto;
+	color: var(--danger);
+	font-size: 15px;
+	font-weight: 600;
+	text-underline-offset: 3px;
+}
+
+.delete-link:hover {
+	color: var(--danger-hover);
+}
+
+.delete-link:focus-visible {
+	outline-color: var(--danger);
 }
 
 .button-primary {

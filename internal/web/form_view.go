@@ -24,8 +24,29 @@ type formView struct {
 	Content         string
 	IsOutsideParish bool
 	Errors          map[string]string
+	EditID          int
 
 	dayIndex int
+}
+
+func (f formView) Title() string {
+	if f.EditID > 0 {
+		return "Edycja intencji"
+	}
+
+	return "Nowa intencja"
+}
+
+func (f formView) Action() string {
+	if f.EditID > 0 {
+		return "/intentions/" + strconv.Itoa(f.EditID)
+	}
+
+	return "/intentions"
+}
+
+func (f formView) DeleteURL() string {
+	return deleteURL(f.Week, f.EditID)
 }
 
 type dayOption struct {
@@ -109,23 +130,27 @@ func markSelected(days []dayView, date, massTime string) {
 }
 
 func newIntentionURL(week, day, massTime string) string {
+	return formURL(week, day, massTime, 0)
+}
+
+func editURL(week string, id int) string {
+	return formURL(week, "", "", id)
+}
+
+func formURL(week, day, massTime string, editID int) string {
 	query := url.Values{}
 	query.Set("week", week)
-	query.Set("new", "1")
+	if editID > 0 {
+		query.Set("edit", strconv.Itoa(editID))
+	} else {
+		query.Set("new", "1")
+	}
 	if massTime != "" {
 		query.Set("time", massTime)
 	}
 	if day != "" {
 		query.Set("day", day)
 	}
-
-	return "/?" + query.Encode()
-}
-
-func editURL(week string, id int) string {
-	query := url.Values{}
-	query.Set("week", week)
-	query.Set("edit", strconv.Itoa(id))
 
 	return "/?" + query.Encode()
 }

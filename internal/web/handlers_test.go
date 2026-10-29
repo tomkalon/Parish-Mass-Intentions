@@ -441,17 +441,26 @@ func TestCreateIntentionDatabaseError(t *testing.T) {
 
 func TestCreateIntentionRoute(t *testing.T) {
 	db := newTestHandler(t, time.Now()).db
-	router := chi.NewRouter()
-	RegisterRoutes(router, db)
 
-	req := httptest.NewRequest(http.MethodPost, "/intentions", strings.NewReader(validForm().Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
+	rec := postToRouter(t, db, "/intentions", validForm())
 
 	if rec.Code != http.StatusSeeOther {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
+}
+
+func postToRouter(t *testing.T, db *gorm.DB, path string, form url.Values) *httptest.ResponseRecorder {
+	t.Helper()
+
+	router := chi.NewRouter()
+	RegisterRoutes(router, db)
+
+	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	return rec
 }
 
 func TestWeekHighlightsSavedIntention(t *testing.T) {
@@ -478,6 +487,176 @@ func TestWeekHighlightsSavedIntention(t *testing.T) {
 			gotSaved := strings.Contains(rec.Body.String(), `<li class="intention is-saved" id="i-1">`)
 			if gotSaved != tt.wantSaved {
 				t.Errorf("intention highlighted = %v, want %v", gotSaved, tt.wantSaved)
+			}
+		})
+	}
+}
+
+func TestWeekWithEditPanel(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedIntention(t, h.db, "2026-11-03 18:00", true, "+ Anna Kutyba (greg.)")
+
+	rec := getWeek(t, h, "/?week=2026-11-02&edit=1")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	body := rec.Body.String()
+	for _, want := range []string{
+		`<h2 class="panel-title" id="panel-title">Edycja intencji</h2>`,
+		`<form class="panel-form" method="post" action="/intentions/1">`,
+		`value="2026-11-03" checked`,
+		`<option value="18:00" selected>18:00</option>`,
+		`>&#43; Anna Kutyba (greg.)</textarea>`,
+		`name="outside" checked`,
+		`<a class="delete-link" href="/?delete=1&amp;week=2026-11-02">Usuń intencję</a>`,
+		`<li class="intention is-editing" id="i-1">`,
+		`href="/?day=2026-10-27&amp;edit=1&amp;time=18%3A00&amp;week=2026-10-26"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+}
+
+func TestWeekEditPanelInAnotherWeek(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedIntention(t, h.db, "2026-11-03 18:00", false, "+ Jan Kowalski")
+
+	rec := getWeek(t, h, "/?week=2026-11-09&edit=1&day=2026-11-10&time=18:00")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	body := rec.Body.String()
+	for _, want := range []string{
+		`<h2 class="panel-title" id="panel-title">Edycja intencji</h2>`,
+		`value="2026-11-10" checked`,
+		`>&#43; Jan Kowalski</textarea>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+}
+
+func TestWeekEditPanelForMissingIntention(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	tests := []struct {
+		target string
+		want   int
+	}{
+		{target: "/?week=2026-11-02&edit=999", want: http.StatusNotFound},
+		{target: "/?week=2026-11-02&edit=abc", want: http.StatusBadRequest},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.target, func(t *testing.T) {
+			rec := getWeek(t, h, tt.target)
+
+			if rec.Code != tt.want {
+				t.Errorf("status = %d, want %d", rec.Code, tt.want)
+			}
+		})
+	}
+}
+
+func TestUpdateIntention(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedIntention(t, h.db, "2026-11-03 18:00", true, "+ Jan Kowalski")
+
+	form := url.Values{
+		"week":    {"2026-11-02"},
+		"day":     {"2026-11-10"},
+		"time":    {"06:30"},
+		"content": {" + Jan Kowalski (greg.) "},
+	}
+	rec := postToRouter(t, h.db, "/intentions/1", form)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if got, want := rec.Header().Get("Location"), "/?week=2026-11-09&saved=1#i-1"; got != want {
+		t.Errorf("Location = %q, want %q", got, want)
+	}
+
+	var saved []intentions.Intention
+	err := h.db.Find(&saved).Error
+	if err != nil {
+		t.Fatalf("finding intentions: %v", err)
+	}
+	if len(saved) != 1 {
+		t.Fatalf("intentions in db = %d, want 1 (update must not create a new one)", len(saved))
+	}
+
+	got := saved[0]
+	if want := time.Date(2026, 11, 10, 6, 30, 0, 0, intentions.TimeZone); !got.MassAt.Equal(want) {
+		t.Errorf("MassAt = %v, want %v", got.MassAt, want)
+	}
+	if want := "+ Jan Kowalski (greg.)"; got.Content != want {
+		t.Errorf("Content = %q, want %q", got.Content, want)
+	}
+	if got.IsOutsideParish {
+		t.Error("IsOutsideParish = true, want false (unchecked box is not sent)")
+	}
+}
+
+func TestUpdateIntentionInvalid(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedIntention(t, h.db, "2026-11-03 18:00", false, "+ Jan Kowalski")
+
+	form := validForm()
+	form.Set("content", "")
+	rec := postToRouter(t, h.db, "/intentions/1", form)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
+	}
+
+	body := rec.Body.String()
+	for _, want := range []string{
+		`<h2 class="panel-title" id="panel-title">Edycja intencji</h2>`,
+		`<form class="panel-form" method="post" action="/intentions/1">`,
+		`<p class="field-error" id="content-error">Pole jest wymagane.</p>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+
+	var intention intentions.Intention
+	err := h.db.First(&intention, 1).Error
+	if err != nil {
+		t.Fatalf("finding intention: %v", err)
+	}
+	if want := "+ Jan Kowalski"; intention.Content != want {
+		t.Errorf("Content = %q, want %q (invalid form must not change the intention)", intention.Content, want)
+	}
+}
+
+func TestUpdateIntentionNotFound(t *testing.T) {
+	db := newTestHandler(t, time.Now()).db
+
+	tests := []struct {
+		path string
+		want int
+	}{
+		{path: "/intentions/999", want: http.StatusNotFound},
+		{path: "/intentions/abc", want: http.StatusBadRequest},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			rec := postToRouter(t, db, tt.path, validForm())
+
+			if rec.Code != tt.want {
+				t.Errorf("status = %d, want %d", rec.Code, tt.want)
+			}
+			if count := countIntentions(t, db); count != 0 {
+				t.Errorf("intentions in db = %d, want 0", count)
 			}
 		})
 	}

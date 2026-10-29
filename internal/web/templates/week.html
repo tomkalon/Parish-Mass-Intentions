@@ -46,7 +46,7 @@
 						{{- if .Parish}}
 						<ol class="intentions">
 							{{- range .Parish}}
-							<li class="intention{{if .IsSaved}} is-saved{{end}}" id="i-{{.ID}}">
+							<li class="intention{{if .IsSaved}} is-saved{{end}}{{if .IsEditing}} is-editing{{end}}" id="i-{{.ID}}">
 								<span class="number">{{.Number}}.</span>
 								<span>{{.Content}}</span>
 								<span class="intention-actions">
@@ -61,7 +61,7 @@
 						<p class="outside-label">Poza Parafią:</p>
 						<ol class="intentions outside">
 							{{- range .Outside}}
-							<li class="intention{{if .IsSaved}} is-saved{{end}}" id="i-{{.ID}}">
+							<li class="intention{{if .IsSaved}} is-saved{{end}}{{if .IsEditing}} is-editing{{end}}" id="i-{{.ID}}">
 								<span class="number">{{.Number}}.</span>
 								<span>{{.Content}}</span>
 								<span class="intention-actions">

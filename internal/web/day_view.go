@@ -43,7 +43,8 @@ type intentionView struct {
 	EditURL   string
 	DeleteURL string
 
-	IsSaved bool
+	IsSaved   bool
+	IsEditing bool
 }
 
 func newDayView(day time.Time, list []intentions.Intention) dayView {

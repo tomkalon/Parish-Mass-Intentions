@@ -2,7 +2,9 @@ package web
 
 import (
 	"bytes"
+	"cmp"
 	"embed"
+	"errors"
 	"fmt"
 	"html/template"
 	"log"
@@ -37,6 +39,7 @@ func RegisterRoutes(router chi.Router, db *gorm.DB) {
 
 	router.Get("/", h.week)
 	router.Post("/intentions", h.create)
+	router.Post("/intentions/{id}", h.update)
 	router.Handle("/static/*", http.FileServerFS(staticFS))
 }
 
@@ -55,7 +58,23 @@ func (h *handler) week(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var form *formView
-	if query.Get("new") == "1" {
+	switch {
+	case query.Get("edit") != "":
+		intention, ok := h.findIntention(w, query.Get("edit"))
+		if !ok {
+			return
+		}
+
+		at := intention.MassAt.In(intentions.TimeZone)
+		day := cmp.Or(query.Get("day"), at.Format(intentions.DateLayout))
+		massTime := cmp.Or(query.Get("time"), at.Format("15:04"))
+
+		f := newFormView(start, day, massTime)
+		f.EditID = intention.ID
+		f.Content = intention.Content
+		f.IsOutsideParish = intention.IsOutsideParish
+		form = &f
+	case query.Get("new") == "1":
 		f := newFormView(start, query.Get("day"), query.Get("time"))
 		form = &f
 	}
@@ -66,6 +85,41 @@ func (h *handler) week(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) create(w http.ResponseWriter, r *http.Request) {
+	h.save(w, r, intentions.Intention{})
+}
+
+func (h *handler) update(w http.ResponseWriter, r *http.Request) {
+	intention, ok := h.findIntention(w, chi.URLParam(r, "id"))
+	if !ok {
+		return
+	}
+
+	h.save(w, r, intention)
+}
+
+func (h *handler) findIntention(w http.ResponseWriter, idParam string) (intentions.Intention, bool) {
+	id, err := strconv.Atoi(idParam)
+	if err != nil {
+		http.Error(w, "nieprawidłowy identyfikator intencji", http.StatusBadRequest)
+		return intentions.Intention{}, false
+	}
+
+	var intention intentions.Intention
+	err = h.db.First(&intention, id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		http.Error(w, "nie znaleziono intencji", http.StatusNotFound)
+		return intentions.Intention{}, false
+	}
+	if err != nil {
+		log.Printf("error finding intention %d: %v", id, err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return intentions.Intention{}, false
+	}
+
+	return intention, true
+}
+
+func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intentions.Intention) {
 	err := r.ParseForm()
 	if err != nil {
 		http.Error(w, "nieprawidłowe dane formularza", http.StatusBadRequest)
@@ -101,17 +155,17 @@ func (h *handler) create(w http.ResponseWriter, r *http.Request) {
 		form.Content = content
 		form.IsOutsideParish = outside
 		form.Errors = errs
+		form.EditID = intention.ID
 
 		h.renderWeek(w, http.StatusUnprocessableEntity, start, &form, 0)
 		return
 	}
 
-	var intention intentions.Intention
 	intention.Apply(input)
 
-	err = h.db.Create(&intention).Error
+	err = h.db.Save(&intention).Error
 	if err != nil {
-		log.Printf("error creating intention: %v", err)
+		log.Printf("error saving intention %d: %v", intention.ID, err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -153,6 +207,7 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 	if form != nil {
 		view.Form = form
 		markSelected(view.Days, form.Day, form.Time)
+		markEditing(view.Days, form.EditID)
 	}
 	markSaved(view.Days, saved)
 

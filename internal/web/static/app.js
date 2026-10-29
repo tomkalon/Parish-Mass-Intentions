@@ -17,4 +17,7 @@ if (selectedDay) {
 const field = document.querySelector('.panel [aria-invalid="true"]') ?? document.getElementById("content");
 if (field && document.activeElement !== field) {
 	field.focus({ preventScroll: true });
+	if (field instanceof HTMLTextAreaElement) {
+		field.setSelectionRange(field.value.length, field.value.length);
+	}
 }

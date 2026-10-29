@@ -23,6 +23,9 @@ jobs:
       - name: go vet
         run: go vet ./...
 
+      - name: go vet (Windows desktop build)
+        run: GOOS=windows GOARCH=amd64 go vet -tags desktop,production ./...
+
       - name: go.mod is tidy
         run: go mod tidy -diff
 

@@ -1,30 +1,43 @@
 package main
 
 import (
+	"fmt"
 	"log"
-	"net/http"
+	"path/filepath"
 
-	"gorm.io/driver/sqlite"
+	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 
 	"go-parafia/internal/intentions"
 )
 
 func main() {
-	db, err := gorm.Open(sqlite.Open("data.db"), &gorm.Config{})
+	dir, err := prepareDataDir()
 	if err != nil {
-		log.Fatalf("error opening database: %v", err)
+		log.Fatalf("error preparing data directory: %v", err)
+	}
+
+	db, err := openDatabase(filepath.Join(dir, "data.db"))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = run(newRouter(db))
+	if err != nil {
+		log.Fatalf("error running application: %v", err)
+	}
+}
+
+func openDatabase(path string) (*gorm.DB, error) {
+	db, err := gorm.Open(sqlite.Open(path), &gorm.Config{})
+	if err != nil {
+		return nil, fmt.Errorf("error opening database %s: %w", path, err)
 	}
 
 	err = db.AutoMigrate(&intentions.Intention{})
 	if err != nil {
-		log.Fatalf("error migrating database: %v", err)
+		return nil, fmt.Errorf("error migrating database %s: %w", path, err)
 	}
 
-	router := newRouter(db)
-
-	err = http.ListenAndServe(":8080", router)
-	if err != nil {
-		log.Fatal("Error starting server: ", err)
-	}
+	return db, nil
 }

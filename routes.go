@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -9,17 +8,18 @@ import (
 	"gorm.io/gorm"
 
 	"go-parafia/internal/api"
+	"go-parafia/internal/web"
 )
 
 func newRouter(db *gorm.DB) http.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.RedirectSlashes)
 
-	router.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		_, _ = fmt.Fprintln(w, "Witaj w systemie parafialnym!")
+	router.Route("/api", func(r chi.Router) {
+		api.RegisterRoutes(r, db)
 	})
 
-	api.RegisterRoutes(router, db)
+	web.RegisterRoutes(router, db)
 
 	return router
 }

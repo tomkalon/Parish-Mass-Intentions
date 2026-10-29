@@ -63,6 +63,7 @@ func TestLayoutWeek(t *testing.T) {
 
 	texts := pageTexts(pages[0])
 	for _, want := range []string{
+		"Parafia pw. Trójcy Przenajświętszej i św. Leopolda w Rzezawie",
 		"INTENCJE MSZY ŚWIĘTYCH",
 		"2 – 8 listopada 2026",
 		"Poniedziałek",

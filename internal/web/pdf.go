@@ -42,6 +42,8 @@ const (
 	smallCapsScale = 0.78
 
 	pdfFamily = "serif"
+
+	parishName = "Parafia pw. Trójcy Przenajświętszej i św. Leopolda w Rzezawie"
 )
 
 type pdfFont int
@@ -257,9 +259,13 @@ func paginate(header pdfBlock, days []pdfBlock) []pdfPage {
 func layoutHeader(start time.Time, m textMeasurer) pdfBlock {
 	var block pdfBlock
 
+	parishSize := 13 * px
+	block.Runs = append(block.Runs, centered(parishName, fontItalic, parishSize, 0, baseline(parishSize, 1.3), m))
+	y := parishSize*1.3 + 6*px
+
 	titleSize := 11 * px
-	block.Runs = append(block.Runs, centered("INTENCJE MSZY ŚWIĘTYCH", fontBold, titleSize, 0.32*titleSize, baseline(titleSize, 1.3), m))
-	y := titleSize * 1.3
+	block.Runs = append(block.Runs, centered("INTENCJE MSZY ŚWIĘTYCH", fontBold, titleSize, 0.32*titleSize, y+baseline(titleSize, 1.3), m))
+	y += titleSize * 1.3
 
 	rangeSize := 26 * px
 	block.Runs = append(block.Runs, centered(weekInWords(start), fontRegular, rangeSize, 0, y+baseline(rangeSize, 1.2), m))

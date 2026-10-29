@@ -234,3 +234,32 @@ func TestWeekViewNewURLs(t *testing.T) {
 		t.Errorf("mass NewURL = %q, want %q", sunday.Masses[0].NewURL, want)
 	}
 }
+
+func TestEditAndDeleteURL(t *testing.T) {
+	if got, want := editURL("2026-11-02", 42), "/?edit=42&week=2026-11-02"; got != want {
+		t.Errorf("editURL = %q, want %q", got, want)
+	}
+	if got, want := deleteURL("2026-11-02", 42), "/?delete=42&week=2026-11-02"; got != want {
+		t.Errorf("deleteURL = %q, want %q", got, want)
+	}
+}
+
+func TestWeekViewIntentionURLs(t *testing.T) {
+	start := time.Date(2026, 11, 2, 0, 0, 0, 0, intentions.TimeZone)
+	view := newWeekView(start, []intentions.Intention{
+		newIntention(t, 7, "2026-11-08 18:00", true, "A"),
+	})
+
+	sunday := view.Days[6]
+	if len(sunday.Masses) != 1 || len(sunday.Masses[0].Outside) != 1 {
+		t.Fatalf("sunday masses = %+v, want one mass with one intention outside the parish", sunday.Masses)
+	}
+
+	intention := sunday.Masses[0].Outside[0]
+	if want := "/?edit=7&week=2026-11-02"; intention.EditURL != want {
+		t.Errorf("EditURL = %q, want %q", intention.EditURL, want)
+	}
+	if want := "/?delete=7&week=2026-11-02"; intention.DeleteURL != want {
+		t.Errorf("DeleteURL = %q, want %q", intention.DeleteURL, want)
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"slices"
+	"strconv"
 	"time"
 
 	"go-parafia/internal/intentions"
@@ -117,6 +118,22 @@ func newIntentionURL(week, day, massTime string) string {
 	if day != "" {
 		query.Set("day", day)
 	}
+
+	return "/?" + query.Encode()
+}
+
+func editURL(week string, id int) string {
+	query := url.Values{}
+	query.Set("week", week)
+	query.Set("edit", strconv.Itoa(id))
+
+	return "/?" + query.Encode()
+}
+
+func deleteURL(week string, id int) string {
+	query := url.Values{}
+	query.Set("week", week)
+	query.Set("delete", strconv.Itoa(id))
 
 	return "/?" + query.Encode()
 }

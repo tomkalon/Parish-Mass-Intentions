@@ -37,9 +37,11 @@ type massView struct {
 }
 
 type intentionView struct {
-	ID      int
-	Number  int
-	Content string
+	ID        int
+	Number    int
+	Content   string
+	EditURL   string
+	DeleteURL string
 
 	IsSaved bool
 }
@@ -64,9 +66,9 @@ func newDayView(day time.Time, list []intentions.Intention) dayView {
 		mass := &masses[len(masses)-1]
 
 		if intention.IsOutsideParish {
-			mass.Outside = appendIntention(mass.Outside, intention)
+			mass.Outside = appendIntention(mass.Outside, intention, week)
 		} else {
-			mass.Parish = appendIntention(mass.Parish, intention)
+			mass.Parish = appendIntention(mass.Parish, intention, week)
 		}
 	}
 
@@ -78,10 +80,12 @@ func newDayView(day time.Time, list []intentions.Intention) dayView {
 	}
 }
 
-func appendIntention(list []intentionView, intention intentions.Intention) []intentionView {
+func appendIntention(list []intentionView, intention intentions.Intention, week string) []intentionView {
 	return append(list, intentionView{
-		ID:      intention.ID,
-		Number:  len(list) + 1,
-		Content: intention.Content,
+		ID:        intention.ID,
+		Number:    len(list) + 1,
+		Content:   intention.Content,
+		EditURL:   editURL(week, intention.ID),
+		DeleteURL: deleteURL(week, intention.ID),
 	})
 }

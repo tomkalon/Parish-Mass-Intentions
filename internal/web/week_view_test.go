@@ -148,12 +148,16 @@ func checkMass(t *testing.T, got, want massView) {
 	if got.Time != want.Time {
 		t.Errorf("mass time = %q, want %q", got.Time, want.Time)
 	}
-	if !slices.Equal(got.Parish, want.Parish) {
+	if !slices.EqualFunc(got.Parish, want.Parish, sameIntention) {
 		t.Errorf("%s parish = %v, want %v", want.Time, got.Parish, want.Parish)
 	}
-	if !slices.Equal(got.Outside, want.Outside) {
+	if !slices.EqualFunc(got.Outside, want.Outside, sameIntention) {
 		t.Errorf("%s outside = %v, want %v", want.Time, got.Outside, want.Outside)
 	}
+}
+
+func sameIntention(a, b intentionView) bool {
+	return a.ID == b.ID && a.Number == b.Number && a.Content == b.Content
 }
 
 func TestMarkSaved(t *testing.T) {

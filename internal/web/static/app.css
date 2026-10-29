@@ -715,3 +715,23 @@ h1 {
 .button-danger:focus-visible {
 	outline-color: var(--danger);
 }
+
+/* Print preview */
+
+.print-page {
+	display: flex;
+	flex-direction: column;
+	height: 100vh;
+}
+
+.print-note {
+	color: var(--muted);
+	font-size: 15px;
+}
+
+.print-preview {
+	flex: 1;
+	width: 100%;
+	border: 0;
+	background: #CFC8BE;
+}

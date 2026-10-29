@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="pl">
+<head>
+	<meta charset="utf-8">
+	<title>Wydruk {{.Range}} – Go Parafia</title>
+	<link rel="stylesheet" href="/static/app.css">
+	<script src="/static/app.js" defer></script>
+</head>
+<body class="print-page">
+	<nav class="toolbar" aria-label="Wydruk">
+		<a class="button" href="{{.WeekURL}}" data-close>← Wróć do tygodnia</a>
+		<span class="print-note">INTENCJE MSZY ŚWIĘTYCH – {{.Range}} · A4 pionowo · czarno-biały</span>
+	</nav>
+	<iframe class="print-preview" src="{{.PDFURL}}" title="Podgląd PDF: intencje {{.Range}}"></iframe>
+</body>
+</html>

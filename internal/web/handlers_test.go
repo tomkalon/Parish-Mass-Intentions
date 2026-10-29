@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/glebarez/sqlite"
 	"github.com/go-chi/chi/v5"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
 	"go-parafia/internal/intentions"
@@ -109,7 +109,7 @@ func TestWeekSelectedByQuery(t *testing.T) {
 		"Niedziela 15.11.",
 		"W tym tygodniu nie ma jeszcze żadnych intencji.",
 		`<a class="button button-primary button-large" href="/?new=1&amp;week=2026-11-09">+ Dodaj intencję</a>`,
-		`<a class="button toolbar-print" href="/pdf?week=2026-11-09">Drukuj / PDF</a>`,
+		`<a class="button toolbar-print" href="/print?week=2026-11-09">Drukuj / PDF</a>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body does not contain %q", want)
@@ -831,5 +831,35 @@ func TestWeekPDFDatabaseError(t *testing.T) {
 	}
 	if strings.HasPrefix(rec.Body.String(), "%PDF-") {
 		t.Error("a PDF was sent despite the error")
+	}
+}
+
+func TestPrintPreview(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	req := httptest.NewRequest(http.MethodGet, "/print?week=2026-11-04", nil)
+	rec := httptest.NewRecorder()
+	h.printPreview(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	body := rec.Body.String()
+	for _, want := range []string{
+		`<a class="button" href="/?week=2026-11-02" data-close>← Wróć do tygodnia</a>`,
+		`<iframe class="print-preview" src="/pdf?week=2026-11-02" title="Podgląd PDF: intencje 2.11.2026 r. – 8.11.2026 r."></iframe>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/print?week=bzdura", nil)
+	rec = httptest.NewRecorder()
+	h.printPreview(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("invalid week: status = %d, want %d", rec.Code, http.StatusBadRequest)
 	}
 }

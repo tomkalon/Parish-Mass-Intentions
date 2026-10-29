@@ -55,6 +55,14 @@ func (v weekView) PDFURL() string {
 	return "/pdf?week=" + v.Start.Format(intentions.DateLayout)
 }
 
+func (v weekView) PrintURL() string {
+	return "/print?week=" + v.Start.Format(intentions.DateLayout)
+}
+
+func (v weekView) WeekURL() string {
+	return "/?week=" + v.Start.Format(intentions.DateLayout)
+}
+
 func (v weekView) urlFor(start time.Time) string {
 	week := start.Format(intentions.DateLayout)
 	if v.Form == nil {

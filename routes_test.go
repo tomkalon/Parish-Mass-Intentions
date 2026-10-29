@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"gorm.io/driver/sqlite"
+	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 
 	"go-parafia/internal/intentions"
@@ -34,6 +34,7 @@ func TestRouter(t *testing.T) {
 		{path: "/static/app.css", wantContentType: "text/css; charset=utf-8"},
 		{path: "/static/app.js", wantContentType: "text/javascript; charset=utf-8"},
 		{path: "/pdf", wantContentType: "application/pdf"},
+		{path: "/print", wantContentType: "text/html; charset=utf-8"},
 	}
 
 	for _, tt := range tests {

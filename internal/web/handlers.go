@@ -29,6 +29,8 @@ var staticFS embed.FS
 
 var weekTemplate = template.Must(template.ParseFS(templateFS, "templates/week.html", "templates/panel.html"))
 
+var printTemplate = template.Must(template.ParseFS(templateFS, "templates/print.html"))
+
 type handler struct {
 	now      func() time.Time
 	db       *gorm.DB
@@ -43,6 +45,7 @@ func RegisterRoutes(router chi.Router, db *gorm.DB) {
 	router.Post("/intentions/{id}", h.update)
 	router.Post("/intentions/{id}/delete", h.delete)
 	router.Get("/pdf", h.pdf)
+	router.Get("/print", h.printPreview)
 	router.Handle("/static/*", http.FileServerFS(staticFS))
 }
 
@@ -102,6 +105,16 @@ func (h *handler) weekStart(query url.Values) (time.Time, error) {
 	}
 
 	return intentions.WeekStart(day), nil
+}
+
+func (h *handler) printPreview(w http.ResponseWriter, r *http.Request) {
+	start, err := h.weekStart(r.URL.Query())
+	if err != nil {
+		http.Error(w, "nieprawidłowa data tygodnia, oczekiwano RRRR-MM-DD", http.StatusBadRequest)
+		return
+	}
+
+	render(w, http.StatusOK, printTemplate, newWeekView(start, nil))
 }
 
 func (h *handler) pdf(w http.ResponseWriter, r *http.Request) {

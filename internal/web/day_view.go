@@ -54,7 +54,7 @@ func newDayView(day time.Time, list []intentions.Intention) dayView {
 	var masses []massView
 	for _, intention := range list {
 		at := intention.MassAt.In(intentions.TimeZone)
-		massTime := fmt.Sprintf("%d:%02d", at.Hour(), at.Minute())
+		massTime := clockLabel(at)
 
 		if len(masses) == 0 || masses[len(masses)-1].Time != massTime {
 			timeValue := at.Format("15:04")
@@ -75,7 +75,7 @@ func newDayView(day time.Time, list []intentions.Intention) dayView {
 
 	return dayView{
 		Date:   date,
-		Label:  weekdayNames[day.Weekday()] + " " + day.Format("2.1."),
+		Label:  dayLabel(day),
 		NewURL: newIntentionURL(week, date, ""),
 		Masses: masses,
 	}
@@ -89,4 +89,12 @@ func appendIntention(list []intentionView, intention intentions.Intention, week 
 		EditURL:   editURL(week, intention.ID),
 		DeleteURL: deleteURL(week, intention.ID),
 	})
+}
+
+func dayLabel(day time.Time) string {
+	return weekdayNames[day.Weekday()] + " " + day.Format("2.1.")
+}
+
+func clockLabel(at time.Time) string {
+	return fmt.Sprintf("%d:%02d", at.Hour(), at.Minute())
 }

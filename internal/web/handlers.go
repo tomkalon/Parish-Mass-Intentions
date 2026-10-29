@@ -40,6 +40,7 @@ func RegisterRoutes(router chi.Router, db *gorm.DB) {
 	router.Get("/", h.week)
 	router.Post("/intentions", h.create)
 	router.Post("/intentions/{id}", h.update)
+	router.Post("/intentions/{id}/delete", h.delete)
 	router.Handle("/static/*", http.FileServerFS(staticFS))
 }
 
@@ -57,8 +58,16 @@ func (h *handler) week(w http.ResponseWriter, r *http.Request) {
 		start = intentions.WeekStart(day)
 	}
 
-	var form *formView
+	var state weekState
 	switch {
+	case query.Get("delete") != "":
+		intention, ok := h.findIntention(w, query.Get("delete"))
+		if !ok {
+			return
+		}
+
+		d := newDeleteView(start, intention)
+		state.delete = &d
 	case query.Get("edit") != "":
 		intention, ok := h.findIntention(w, query.Get("edit"))
 		if !ok {
@@ -73,15 +82,15 @@ func (h *handler) week(w http.ResponseWriter, r *http.Request) {
 		f.EditID = intention.ID
 		f.Content = intention.Content
 		f.IsOutsideParish = intention.IsOutsideParish
-		form = &f
+		state.form = &f
 	case query.Get("new") == "1":
 		f := newFormView(start, query.Get("day"), query.Get("time"))
-		form = &f
+		state.form = &f
 	}
 
-	saved, _ := strconv.Atoi(query.Get("saved"))
+	state.saved, _ = strconv.Atoi(query.Get("saved"))
 
-	h.renderWeek(w, http.StatusOK, start, form, saved)
+	h.renderWeek(w, http.StatusOK, start, state)
 }
 
 func (h *handler) create(w http.ResponseWriter, r *http.Request) {
@@ -95,6 +104,23 @@ func (h *handler) update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.save(w, r, intention)
+}
+
+func (h *handler) delete(w http.ResponseWriter, r *http.Request) {
+	intention, ok := h.findIntention(w, chi.URLParam(r, "id"))
+	if !ok {
+		return
+	}
+
+	err := h.db.Delete(&intention).Error
+	if err != nil {
+		log.Printf("error deleting intention %d: %v", intention.ID, err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	week := intentions.WeekStart(intention.MassAt).Format(intentions.DateLayout)
+	http.Redirect(w, r, "/?week="+week, http.StatusSeeOther)
 }
 
 func (h *handler) findIntention(w http.ResponseWriter, idParam string) (intentions.Intention, bool) {
@@ -157,7 +183,7 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 		form.Errors = errs
 		form.EditID = intention.ID
 
-		h.renderWeek(w, http.StatusUnprocessableEntity, start, &form, 0)
+		h.renderWeek(w, http.StatusUnprocessableEntity, start, weekState{form: &form})
 		return
 	}
 
@@ -193,7 +219,13 @@ func formErrors(day, massTime string, messages map[string]string) map[string]str
 	return errs
 }
 
-func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time, form *formView, saved int) {
+type weekState struct {
+	form   *formView
+	delete *deleteView
+	saved  int
+}
+
+func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time, state weekState) {
 	list, err := intentions.ForWeek(h.db, start)
 	if err != nil {
 		log.Printf("error loading week intention: %v", err)
@@ -204,12 +236,13 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 	view := newWeekView(start, list)
 	view.IsUpcoming = start.Equal(intentions.NextWeekStart(h.now()))
 
-	if form != nil {
-		view.Form = form
-		markSelected(view.Days, form.Day, form.Time)
-		markEditing(view.Days, form.EditID)
+	if state.form != nil {
+		view.Form = state.form
+		markSelected(view.Days, state.form.Day, state.form.Time)
+		markEditing(view.Days, state.form.EditID)
 	}
-	markSaved(view.Days, saved)
+	view.Delete = state.delete
+	markSaved(view.Days, state.saved)
 
 	render(w, status, weekTemplate, view)
 }

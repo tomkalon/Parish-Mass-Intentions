@@ -3,7 +3,7 @@ document.addEventListener("keydown", (event) => {
 		return;
 	}
 
-	const close = document.querySelector(".panel-close");
+	const close = document.querySelector("[data-close]");
 	if (close) {
 		window.location.href = close.href;
 	}

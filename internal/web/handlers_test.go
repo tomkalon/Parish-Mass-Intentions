@@ -145,7 +145,7 @@ func TestWeekWithNewIntentionPanel(t *testing.T) {
 		`<legend class="label">Dzień · 2.11 – 8.11.2026</legend>`,
 		`value="2026-11-03" checked required>`,
 		`<option value="18:00" selected>18:00</option>`,
-		`<a class="panel-close" href="/?week=2026-11-02" aria-label="Zamknij">×</a>`,
+		`<a class="panel-close" href="/?week=2026-11-02" aria-label="Zamknij" data-close>×</a>`,
 		`<section class="day is-selected" id="d-2026-11-03">`,
 		`<span class="pill">wybrany w formularzu</span>`,
 		`<div class="mass is-selected">`,
@@ -657,6 +657,97 @@ func TestUpdateIntentionNotFound(t *testing.T) {
 			}
 			if count := countIntentions(t, db); count != 0 {
 				t.Errorf("intentions in db = %d, want 0", count)
+			}
+		})
+	}
+}
+
+func TestWeekWithDeleteDialog(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedIntention(t, h.db, "2026-11-03 06:30", true, "+ Anna Kutyba (greg.)")
+
+	rec := getWeek(t, h, "/?week=2026-11-02&delete=1")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	body := rec.Body.String()
+	for _, want := range []string{
+		`<div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title" aria-describedby="dialog-when">`,
+		`<h2 class="dialog-title" id="dialog-title">Usunąć intencję?</h2>`,
+		`<p class="dialog-when" id="dialog-when">Wtorek 3.11., godz. 6:30 · poza parafią</p>`,
+		`<p class="dialog-content">&#43; Anna Kutyba (greg.)</p>`,
+		`<form class="dialog-actions" method="post" action="/intentions/1/delete">`,
+		`<button class="button button-danger" type="submit" autofocus>Usuń</button>`,
+		`<a class="button" href="/?week=2026-11-02" data-close>Anuluj</a>`,
+		`<main inert>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+
+	if strings.Contains(body, `id="panel-title"`) {
+		t.Error("side panel is open together with the delete dialog")
+	}
+}
+
+func TestWeekDeleteDialogForMissingIntention(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	rec := getWeek(t, h, "/?week=2026-11-02&delete=999")
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+func TestDeleteIntention(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedIntention(t, h.db, "2026-11-10 18:00", false, "+ Jan Kowalski")
+	seedIntention(t, h.db, "2026-11-10 18:00", false, "+ Anna Nowak")
+
+	rec := postToRouter(t, h.db, "/intentions/1/delete", url.Values{})
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if got, want := rec.Header().Get("Location"), "/?week=2026-11-09"; got != want {
+		t.Errorf("Location = %q, want %q", got, want)
+	}
+
+	var left []intentions.Intention
+	err := h.db.Find(&left).Error
+	if err != nil {
+		t.Fatalf("finding intentions: %v", err)
+	}
+	if len(left) != 1 || left[0].ID != 2 {
+		t.Errorf("intentions left = %+v, want only intention 2", left)
+	}
+}
+
+func TestDeleteIntentionNotFound(t *testing.T) {
+	h := newTestHandler(t, time.Now())
+	seedIntention(t, h.db, "2026-11-10 18:00", false, "+ Jan Kowalski")
+
+	tests := []struct {
+		path string
+		want int
+	}{
+		{path: "/intentions/999/delete", want: http.StatusNotFound},
+		{path: "/intentions/abc/delete", want: http.StatusBadRequest},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			rec := postToRouter(t, h.db, tt.path, url.Values{})
+
+			if rec.Code != tt.want {
+				t.Errorf("status = %d, want %d", rec.Code, tt.want)
+			}
+			if count := countIntentions(t, h.db); count != 1 {
+				t.Errorf("intentions in db = %d, want 1", count)
 			}
 		})
 	}

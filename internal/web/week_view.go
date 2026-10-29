@@ -14,6 +14,7 @@ type weekView struct {
 
 	IsUpcoming bool
 	Form       *formView
+	Delete     *deleteView
 }
 
 func newWeekView(start time.Time, intentionsList []intentions.Intention) weekView {

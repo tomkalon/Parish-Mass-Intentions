@@ -19,11 +19,11 @@ func TestNewWeekView(t *testing.T) {
 	if want := "2.11.2026 r. – 8.11.2026 r."; got.Range != want {
 		t.Errorf("Range = %q, want %q", got.Range, want)
 	}
-	if want := "2026-10-26"; got.Prev != want {
-		t.Errorf("Prev = %q, want %q", got.Prev, want)
+	if want := "/?week=2026-10-26"; got.PrevURL() != want {
+		t.Errorf("PrevURL() = %q, want %q", got.PrevURL(), want)
 	}
-	if want := "2026-11-09"; got.Next != want {
-		t.Errorf("Next = %q, want %q", got.Next, want)
+	if want := "/?week=2026-11-09"; got.NextURL() != want {
+		t.Errorf("NextURL() = %q, want %q", got.NextURL(), want)
 	}
 
 	wantDays := []dayView{
@@ -56,8 +56,8 @@ func TestNewWeekViewAcrossDSTChange(t *testing.T) {
 	if want := "2026-10-25"; got.Days[6].Date != want {
 		t.Errorf("last day = %q, want %q", got.Days[6].Date, want)
 	}
-	if want := "2026-10-26"; got.Next != want {
-		t.Errorf("Next = %q, want %q", got.Next, want)
+	if want := "/?week=2026-10-26"; got.NextURL() != want {
+		t.Errorf("NextURL() = %q, want %q", got.NextURL(), want)
 	}
 }
 

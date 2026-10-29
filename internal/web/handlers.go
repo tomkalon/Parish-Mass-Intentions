@@ -20,7 +20,7 @@ var templateFS embed.FS
 //go:embed static
 var staticFS embed.FS
 
-var weekTemplate = template.Must(template.ParseFS(templateFS, "templates/week.html"))
+var weekTemplate = template.Must(template.ParseFS(templateFS, "templates/week.html", "templates/panel.html"))
 
 type handler struct {
 	now func() time.Time
@@ -35,10 +35,11 @@ func RegisterRoutes(router chi.Router, db *gorm.DB) {
 }
 
 func (h *handler) week(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
 	upcoming := intentions.NextWeekStart(h.now())
 
 	start := upcoming
-	if param := r.URL.Query().Get("week"); param != "" {
+	if param := query.Get("week"); param != "" {
 		day, err := time.ParseInLocation(intentions.DateLayout, param, intentions.TimeZone)
 		if err != nil {
 			http.Error(w, "nieprawidłowa data tygodnia, oczekiwano RRRR-MM-DD", http.StatusBadRequest)
@@ -57,6 +58,12 @@ func (h *handler) week(w http.ResponseWriter, r *http.Request) {
 
 	view := newWeekView(start, list)
 	view.IsUpcoming = start.Equal(upcoming)
+
+	if query.Get("new") == "1" {
+		form := newFormView(start, query.Get("day"), query.Get("time"))
+		view.Form = &form
+		markSelected(view.Days, form.Day, form.Time)
+	}
 
 	render(w, weekTemplate, view)
 }

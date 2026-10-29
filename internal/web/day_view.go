@@ -21,12 +21,17 @@ type dayView struct {
 	Date   string
 	Label  string
 	Masses []massView
+
+	IsSelected bool
 }
 
 type massView struct {
-	Time    string
-	Parish  []intentionView
-	Outside []intentionView
+	Time      string
+	TimeValue string
+	Parish    []intentionView
+	Outside   []intentionView
+
+	IsSelected bool
 }
 
 type intentionView struct {
@@ -42,7 +47,7 @@ func newDayView(day time.Time, list []intentions.Intention) dayView {
 		massTime := fmt.Sprintf("%d:%02d", at.Hour(), at.Minute())
 
 		if len(masses) == 0 || masses[len(masses)-1].Time != massTime {
-			masses = append(masses, massView{Time: massTime})
+			masses = append(masses, massView{Time: massTime, TimeValue: at.Format("15:04")})
 		}
 		mass := &masses[len(masses)-1]
 

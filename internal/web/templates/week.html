@@ -5,10 +5,10 @@
 	<title>Intencje {{.Range}} – Go Parafia</title>
 	<link rel="stylesheet" href="/static/app.css">
 </head>
-<body>
+<body{{if .Form}} class="has-panel"{{end}}>
 	<nav class="toolbar" aria-label="Wybór tygodnia">
-		<a class="button" href="/?week={{.Prev}}">← Poprzedni</a>
-		<a class="button" href="/?week={{.Next}}">Następny →</a>
+		<a class="button" href="{{.PrevURL}}">← Poprzedni</a>
+		<a class="button" href="{{.NextURL}}">Następny →</a>
 		<a class="upcoming" href="/"{{if .IsUpcoming}} aria-current="true"{{end}}>Nadchodzący tydzień</a>
 	</nav>
 
@@ -21,10 +21,15 @@
 
 		<div class="week">
 			{{- range .Days}}
-			<section class="day" id="d-{{.Date}}">
-				<h2 class="day-name">{{.Label}}</h2>
+			<section class="day{{if .IsSelected}} is-selected{{end}}" id="d-{{.Date}}">
+				<div class="day-header">
+					<h2 class="day-name">{{.Label}}</h2>
+					{{- if .IsSelected}}
+					<span class="pill">wybrany w formularzu</span>
+					{{- end}}
+				</div>
 				{{- range .Masses}}
-				<div class="mass">
+				<div class="mass{{if .IsSelected}} is-selected{{end}}">
 					<h3 class="mass-time">{{.Time}}</h3>
 					<div>
 						{{- if .Parish}}
@@ -51,5 +56,9 @@
 			{{- end}}
 		</div>
 	</main>
+
+	{{- with .Form}}
+	{{template "panel" .}}
+	{{- end}}
 </body>
 </html>

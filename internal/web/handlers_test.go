@@ -118,6 +118,45 @@ func TestWeekSelectedByQuery(t *testing.T) {
 	if strings.Contains(body, "aria-current") {
 		t.Error("a week other than the upcoming one must not be marked with aria-current")
 	}
+	if strings.Contains(body, `id="panel-title"`) {
+		t.Error("panel is open without new=1")
+	}
+}
+
+func TestWeekWithNewIntentionPanel(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedIntention(t, h.db, "2026-11-03 18:00", false, "+ Wiesław Więckiewicz")
+
+	rec := getWeek(t, h, "/?week=2026-11-02&new=1&day=2026-11-03&time=18:00")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	body := rec.Body.String()
+	for _, want := range []string{
+		`<body class="has-panel">`,
+		`<h2 class="panel-title" id="panel-title">Nowa intencja</h2>`,
+		`<form class="panel-form" method="post" action="/intentions">`,
+		`<input type="hidden" name="week" value="2026-11-02">`,
+		`<legend class="label">Dzień · 2.11 – 8.11.2026</legend>`,
+		`value="2026-11-03" checked required>`,
+		`<option value="18:00" selected>18:00</option>`,
+		`<a class="panel-close" href="/?week=2026-11-02" aria-label="Zamknij">×</a>`,
+		`<section class="day is-selected" id="d-2026-11-03">`,
+		`<span class="pill">wybrany w formularzu</span>`,
+		`<div class="mass is-selected">`,
+		// html/template writes & in attributes as &amp;.
+		`href="/?day=2026-10-27&amp;new=1&amp;time=18%3A00&amp;week=2026-10-26#d-2026-10-27"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+
+	if got := strings.Count(body, " checked "); got != 1 {
+		t.Errorf("%d days are checked, want 1", got)
+	}
 }
 
 func TestWeekShowsIntentions(t *testing.T) {

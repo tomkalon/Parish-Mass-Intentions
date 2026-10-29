@@ -2,6 +2,7 @@ package web
 
 import (
 	"fmt"
+	"net/url"
 	"time"
 
 	"go-parafia/internal/intentions"
@@ -10,11 +11,10 @@ import (
 type weekView struct {
 	Start time.Time
 	Range string
-	Prev  string
-	Next  string
 	Days  []dayView
 
 	IsUpcoming bool
+	Form       *formView
 }
 
 func newWeekView(start time.Time, intentionsList []intentions.Intention) weekView {
@@ -35,10 +35,38 @@ func newWeekView(start time.Time, intentionsList []intentions.Intention) weekVie
 	return weekView{
 		Start: start,
 		Range: fmt.Sprintf("%s r. – %s r.", start.Format("2.1.2006"), end.Format("2.1.2006")),
-		Prev:  start.AddDate(0, 0, -7).Format(intentions.DateLayout),
-		Next:  start.AddDate(0, 0, 7).Format(intentions.DateLayout),
 		Days:  days,
 	}
+}
+
+func (v weekView) PrevURL() string {
+	return v.urlFor(v.Start.AddDate(0, 0, -7))
+}
+
+func (v weekView) NextURL() string {
+	return v.urlFor(v.Start.AddDate(0, 0, 7))
+}
+
+// urlFor keeps an open form open in the other week, on the same weekday and time.
+func (v weekView) urlFor(start time.Time) string {
+	query := url.Values{}
+	query.Set("week", start.Format(intentions.DateLayout))
+	if v.Form == nil {
+		return "/?" + query.Encode()
+	}
+
+	query.Set("new", "1")
+	if v.Form.Time != "" {
+		query.Set("time", v.Form.Time)
+	}
+	if v.Form.dayIndex < 0 {
+		return "/?" + query.Encode()
+	}
+
+	day := start.AddDate(0, 0, v.Form.dayIndex).Format(intentions.DateLayout)
+	query.Set("day", day)
+
+	return "/?" + query.Encode() + "#d-" + day
 }
 
 func (v weekView) IsEmpty() bool {

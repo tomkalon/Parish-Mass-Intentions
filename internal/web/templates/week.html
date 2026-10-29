@@ -15,11 +15,38 @@
 	<main>
 		<h1>INTENCJE MSZY ŚWIĘTYCH – {{.Range}}</h1>
 
+		{{- if .IsEmpty}}
+		<p class="empty-week">W tym tygodniu nie ma jeszcze żadnych intencji.</p>
+		{{- end}}
+
 		<div class="week">
 			{{- range .Days}}
 			<section class="day" id="d-{{.Date}}">
 				<h2 class="day-name">{{.Label}}</h2>
+				{{- range .Masses}}
+				<div class="mass">
+					<h3 class="mass-time">{{.Time}}</h3>
+					<div>
+						{{- if .Parish}}
+						<ol class="intentions">
+							{{- range .Parish}}
+							<li class="intention" id="i-{{.ID}}"><span class="number">{{.Number}}.</span> <span>{{.Content}}</span></li>
+							{{- end}}
+						</ol>
+						{{- end}}
+						{{- if .Outside}}
+						<p class="outside-label">Poza Parafią:</p>
+						<ol class="intentions outside">
+							{{- range .Outside}}
+							<li class="intention" id="i-{{.ID}}"><span class="number">{{.Number}}.</span> <span>{{.Content}}</span></li>
+							{{- end}}
+						</ol>
+						{{- end}}
+					</div>
+				</div>
+				{{- else}}
 				<p class="empty">brak intencji</p>
+				{{- end}}
 			</section>
 			{{- end}}
 		</div>

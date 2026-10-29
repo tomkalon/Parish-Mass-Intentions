@@ -52,14 +52,14 @@ func ValidationMessages(err error) (map[string]string, bool) {
 func validationMessage(fe validator.FieldError) string {
 	switch fe.Tag() {
 	case "required":
-		return "pole jest wymagane"
+		return "Pole jest wymagane."
 	case "datetime":
-		return "nieprawidłowy format, oczekiwano RRRR-MM-DD GG:MM"
+		return "Nieprawidłowy format, oczekiwano RRRR-MM-DD GG:MM."
 	case "quarter_hour":
-		return "godzina musi być pełnym kwadransem (:00, :15, :30, :45)"
+		return "Godzina musi być pełnym kwadransem (:00, :15, :30, :45)."
 	case "max":
-		return fmt.Sprintf("maksymalnie %s znaków", fe.Param())
+		return fmt.Sprintf("Maksymalnie %s znaków.", fe.Param())
 	default:
-		return "nieprawidłowa wartość"
+		return "Nieprawidłowa wartość."
 	}
 }

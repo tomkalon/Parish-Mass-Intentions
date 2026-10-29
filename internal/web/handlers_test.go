@@ -105,6 +105,7 @@ func TestWeekSelectedByQuery(t *testing.T) {
 		`id="d-2026-11-15"`,
 		"Poniedziałek 9.11.",
 		"Niedziela 15.11.",
+		"W tym tygodniu nie ma jeszcze żadnych intencji.",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body does not contain %q", want)
@@ -116,6 +117,54 @@ func TestWeekSelectedByQuery(t *testing.T) {
 	}
 	if strings.Contains(body, "aria-current") {
 		t.Error("a week other than the upcoming one must not be marked with aria-current")
+	}
+}
+
+func TestWeekShowsIntentions(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedIntention(t, h.db, "2026-11-02 06:30", false, "++ Jan i Rozalia Leżanka")
+	seedIntention(t, h.db, "2026-11-02 06:30", true, "+ Anna Kutyba (greg.)")
+	seedIntention(t, h.db, "2026-11-04 18:00", false, "<script>alert(1)</script>")
+
+	rec := getWeek(t, h, "/")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	body := rec.Body.String()
+	for _, want := range []string{
+		`<h3 class="mass-time">6:30</h3>`,
+		// html/template escapes "+" as "&#43;"; the browser still shows "+".
+		`<li class="intention" id="i-1"><span class="number">1.</span> <span>&#43;&#43; Jan i Rozalia Leżanka</span></li>`,
+		`<p class="outside-label">Poza Parafią:</p>`,
+		`<li class="intention" id="i-2"><span class="number">1.</span> <span>&#43; Anna Kutyba (greg.)</span></li>`,
+		`<h3 class="mass-time">18:00</h3>`,
+		"&lt;script&gt;alert(1)&lt;/script&gt;",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+
+	if strings.Contains(body, "<script>alert(1)") {
+		t.Error("intention content is not escaped")
+	}
+	if got := strings.Count(body, "brak intencji"); got != 5 {
+		t.Errorf(`"brak intencji" appears %d times, want 5`, got)
+	}
+	if strings.Contains(body, "W tym tygodniu nie ma jeszcze żadnych intencji.") {
+		t.Error("week with intentions must not show the empty week message")
+	}
+}
+
+func seedIntention(t *testing.T, db *gorm.DB, massAt string, outside bool, content string) {
+	t.Helper()
+
+	intention := newIntention(t, 0, massAt, outside, content)
+	err := db.Create(&intention).Error
+	if err != nil {
+		t.Fatalf("creating intention: %v", err)
 	}
 }
 

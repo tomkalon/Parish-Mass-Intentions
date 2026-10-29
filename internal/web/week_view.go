@@ -17,7 +17,6 @@ type weekView struct {
 	IsUpcoming bool
 }
 
-// intentionsList must be sorted by MassAt, then ID.
 func newWeekView(start time.Time, intentionsList []intentions.Intention) weekView {
 	end := start.AddDate(0, 0, 6)
 
@@ -40,4 +39,14 @@ func newWeekView(start time.Time, intentionsList []intentions.Intention) weekVie
 		Next:  start.AddDate(0, 0, 7).Format(intentions.DateLayout),
 		Days:  days,
 	}
+}
+
+func (v weekView) IsEmpty() bool {
+	for _, day := range v.Days {
+		if len(day.Masses) > 0 {
+			return false
+		}
+	}
+
+	return true
 }

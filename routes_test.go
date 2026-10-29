@@ -33,6 +33,7 @@ func TestRouter(t *testing.T) {
 		{path: "/", wantContentType: "text/html; charset=utf-8"},
 		{path: "/static/app.css", wantContentType: "text/css; charset=utf-8"},
 		{path: "/static/app.js", wantContentType: "text/javascript; charset=utf-8"},
+		{path: "/pdf", wantContentType: "application/pdf"},
 	}
 
 	for _, tt := range tests {

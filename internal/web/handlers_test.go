@@ -109,6 +109,7 @@ func TestWeekSelectedByQuery(t *testing.T) {
 		"Niedziela 15.11.",
 		"W tym tygodniu nie ma jeszcze żadnych intencji.",
 		`<a class="button button-primary button-large" href="/?new=1&amp;week=2026-11-09">+ Dodaj intencję</a>`,
+		`<a class="button toolbar-print" href="/pdf?week=2026-11-09">Drukuj / PDF</a>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body does not contain %q", want)
@@ -750,5 +751,76 @@ func TestDeleteIntentionNotFound(t *testing.T) {
 				t.Errorf("intentions in db = %d, want 1", count)
 			}
 		})
+	}
+}
+
+func getPDF(t *testing.T, h *handler, target string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, target, nil)
+	rec := httptest.NewRecorder()
+	h.pdf(rec, req)
+
+	return rec
+}
+
+func TestWeekPDF(t *testing.T) {
+	tests := []struct {
+		name         string
+		target       string
+		wantFilename string
+	}{
+		{name: "week from the address", target: "/pdf?week=2026-11-11", wantFilename: "intencje-2026-11-09.pdf"},
+		{name: "upcoming week by default", target: "/pdf", wantFilename: "intencje-2026-11-02.pdf"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+			seedIntention(t, h.db, "2026-11-10 18:00", true, "+ Anna Kutyba (greg.)")
+
+			rec := getPDF(t, h, tt.target)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+			}
+			if got, want := rec.Header().Get("Content-Type"), "application/pdf"; got != want {
+				t.Errorf("Content-Type = %q, want %q", got, want)
+			}
+			if got, want := rec.Header().Get("Content-Disposition"), `inline; filename="`+tt.wantFilename+`"`; got != want {
+				t.Errorf("Content-Disposition = %q, want %q", got, want)
+			}
+			if !strings.HasPrefix(rec.Body.String(), "%PDF-") {
+				t.Errorf("body does not start with %%PDF-")
+			}
+		})
+	}
+}
+
+func TestWeekPDFRejectsInvalidDate(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	rec := getPDF(t, h, "/pdf?week=bzdura")
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestWeekPDFDatabaseError(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	err := h.db.Migrator().DropTable(&intentions.Intention{})
+	if err != nil {
+		t.Fatalf("dropping intentions table: %v", err)
+	}
+
+	rec := getPDF(t, h, "/pdf?week=2026-11-02")
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+	if strings.HasPrefix(rec.Body.String(), "%PDF-") {
+		t.Error("a PDF was sent despite the error")
 	}
 }

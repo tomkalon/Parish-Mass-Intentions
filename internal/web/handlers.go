@@ -9,6 +9,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -41,21 +42,17 @@ func RegisterRoutes(router chi.Router, db *gorm.DB) {
 	router.Post("/intentions", h.create)
 	router.Post("/intentions/{id}", h.update)
 	router.Post("/intentions/{id}/delete", h.delete)
+	router.Get("/pdf", h.pdf)
 	router.Handle("/static/*", http.FileServerFS(staticFS))
 }
 
 func (h *handler) week(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 
-	start := intentions.NextWeekStart(h.now())
-	if param := query.Get("week"); param != "" {
-		day, err := time.ParseInLocation(intentions.DateLayout, param, intentions.TimeZone)
-		if err != nil {
-			http.Error(w, "nieprawidłowa data tygodnia, oczekiwano RRRR-MM-DD", http.StatusBadRequest)
-			return
-		}
-
-		start = intentions.WeekStart(day)
+	start, err := h.weekStart(query)
+	if err != nil {
+		http.Error(w, "nieprawidłowa data tygodnia, oczekiwano RRRR-MM-DD", http.StatusBadRequest)
+		return
 	}
 
 	var state weekState
@@ -91,6 +88,52 @@ func (h *handler) week(w http.ResponseWriter, r *http.Request) {
 	state.saved, _ = strconv.Atoi(query.Get("saved"))
 
 	h.renderWeek(w, http.StatusOK, start, state)
+}
+
+func (h *handler) weekStart(query url.Values) (time.Time, error) {
+	param := query.Get("week")
+	if param == "" {
+		return intentions.NextWeekStart(h.now()), nil
+	}
+
+	day, err := time.ParseInLocation(intentions.DateLayout, param, intentions.TimeZone)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	return intentions.WeekStart(day), nil
+}
+
+func (h *handler) pdf(w http.ResponseWriter, r *http.Request) {
+	start, err := h.weekStart(r.URL.Query())
+	if err != nil {
+		http.Error(w, "nieprawidłowa data tygodnia, oczekiwano RRRR-MM-DD", http.StatusBadRequest)
+		return
+	}
+
+	list, err := intentions.ForWeek(h.db, start)
+	if err != nil {
+		log.Printf("error loading week intention: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	var buf bytes.Buffer
+	err = writeWeekPDF(&buf, newWeekView(start, list))
+	if err != nil {
+		log.Printf("error generating pdf for week %s: %v", start.Format(intentions.DateLayout), err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	filename := "intencje-" + start.Format(intentions.DateLayout) + ".pdf"
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", `inline; filename="`+filename+`"`)
+
+	_, err = buf.WriteTo(w)
+	if err != nil {
+		log.Printf("error writing response: %v", err)
+	}
 }
 
 func (h *handler) create(w http.ResponseWriter, r *http.Request) {

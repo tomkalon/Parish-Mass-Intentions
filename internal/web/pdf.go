@@ -117,6 +117,8 @@ func writeWeekPDF(w io.Writer, view weekView) error {
 		return err
 	}
 
+	pdf.SetInfo(gopdf.PdfInfo{Title: "Intencje mszy świętych – " + weekInWords(view.Start), Creator: "Go Parafia"})
+
 	measurer := &gopdfMeasurer{pdf: pdf}
 	pages := layoutWeek(view, measurer)
 	if measurer.err != nil {

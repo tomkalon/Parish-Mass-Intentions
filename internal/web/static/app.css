@@ -180,6 +180,17 @@ h1 {
 	margin-left: auto;
 }
 
+.button,
+.button-small,
+.add-mass,
+.action,
+.upcoming,
+.delete-link,
+.panel-close {
+	flex: none;
+	white-space: nowrap;
+}
+
 .button-small {
 	display: inline-flex;
 	align-items: center;
@@ -256,7 +267,7 @@ h1 {
 	border-radius: 6px;
 	font-size: 17px;
 	line-height: 1.55;
-	scroll-margin-top: 88px;
+	scroll-margin-top: 160px;
 }
 
 .intention.is-saved {
@@ -580,12 +591,17 @@ h1 {
 }
 
 .pill {
+	display: none;
 	padding: 2px 10px;
 	border-radius: var(--radius-pill);
 	background: var(--accent-soft);
 	color: var(--accent);
 	font-size: 13px;
 	font-weight: 600;
+}
+
+.day.is-selected .pill {
+	display: inline-block;
 }
 
 /* Form errors */

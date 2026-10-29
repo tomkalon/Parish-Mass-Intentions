@@ -31,14 +31,14 @@
 			<section class="day{{if .IsSelected}} is-selected{{end}}" id="d-{{.Date}}">
 				<div class="day-header">
 					<h2 class="day-name">{{.Label}}</h2>
-					{{- if .IsSelected}}
+					{{- if $.Form}}
 					<span class="pill">wybrany w formularzu</span>
 					{{- end}}
 					<a class="button-small" href="{{.NewURL}}" aria-label="Dodaj intencję – {{.Label}}">+ Dodaj</a>
 				</div>
 				{{- range .Masses}}
 				{{- $time := .Time}}
-				<div class="mass{{if .IsSelected}} is-selected{{end}}">
+				<div class="mass{{if .IsSelected}} is-selected{{end}}" data-time="{{.TimeValue}}">
 					<div class="mass-side">
 						<h3 class="mass-time">{{.Time}}</h3>
 						<a class="add-mass" href="{{.NewURL}}" aria-label="Dodaj intencję na godz. {{.Time}}">+</a>

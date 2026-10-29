@@ -125,6 +125,9 @@ func TestWeekSelectedByQuery(t *testing.T) {
 	if strings.Contains(body, `id="panel-title"`) {
 		t.Error("panel is open without new=1")
 	}
+	if strings.Contains(body, `class="pill"`) {
+		t.Error("day pills are rendered without an open form")
+	}
 }
 
 func TestWeekWithNewIntentionPanel(t *testing.T) {
@@ -149,7 +152,7 @@ func TestWeekWithNewIntentionPanel(t *testing.T) {
 		`<a class="panel-close" href="/?week=2026-11-02" aria-label="Zamknij" data-close>×</a>`,
 		`<section class="day is-selected" id="d-2026-11-03">`,
 		`<span class="pill">wybrany w formularzu</span>`,
-		`<div class="mass is-selected">`,
+		`<div class="mass is-selected" data-time="18:00">`,
 		// html/template writes & in attributes as &amp;.
 		`href="/?day=2026-10-27&amp;new=1&amp;time=18%3A00&amp;week=2026-10-26"`,
 	} {
@@ -160,6 +163,9 @@ func TestWeekWithNewIntentionPanel(t *testing.T) {
 
 	if got := strings.Count(body, " checked "); got != 1 {
 		t.Errorf("%d days are checked, want 1", got)
+	}
+	if got := strings.Count(body, `<span class="pill">wybrany w formularzu</span>`); got != 7 {
+		t.Errorf("day pills = %d, want 7 (CSS shows only the selected one, JS moves the selection)", got)
 	}
 }
 
@@ -266,6 +272,9 @@ func TestStaticFiles(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "--accent: #7A1F2B;") {
 		t.Error("app.css does not contain the --accent token")
+	}
+	if !strings.Contains(rec.Body.String(), "flex: none;\n\twhite-space: nowrap;") {
+		t.Error("app.css does not keep buttons on one line (flex: none, white-space: nowrap)")
 	}
 }
 

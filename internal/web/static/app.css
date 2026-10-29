@@ -256,6 +256,29 @@ h1 {
 	border-radius: 6px;
 	font-size: 17px;
 	line-height: 1.55;
+	scroll-margin-top: 88px;
+}
+
+.intention.is-saved {
+	animation: saved-fade 1.5s ease-out;
+}
+
+@keyframes saved-fade {
+	0%,
+	30% {
+		background-color: var(--saved);
+	}
+
+	100% {
+		background-color: transparent;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.intention.is-saved {
+		animation: none;
+		background-color: var(--saved);
+	}
 }
 
 .intention:hover {

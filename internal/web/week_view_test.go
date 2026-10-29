@@ -155,3 +155,21 @@ func checkMass(t *testing.T, got, want massView) {
 		t.Errorf("%s outside = %v, want %v", want.Time, got.Outside, want.Outside)
 	}
 }
+
+func TestMarkSaved(t *testing.T) {
+	start := time.Date(2026, 11, 2, 0, 0, 0, 0, intentions.TimeZone)
+	view := newWeekView(start, []intentions.Intention{
+		newIntention(t, 1, "2026-11-02 06:30", false, "A"),
+		newIntention(t, 2, "2026-11-02 06:30", true, "B"),
+	})
+
+	markSaved(view.Days, 2)
+
+	mass := view.Days[0].Masses[0]
+	if mass.Parish[0].IsSaved {
+		t.Error("intention 1 is saved, want only 2")
+	}
+	if !mass.Outside[0].IsSaved {
+		t.Error("intention 2 is not saved")
+	}
+}

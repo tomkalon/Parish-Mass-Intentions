@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -59,7 +60,9 @@ func (h *handler) week(w http.ResponseWriter, r *http.Request) {
 		form = &f
 	}
 
-	h.renderWeek(w, http.StatusOK, start, form)
+	saved, _ := strconv.Atoi(query.Get("saved"))
+
+	h.renderWeek(w, http.StatusOK, start, form, saved)
 }
 
 func (h *handler) create(w http.ResponseWriter, r *http.Request) {
@@ -99,7 +102,7 @@ func (h *handler) create(w http.ResponseWriter, r *http.Request) {
 		form.IsOutsideParish = outside
 		form.Errors = errs
 
-		h.renderWeek(w, http.StatusUnprocessableEntity, start, &form)
+		h.renderWeek(w, http.StatusUnprocessableEntity, start, &form, 0)
 		return
 	}
 
@@ -136,7 +139,7 @@ func formErrors(day, massTime string, messages map[string]string) map[string]str
 	return errs
 }
 
-func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time, form *formView) {
+func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time, form *formView, saved int) {
 	list, err := intentions.ForWeek(h.db, start)
 	if err != nil {
 		log.Printf("error loading week intention: %v", err)
@@ -151,6 +154,7 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 		view.Form = form
 		markSelected(view.Days, form.Day, form.Time)
 	}
+	markSaved(view.Days, saved)
 
 	render(w, status, weekTemplate, view)
 }

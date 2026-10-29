@@ -118,8 +118,8 @@ func TestWeekViewURLsWithOpenForm(t *testing.T) {
 			name:     "day and time move to the same weekday",
 			day:      "2026-11-03",
 			massTime: "18:00",
-			wantPrev: "/?day=2026-10-27&new=1&time=18%3A00&week=2026-10-26#d-2026-10-27",
-			wantNext: "/?day=2026-11-10&new=1&time=18%3A00&week=2026-11-09#d-2026-11-10",
+			wantPrev: "/?day=2026-10-27&new=1&time=18%3A00&week=2026-10-26",
+			wantNext: "/?day=2026-11-10&new=1&time=18%3A00&week=2026-11-09",
 		},
 		{
 			name:     "no day selected",
@@ -193,13 +193,13 @@ func TestNewIntentionURL(t *testing.T) {
 		{
 			name: "day",
 			day:  "2026-11-03",
-			want: "/?day=2026-11-03&new=1&week=2026-11-02#d-2026-11-03",
+			want: "/?day=2026-11-03&new=1&week=2026-11-02",
 		},
 		{
 			name:     "day and time",
 			day:      "2026-11-03",
 			massTime: "18:00",
-			want:     "/?day=2026-11-03&new=1&time=18%3A00&week=2026-11-02#d-2026-11-03",
+			want:     "/?day=2026-11-03&new=1&time=18%3A00&week=2026-11-02",
 		},
 	}
 
@@ -223,14 +223,14 @@ func TestWeekViewNewURLs(t *testing.T) {
 	}
 
 	sunday := view.Days[6]
-	if want := "/?day=2026-11-08&new=1&week=2026-11-02#d-2026-11-08"; sunday.NewURL != want {
+	if want := "/?day=2026-11-08&new=1&week=2026-11-02"; sunday.NewURL != want {
 		t.Errorf("sunday NewURL = %q, want %q", sunday.NewURL, want)
 	}
 
 	if len(sunday.Masses) != 1 {
 		t.Fatalf("sunday has %d masses, want 1", len(sunday.Masses))
 	}
-	if want := "/?day=2026-11-08&new=1&time=06%3A30&week=2026-11-02#d-2026-11-08"; sunday.Masses[0].NewURL != want {
+	if want := "/?day=2026-11-08&new=1&time=06%3A30&week=2026-11-02"; sunday.Masses[0].NewURL != want {
 		t.Errorf("mass NewURL = %q, want %q", sunday.Masses[0].NewURL, want)
 	}
 }

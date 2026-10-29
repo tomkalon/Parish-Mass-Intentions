@@ -73,3 +73,17 @@ func (v weekView) IsEmpty() bool {
 
 	return true
 }
+
+func markSaved(days []dayView, id int) {
+	for i := range days {
+		for j := range days[i].Masses {
+			mass := &days[i].Masses[j]
+			for k := range mass.Parish {
+				mass.Parish[k].IsSaved = mass.Parish[k].ID == id
+			}
+			for k := range mass.Outside {
+				mass.Outside[k].IsSaved = mass.Outside[k].ID == id
+			}
+		}
+	}
+}

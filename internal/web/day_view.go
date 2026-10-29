@@ -40,6 +40,8 @@ type intentionView struct {
 	ID      int
 	Number  int
 	Content string
+
+	IsSaved bool
 }
 
 func newDayView(day time.Time, list []intentions.Intention) dayView {

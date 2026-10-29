@@ -99,6 +99,7 @@ func TestWeekSelectedByQuery(t *testing.T) {
 	body := rec.Body.String()
 	for _, want := range []string{
 		`<link rel="stylesheet" href="/static/app.css">`,
+		`<script src="/static/app.js" defer></script>`,
 		"<h1>INTENCJE MSZY ŚWIĘTYCH – 9.11.2026 r. – 15.11.2026 r.</h1>",
 		`href="/?week=2026-11-02"`,
 		`href="/?week=2026-11-16"`,
@@ -149,7 +150,7 @@ func TestWeekWithNewIntentionPanel(t *testing.T) {
 		`<span class="pill">wybrany w formularzu</span>`,
 		`<div class="mass is-selected">`,
 		// html/template writes & in attributes as &amp;.
-		`href="/?day=2026-10-27&amp;new=1&amp;time=18%3A00&amp;week=2026-10-26#d-2026-10-27"`,
+		`href="/?day=2026-10-27&amp;new=1&amp;time=18%3A00&amp;week=2026-10-26"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body does not contain %q", want)
@@ -183,8 +184,8 @@ func TestWeekShowsIntentions(t *testing.T) {
 		`<h3 class="mass-time">18:00</h3>`,
 		"&lt;script&gt;alert(1)&lt;/script&gt;",
 		`<a class="button button-primary toolbar-add" href="/?new=1&amp;week=2026-11-02">+ Dodaj intencję</a>`,
-		`<a class="button-small" href="/?day=2026-11-02&amp;new=1&amp;week=2026-11-02#d-2026-11-02" aria-label="Dodaj intencję – Poniedziałek 2.11.">+ Dodaj</a>`,
-		`<a class="add-mass" href="/?day=2026-11-02&amp;new=1&amp;time=06%3A30&amp;week=2026-11-02#d-2026-11-02" aria-label="Dodaj intencję na godz. 6:30">+</a>`,
+		`<a class="button-small" href="/?day=2026-11-02&amp;new=1&amp;week=2026-11-02" aria-label="Dodaj intencję – Poniedziałek 2.11.">+ Dodaj</a>`,
+		`<a class="add-mass" href="/?day=2026-11-02&amp;new=1&amp;time=06%3A30&amp;week=2026-11-02" aria-label="Dodaj intencję na godz. 6:30">+</a>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body does not contain %q", want)
@@ -447,5 +448,34 @@ func TestCreateIntentionRoute(t *testing.T) {
 
 	if rec.Code != http.StatusSeeOther {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+}
+
+func TestWeekHighlightsSavedIntention(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedIntention(t, h.db, "2026-11-02 06:30", false, "+ Jan Kowalski")
+
+	tests := []struct {
+		target    string
+		wantSaved bool
+	}{
+		{target: "/?week=2026-11-02&saved=1", wantSaved: true},
+		{target: "/?week=2026-11-02&saved=2", wantSaved: false},
+		{target: "/?week=2026-11-02&saved=abc", wantSaved: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.target, func(t *testing.T) {
+			rec := getWeek(t, h, tt.target)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+			}
+
+			gotSaved := strings.Contains(rec.Body.String(), `<li class="intention is-saved" id="i-1">`)
+			if gotSaved != tt.wantSaved {
+				t.Errorf("intention highlighted = %v, want %v", gotSaved, tt.wantSaved)
+			}
+		})
 	}
 }

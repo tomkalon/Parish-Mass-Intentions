@@ -114,11 +114,9 @@ func newIntentionURL(week, day, massTime string) string {
 	if massTime != "" {
 		query.Set("time", massTime)
 	}
-	if day == "" {
-		return "/?" + query.Encode()
+	if day != "" {
+		query.Set("day", day)
 	}
 
-	query.Set("day", day)
-
-	return "/?" + query.Encode() + "#d-" + day
+	return "/?" + query.Encode()
 }

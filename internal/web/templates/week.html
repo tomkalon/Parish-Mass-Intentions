@@ -4,6 +4,7 @@
 	<meta charset="utf-8">
 	<title>Intencje {{.Range}} – Go Parafia</title>
 	<link rel="stylesheet" href="/static/app.css">
+	<script src="/static/app.js" defer></script>
 </head>
 <body{{if .Form}} class="has-panel"{{end}}>
 	<nav class="toolbar" aria-label="Wybór tygodnia">
@@ -44,7 +45,7 @@
 						{{- if .Parish}}
 						<ol class="intentions">
 							{{- range .Parish}}
-							<li class="intention" id="i-{{.ID}}"><span class="number">{{.Number}}.</span> <span>{{.Content}}</span></li>
+							<li class="intention{{if .IsSaved}} is-saved{{end}}" id="i-{{.ID}}"><span class="number">{{.Number}}.</span> <span>{{.Content}}</span></li>
 							{{- end}}
 						</ol>
 						{{- end}}
@@ -52,7 +53,7 @@
 						<p class="outside-label">Poza Parafią:</p>
 						<ol class="intentions outside">
 							{{- range .Outside}}
-							<li class="intention" id="i-{{.ID}}"><span class="number">{{.Number}}.</span> <span>{{.Content}}</span></li>
+							<li class="intention{{if .IsSaved}} is-saved{{end}}" id="i-{{.ID}}"><span class="number">{{.Number}}.</span> <span>{{.Content}}</span></li>
 							{{- end}}
 						</ol>
 						{{- end}}

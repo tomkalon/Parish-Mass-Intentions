@@ -3,17 +3,32 @@ package web
 import (
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 
 	"go-parafia/internal/intentions"
 )
 
-func newTestHandler(now time.Time) *handler {
-	return &handler{now: func() time.Time { return now }}
+func newTestHandler(t *testing.T, now time.Time) *handler {
+	t.Helper()
+
+	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "test.db")), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("opening test database: %v", err)
+	}
+
+	err = db.AutoMigrate(&intentions.Intention{})
+	if err != nil {
+		t.Fatalf("migrating test database: %v", err)
+	}
+
+	return &handler{db: db, now: func() time.Time { return now }}
 }
 
 func getWeek(t *testing.T, h *handler, target string) *httptest.ResponseRecorder {
@@ -51,7 +66,7 @@ func TestWeekDefaultsToUpcomingWeek(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rec := getWeek(t, newTestHandler(tt.now), "/")
+			rec := getWeek(t, newTestHandler(t, tt.now), "/")
 
 			if rec.Code != http.StatusOK {
 				t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -69,7 +84,7 @@ func TestWeekDefaultsToUpcomingWeek(t *testing.T) {
 }
 
 func TestWeekSelectedByQuery(t *testing.T) {
-	h := newTestHandler(time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
 
 	rec := getWeek(t, h, "/?week=2026-11-11")
 
@@ -105,7 +120,7 @@ func TestWeekSelectedByQuery(t *testing.T) {
 }
 
 func TestWeekRejectsInvalidDate(t *testing.T) {
-	h := newTestHandler(time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
 
 	for _, target := range []string{
 		"/?week=bzdura",
@@ -119,6 +134,21 @@ func TestWeekRejectsInvalidDate(t *testing.T) {
 				t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
 			}
 		})
+	}
+}
+
+func TestWeekDatabaseError(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	err := h.db.Migrator().DropTable(&intentions.Intention{})
+	if err != nil {
+		t.Fatalf("dropping intentions table: %v", err)
+	}
+
+	rec := getWeek(t, h, "/")
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
 	}
 }
 

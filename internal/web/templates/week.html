@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="pl">
+<head>
+	<meta charset="utf-8">
+	<title>Intencje {{.Range}} – Go Parafia</title>
+	<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+	<nav class="toolbar" aria-label="Wybór tygodnia">
+		<a class="button" href="/?week={{.Prev}}">← Poprzedni</a>
+		<a class="button" href="/?week={{.Next}}">Następny →</a>
+		<a class="upcoming" href="/"{{if .IsUpcoming}} aria-current="true"{{end}}>Nadchodzący tydzień</a>
+	</nav>
+
+	<main>
+		<h1>INTENCJE MSZY ŚWIĘTYCH – {{.Range}}</h1>
+
+		<div class="week">
+			{{- range .Days}}
+			<section class="day" id="d-{{.Date}}">
+				<h2 class="day-name">{{.Label}}</h2>
+				<p class="empty">brak intencji</p>
+			</section>
+			{{- end}}
+		</div>
+	</main>
+</body>
+</html>

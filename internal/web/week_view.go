@@ -17,13 +17,20 @@ type weekView struct {
 	IsUpcoming bool
 }
 
-func newWeekView(start time.Time) weekView {
+// intentionsList must be sorted by MassAt, then ID.
+func newWeekView(start time.Time, intentionsList []intentions.Intention) weekView {
 	end := start.AddDate(0, 0, 6)
+
+	byDate := make(map[string][]intentions.Intention)
+	for _, intention := range intentionsList {
+		date := intention.MassAt.In(intentions.TimeZone).Format(intentions.DateLayout)
+		byDate[date] = append(byDate[date], intention)
+	}
 
 	days := make([]dayView, 0, 7)
 	for i := range 7 {
 		day := start.AddDate(0, 0, i)
-		days = append(days, newDayView(day))
+		days = append(days, newDayView(day, byDate[day.Format(intentions.DateLayout)]))
 	}
 
 	return weekView{

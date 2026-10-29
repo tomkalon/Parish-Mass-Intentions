@@ -11,7 +11,7 @@ import (
 func TestNewWeekView(t *testing.T) {
 	start := time.Date(2026, 11, 2, 0, 0, 0, 0, intentions.TimeZone)
 
-	got := newWeekView(start)
+	got := newWeekView(start, nil)
 
 	if !got.Start.Equal(start) {
 		t.Errorf("Start = %v, want %v", got.Start, start)
@@ -35,15 +35,20 @@ func TestNewWeekView(t *testing.T) {
 		{Date: "2026-11-07", Label: "Sobota 7.11."},
 		{Date: "2026-11-08", Label: "Niedziela 8.11."},
 	}
-	if !slices.Equal(got.Days, wantDays) {
-		t.Errorf("Days = %v, want %v", got.Days, wantDays)
+	if len(got.Days) != len(wantDays) {
+		t.Fatalf("len(Days) = %d, want %d", len(got.Days), len(wantDays))
+	}
+	for i, want := range wantDays {
+		if got.Days[i].Date != want.Date || got.Days[i].Label != want.Label {
+			t.Errorf("Days[%d] = {%q, %q}, want {%q, %q}", i, got.Days[i].Date, got.Days[i].Label, want.Date, want.Label)
+		}
 	}
 }
 
 func TestNewWeekViewAcrossDSTChange(t *testing.T) {
 	start := time.Date(2026, 10, 19, 0, 0, 0, 0, intentions.TimeZone)
 
-	got := newWeekView(start)
+	got := newWeekView(start, nil)
 
 	if len(got.Days) != 7 {
 		t.Fatalf("len(Days) = %d, want 7", len(got.Days))
@@ -53,5 +58,100 @@ func TestNewWeekViewAcrossDSTChange(t *testing.T) {
 	}
 	if want := "2026-10-26"; got.Next != want {
 		t.Errorf("Next = %q, want %q", got.Next, want)
+	}
+}
+
+func TestNewWeekViewGroupsIntentions(t *testing.T) {
+	start := time.Date(2026, 11, 2, 0, 0, 0, 0, intentions.TimeZone)
+	list := []intentions.Intention{
+		newIntention(t, 1, "2026-11-02 06:30", false, "A"),
+		newIntention(t, 2, "2026-11-02 06:30", false, "B"),
+		newIntention(t, 3, "2026-11-02 06:30", true, "C"),
+		newIntention(t, 4, "2026-11-02 18:00", true, "D"),
+		newIntention(t, 5, "2026-11-04 07:00", false, "E"),
+		newIntention(t, 6, "2026-11-09 07:00", false, "next week"),
+	}
+
+	got := newWeekView(start, list)
+
+	if len(got.Days) != 7 {
+		t.Fatalf("len(Days) = %d, want 7", len(got.Days))
+	}
+
+	monday := got.Days[0].Masses
+	if len(monday) != 2 {
+		t.Fatalf("monday has %d masses, want 2", len(monday))
+	}
+	checkMass(t, monday[0], massView{
+		Time:    "6:30",
+		Parish:  []intentionView{{ID: 1, Number: 1, Content: "A"}, {ID: 2, Number: 2, Content: "B"}},
+		Outside: []intentionView{{ID: 3, Number: 1, Content: "C"}},
+	})
+	checkMass(t, monday[1], massView{
+		Time:    "18:00",
+		Outside: []intentionView{{ID: 4, Number: 1, Content: "D"}},
+	})
+
+	if n := len(got.Days[1].Masses); n != 0 {
+		t.Errorf("tuesday has %d masses, want 0", n)
+	}
+
+	wednesday := got.Days[2].Masses
+	if len(wednesday) != 1 {
+		t.Fatalf("wednesday has %d masses, want 1", len(wednesday))
+	}
+	checkMass(t, wednesday[0], massView{
+		Time:   "7:00",
+		Parish: []intentionView{{ID: 5, Number: 1, Content: "E"}},
+	})
+
+	if n := len(got.Days[6].Masses); n != 0 {
+		t.Errorf("sunday has %d masses, want 0 (intention from next week must be ignored)", n)
+	}
+}
+
+func TestNewWeekViewUsesPolishTimeZone(t *testing.T) {
+	start := time.Date(2026, 11, 2, 0, 0, 0, 0, intentions.TimeZone)
+	list := []intentions.Intention{
+		{ID: 1, MassAt: time.Date(2026, 11, 2, 23, 30, 0, 0, time.UTC), Content: "A"},
+	}
+
+	got := newWeekView(start, list)
+
+	if n := len(got.Days[0].Masses); n != 0 {
+		t.Errorf("monday has %d masses, want 0", n)
+	}
+
+	tuesday := got.Days[1].Masses
+	if len(tuesday) != 1 {
+		t.Fatalf("tuesday has %d masses, want 1", len(tuesday))
+	}
+	if want := "0:30"; tuesday[0].Time != want {
+		t.Errorf("mass time = %q, want %q", tuesday[0].Time, want)
+	}
+}
+
+func newIntention(t *testing.T, id int, massAt string, outside bool, content string) intentions.Intention {
+	t.Helper()
+
+	at, err := time.ParseInLocation(intentions.MassAtLayout, massAt, intentions.TimeZone)
+	if err != nil {
+		t.Fatalf("parsing mass time %q: %v", massAt, err)
+	}
+
+	return intentions.Intention{ID: id, MassAt: at, Content: content, IsOutsideParish: outside}
+}
+
+func checkMass(t *testing.T, got, want massView) {
+	t.Helper()
+
+	if got.Time != want.Time {
+		t.Errorf("mass time = %q, want %q", got.Time, want.Time)
+	}
+	if !slices.Equal(got.Parish, want.Parish) {
+		t.Errorf("%s parish = %v, want %v", want.Time, got.Parish, want.Parish)
+	}
+	if !slices.Equal(got.Outside, want.Outside) {
+		t.Errorf("%s outside = %v, want %v", want.Time, got.Outside, want.Outside)
 	}
 }

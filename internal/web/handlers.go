@@ -47,7 +47,7 @@ func (h *handler) week(w http.ResponseWriter, r *http.Request) {
 		start = intentions.WeekStart(day)
 	}
 
-	view := newWeekView(start)
+	view := newWeekView(start, nil)
 	view.IsUpcoming = start.Equal(upcoming)
 
 	render(w, weekTemplate, view)

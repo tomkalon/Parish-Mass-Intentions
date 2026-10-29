@@ -178,3 +178,59 @@ func selectedTimes(options []timeOption) []string {
 
 	return selected
 }
+
+func TestNewIntentionURL(t *testing.T) {
+	tests := []struct {
+		name     string
+		day      string
+		massTime string
+		want     string
+	}{
+		{
+			name: "week only",
+			want: "/?new=1&week=2026-11-02",
+		},
+		{
+			name: "day",
+			day:  "2026-11-03",
+			want: "/?day=2026-11-03&new=1&week=2026-11-02#d-2026-11-03",
+		},
+		{
+			name:     "day and time",
+			day:      "2026-11-03",
+			massTime: "18:00",
+			want:     "/?day=2026-11-03&new=1&time=18%3A00&week=2026-11-02#d-2026-11-03",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := newIntentionURL("2026-11-02", tt.day, tt.massTime); got != tt.want {
+				t.Errorf("newIntentionURL = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestWeekViewNewURLs(t *testing.T) {
+	start := time.Date(2026, 11, 2, 0, 0, 0, 0, intentions.TimeZone)
+	view := newWeekView(start, []intentions.Intention{
+		newIntention(t, 1, "2026-11-08 06:30", false, "A"),
+	})
+
+	if want := "/?new=1&week=2026-11-02"; view.NewURL() != want {
+		t.Errorf("week NewURL() = %q, want %q", view.NewURL(), want)
+	}
+
+	sunday := view.Days[6]
+	if want := "/?day=2026-11-08&new=1&week=2026-11-02#d-2026-11-08"; sunday.NewURL != want {
+		t.Errorf("sunday NewURL = %q, want %q", sunday.NewURL, want)
+	}
+
+	if len(sunday.Masses) != 1 {
+		t.Fatalf("sunday has %d masses, want 1", len(sunday.Masses))
+	}
+	if want := "/?day=2026-11-08&new=1&time=06%3A30&week=2026-11-02#d-2026-11-08"; sunday.Masses[0].NewURL != want {
+		t.Errorf("mass NewURL = %q, want %q", sunday.Masses[0].NewURL, want)
+	}
+}

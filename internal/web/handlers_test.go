@@ -106,6 +106,7 @@ func TestWeekSelectedByQuery(t *testing.T) {
 		"Poniedziałek 9.11.",
 		"Niedziela 15.11.",
 		"W tym tygodniu nie ma jeszcze żadnych intencji.",
+		`<a class="button button-primary button-large" href="/?new=1&amp;week=2026-11-09">+ Dodaj intencję</a>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body does not contain %q", want)
@@ -180,6 +181,9 @@ func TestWeekShowsIntentions(t *testing.T) {
 		`<li class="intention" id="i-2"><span class="number">1.</span> <span>&#43; Anna Kutyba (greg.)</span></li>`,
 		`<h3 class="mass-time">18:00</h3>`,
 		"&lt;script&gt;alert(1)&lt;/script&gt;",
+		`<a class="button button-primary toolbar-add" href="/?new=1&amp;week=2026-11-02">+ Dodaj intencję</a>`,
+		`<a class="button-small" href="/?day=2026-11-02&amp;new=1&amp;week=2026-11-02#d-2026-11-02" aria-label="Dodaj intencję – Poniedziałek 2.11.">+ Dodaj</a>`,
+		`<a class="add-mass" href="/?day=2026-11-02&amp;new=1&amp;time=06%3A30&amp;week=2026-11-02#d-2026-11-02" aria-label="Dodaj intencję na godz. 6:30">+</a>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body does not contain %q", want)

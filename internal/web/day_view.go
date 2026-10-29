@@ -20,6 +20,7 @@ var weekdayNames = [...]string{
 type dayView struct {
 	Date   string
 	Label  string
+	NewURL string
 	Masses []massView
 
 	IsSelected bool
@@ -28,6 +29,7 @@ type dayView struct {
 type massView struct {
 	Time      string
 	TimeValue string
+	NewURL    string
 	Parish    []intentionView
 	Outside   []intentionView
 
@@ -41,13 +43,21 @@ type intentionView struct {
 }
 
 func newDayView(day time.Time, list []intentions.Intention) dayView {
+	date := day.Format(intentions.DateLayout)
+	week := intentions.WeekStart(day).Format(intentions.DateLayout)
+
 	var masses []massView
 	for _, intention := range list {
 		at := intention.MassAt.In(intentions.TimeZone)
 		massTime := fmt.Sprintf("%d:%02d", at.Hour(), at.Minute())
 
 		if len(masses) == 0 || masses[len(masses)-1].Time != massTime {
-			masses = append(masses, massView{Time: massTime, TimeValue: at.Format("15:04")})
+			timeValue := at.Format("15:04")
+			masses = append(masses, massView{
+				Time:      massTime,
+				TimeValue: timeValue,
+				NewURL:    newIntentionURL(week, date, timeValue),
+			})
 		}
 		mass := &masses[len(masses)-1]
 
@@ -59,8 +69,9 @@ func newDayView(day time.Time, list []intentions.Intention) dayView {
 	}
 
 	return dayView{
-		Date:   day.Format(intentions.DateLayout),
+		Date:   date,
 		Label:  weekdayNames[day.Weekday()] + " " + day.Format("2.1."),
+		NewURL: newIntentionURL(week, date, ""),
 		Masses: masses,
 	}
 }

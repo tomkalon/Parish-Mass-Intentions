@@ -156,8 +156,47 @@ h1 {
 	padding: 28px 24px;
 	border: 2px dashed #B9AD9B;
 	border-radius: var(--radius-card);
-	font: 20px/1.4 var(--font-serif);
 	text-align: center;
+}
+
+.empty-week-title {
+	margin: 0;
+	font: 20px/1.4 var(--font-serif);
+}
+
+.empty-week-hint {
+	margin: 6px 0 18px;
+	color: var(--ink-2);
+	font-size: 15px;
+}
+
+.button-large {
+	min-height: 52px;
+	padding: 0 24px;
+	font-size: 17px;
+}
+
+.toolbar-add {
+	margin-left: auto;
+}
+
+.button-small {
+	display: inline-flex;
+	align-items: center;
+	min-height: 36px;
+	margin-left: auto;
+	padding: 0 12px;
+	border: 1px solid var(--line-strong);
+	border-radius: var(--radius);
+	color: var(--accent);
+	font-size: 15px;
+	font-weight: 600;
+	text-decoration: none;
+	white-space: nowrap;
+}
+
+.button-small:hover {
+	background: var(--accent-soft);
 }
 
 /* Masses and intentions */
@@ -169,6 +208,32 @@ h1 {
 
 .mass + .mass {
 	margin-top: 10px;
+}
+
+.mass-side {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 4px;
+}
+
+.add-mass {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	border: 1px solid var(--line-strong);
+	border-radius: var(--radius);
+	color: var(--accent);
+	font-size: 20px;
+	font-weight: 600;
+	line-height: 1;
+	text-decoration: none;
+}
+
+.add-mass:hover {
+	background: var(--accent-soft);
 }
 
 .mass-time {

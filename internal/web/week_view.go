@@ -2,7 +2,6 @@ package web
 
 import (
 	"fmt"
-	"net/url"
 	"time"
 
 	"go-parafia/internal/intentions"
@@ -47,26 +46,22 @@ func (v weekView) NextURL() string {
 	return v.urlFor(v.Start.AddDate(0, 0, 7))
 }
 
-// urlFor keeps an open form open in the other week, on the same weekday and time.
+func (v weekView) NewURL() string {
+	return newIntentionURL(v.Start.Format(intentions.DateLayout), "", "")
+}
+
 func (v weekView) urlFor(start time.Time) string {
-	query := url.Values{}
-	query.Set("week", start.Format(intentions.DateLayout))
+	week := start.Format(intentions.DateLayout)
 	if v.Form == nil {
-		return "/?" + query.Encode()
+		return "/?week=" + week
 	}
 
-	query.Set("new", "1")
-	if v.Form.Time != "" {
-		query.Set("time", v.Form.Time)
-	}
-	if v.Form.dayIndex < 0 {
-		return "/?" + query.Encode()
+	day := ""
+	if v.Form.dayIndex >= 0 {
+		day = start.AddDate(0, 0, v.Form.dayIndex).Format(intentions.DateLayout)
 	}
 
-	day := start.AddDate(0, 0, v.Form.dayIndex).Format(intentions.DateLayout)
-	query.Set("day", day)
-
-	return "/?" + query.Encode() + "#d-" + day
+	return newIntentionURL(week, day, v.Form.Time)
 }
 
 func (v weekView) IsEmpty() bool {

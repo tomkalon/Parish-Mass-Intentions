@@ -10,13 +10,18 @@
 		<a class="button" href="{{.PrevURL}}">← Poprzedni</a>
 		<a class="button" href="{{.NextURL}}">Następny →</a>
 		<a class="upcoming" href="/"{{if .IsUpcoming}} aria-current="true"{{end}}>Nadchodzący tydzień</a>
+		<a class="button button-primary toolbar-add" href="{{.NewURL}}">+ Dodaj intencję</a>
 	</nav>
 
 	<main>
 		<h1>INTENCJE MSZY ŚWIĘTYCH – {{.Range}}</h1>
 
 		{{- if .IsEmpty}}
-		<p class="empty-week">W tym tygodniu nie ma jeszcze żadnych intencji.</p>
+		<div class="empty-week">
+			<p class="empty-week-title">W tym tygodniu nie ma jeszcze żadnych intencji.</p>
+			<p class="empty-week-hint">Dodaj pierwszą intencję — pojawi się w wybranym dniu i godzinie.</p>
+			<a class="button button-primary button-large" href="{{.NewURL}}">+ Dodaj intencję</a>
+		</div>
 		{{- end}}
 
 		<div class="week">
@@ -27,10 +32,14 @@
 					{{- if .IsSelected}}
 					<span class="pill">wybrany w formularzu</span>
 					{{- end}}
+					<a class="button-small" href="{{.NewURL}}" aria-label="Dodaj intencję – {{.Label}}">+ Dodaj</a>
 				</div>
 				{{- range .Masses}}
 				<div class="mass{{if .IsSelected}} is-selected{{end}}">
-					<h3 class="mass-time">{{.Time}}</h3>
+					<div class="mass-side">
+						<h3 class="mass-time">{{.Time}}</h3>
+						<a class="add-mass" href="{{.NewURL}}" aria-label="Dodaj intencję na godz. {{.Time}}">+</a>
+					</div>
 					<div>
 						{{- if .Parish}}
 						<ol class="intentions">

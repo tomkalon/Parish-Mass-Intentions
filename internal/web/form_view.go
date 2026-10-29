@@ -2,6 +2,7 @@ package web
 
 import (
 	"fmt"
+	"net/url"
 	"slices"
 	"time"
 
@@ -103,4 +104,20 @@ func markSelected(days []dayView, date, massTime string) {
 			days[i].Masses[j].IsSelected = days[i].Masses[j].TimeValue == massTime
 		}
 	}
+}
+
+func newIntentionURL(week, day, massTime string) string {
+	query := url.Values{}
+	query.Set("week", week)
+	query.Set("new", "1")
+	if massTime != "" {
+		query.Set("time", massTime)
+	}
+	if day == "" {
+		return "/?" + query.Encode()
+	}
+
+	query.Set("day", day)
+
+	return "/?" + query.Encode() + "#d-" + day
 }

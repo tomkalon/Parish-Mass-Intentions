@@ -7,6 +7,7 @@ type Intention struct {
 	MassAt          time.Time `json:"mass_at"`
 	Content         string    `json:"content"`
 	IsOutsideParish bool      `json:"is_outside_parish"`
+	IsPlaceholder   bool      `json:"is_placeholder" gorm:"not null;default:false"`
 }
 
 type Input struct {
@@ -19,4 +20,5 @@ func (i *Intention) Apply(input Input) {
 	i.MassAt, _ = time.ParseInLocation(MassAtLayout, input.MassAt, TimeZone)
 	i.Content = input.Content
 	i.IsOutsideParish = input.IsOutsideParish
+	i.IsPlaceholder = false
 }

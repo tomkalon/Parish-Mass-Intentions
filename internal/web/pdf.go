@@ -42,8 +42,6 @@ const (
 	smallCapsScale = 0.78
 
 	pdfFamily = "serif"
-
-	parishName = "Parafia pw. Trójcy Przenajświętszej i św. Leopolda w Rzezawie"
 )
 
 type pdfFont int
@@ -207,7 +205,7 @@ func (m *gopdfMeasurer) width(text string, font pdfFont, size, spacing float64) 
 }
 
 func layoutWeek(view weekView, m textMeasurer) []pdfPage {
-	header := layoutHeader(view.Start, m)
+	header := layoutHeader(view, m)
 
 	var days []pdfBlock
 	for _, style := range pdfStyles {
@@ -256,19 +254,30 @@ func paginate(header pdfBlock, days []pdfBlock) []pdfPage {
 	return pages
 }
 
-func layoutHeader(start time.Time, m textMeasurer) pdfBlock {
+func layoutHeader(view weekView, m textMeasurer) pdfBlock {
 	var block pdfBlock
+	y := 0.0
 
-	parishSize := 13 * px
-	block.Runs = append(block.Runs, centered(parishName, fontItalic, parishSize, 0, baseline(parishSize, 1.3), m))
-	y := parishSize*1.3 + 6*px
+	if view.ParishName != "" {
+		parishSize := 13 * px
+		block.Runs = append(block.Runs, centered(view.ParishName, fontItalic, parishSize, 0, y+baseline(parishSize, 1.3), m))
+		y += parishSize * 1.3
+	}
+	if view.Address != "" {
+		addressSize := 11 * px
+		block.Runs = append(block.Runs, centered(view.Address, fontRegular, addressSize, 0, y+baseline(addressSize, 1.3), m))
+		y += addressSize * 1.3
+	}
+	if y > 0 {
+		y += 6 * px
+	}
 
 	titleSize := 11 * px
 	block.Runs = append(block.Runs, centered("INTENCJE MSZY ŚWIĘTYCH", fontBold, titleSize, 0.32*titleSize, y+baseline(titleSize, 1.3), m))
 	y += titleSize * 1.3
 
 	rangeSize := 26 * px
-	block.Runs = append(block.Runs, centered(weekInWords(start), fontRegular, rangeSize, 0, y+baseline(rangeSize, 1.2), m))
+	block.Runs = append(block.Runs, centered(weekInWords(view.Start), fontRegular, rangeSize, 0, y+baseline(rangeSize, 1.2), m))
 	y += rangeSize*1.2 + 12*px
 
 	block.Rules = append(block.Rules,
@@ -299,7 +308,13 @@ func layoutDay(date time.Time, day dayView, style pdfStyle, last bool, m textMea
 	leftHeight := nameLine + dateSize*1.3
 
 	massesX := marginSide + 112*px + 14*px
-	rightHeight := layoutMasses(&block, day.Masses, massesX, marginSide+contentWidth-massesX, top, style, m)
+	massesWidth := marginSide + contentWidth - massesX
+
+	massesTop := top
+	if day.Feast != "" {
+		massesTop += layoutFeast(&block, day.Feast, massesX, massesWidth, top, m) + 4*px
+	}
+	rightHeight := massesTop - top + layoutMasses(&block, printableMasses(day.Masses), massesX, massesWidth, massesTop, style, m)
 
 	block.Height = top + max(leftHeight, rightHeight) + style.padBottom
 	if !last {
@@ -309,12 +324,55 @@ func layoutDay(date time.Time, day dayView, style pdfStyle, last bool, m textMea
 	return block
 }
 
+func layoutFeast(block *pdfBlock, feast string, x, width, top float64, m textMeasurer) float64 {
+	size := 12.5 * px
+	line := size * 1.3
+
+	measure := func(text string) float64 {
+		return m.width(text, fontItalic, size, 0)
+	}
+	lines := wrapText(feast, width, width, measure)
+	for i, text := range lines {
+		block.Runs = append(block.Runs, pdfRun{X: x, Baseline: top + baseline(size, 1.3) + float64(i)*line, Font: fontItalic, Size: size, Text: text})
+	}
+
+	return float64(len(lines)) * line
+}
+
 type printedIntention struct {
 	content string
 	outside bool
 }
 
-func layoutMasses(block *pdfBlock, masses []massView, x, width, top float64, style pdfStyle, m textMeasurer) float64 {
+type printedMass struct {
+	time       string
+	intentions []printedIntention
+}
+
+func printableMasses(masses []massView) []printedMass {
+	var result []printedMass
+	for _, mass := range masses {
+		var printed []printedIntention
+		for _, intention := range mass.Parish {
+			if !intention.IsPlaceholder {
+				printed = append(printed, printedIntention{content: intention.Content})
+			}
+		}
+		for _, intention := range mass.Outside {
+			if !intention.IsPlaceholder {
+				printed = append(printed, printedIntention{content: intention.Content, outside: true})
+			}
+		}
+
+		if len(printed) > 0 {
+			result = append(result, printedMass{time: mass.Time, intentions: printed})
+		}
+	}
+
+	return result
+}
+
+func layoutMasses(block *pdfBlock, masses []printedMass, x, width, top float64, style pdfStyle, m textMeasurer) float64 {
 	line := style.textSize * style.lineHeight
 	textBaseline := baseline(style.textSize, style.lineHeight)
 
@@ -333,19 +391,11 @@ func layoutMasses(block *pdfBlock, masses []massView, x, width, top float64, sty
 			y += 4 * px
 		}
 
-		w := m.width(mass.Time, fontBold, style.textSize, 0)
-		block.Runs = append(block.Runs, pdfRun{X: x + timeWidth - w, Baseline: y + textBaseline, Font: fontBold, Size: style.textSize, Text: mass.Time})
+		w := m.width(mass.time, fontBold, style.textSize, 0)
+		block.Runs = append(block.Runs, pdfRun{X: x + timeWidth - w, Baseline: y + textBaseline, Font: fontBold, Size: style.textSize, Text: mass.time})
 
-		var printed []printedIntention
-		for _, intention := range mass.Parish {
-			printed = append(printed, printedIntention{content: intention.Content})
-		}
-		for _, intention := range mass.Outside {
-			printed = append(printed, printedIntention{content: intention.Content, outside: true})
-		}
-
-		numbered := len(printed) > 1
-		for n, intention := range printed {
+		numbered := len(mass.intentions) > 1
+		for n, intention := range mass.intentions {
 			contentX, available := textX, textWidth
 			if numbered {
 				block.Runs = append(block.Runs, pdfRun{X: textX, Baseline: y + textBaseline, Font: fontRegular, Size: style.textSize, Text: fmt.Sprintf("%d.", n+1)})

@@ -14,12 +14,12 @@ if (selectedDay) {
 	selectedDay.scrollIntoView({ block: "start" });
 }
 
-const field = document.querySelector('.panel [aria-invalid="true"]') ?? document.getElementById("content");
+const field = document.querySelector('[aria-invalid="true"]') ?? document.getElementById("content") ?? document.getElementById("feast");
 if (field && document.activeElement !== field) {
 	field.focus({ preventScroll: true });
-	if (field instanceof HTMLTextAreaElement) {
-		field.setSelectionRange(field.value.length, field.value.length);
-	}
+}
+if (field instanceof HTMLTextAreaElement || (field instanceof HTMLInputElement && field.type === "text")) {
+	field.setSelectionRange(field.value.length, field.value.length);
 }
 
 const form = document.querySelector(".panel-form");

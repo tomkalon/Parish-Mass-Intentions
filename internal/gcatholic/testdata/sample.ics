@@ -1,0 +1,51 @@
+BEGIN:VCALENDAR
+PRODID:-//GCatholic.org//Liturgical Calendar//PL
+VERSION:2.0
+X-WR-CALNAME:Kalendarz liturgiczny 2026 (Polska)
+X-WR-CALDESC:Plik testowy w formacie kalendarza GCatholic\nhttps://gcatholi
+ c.org/calendar/2026/PL-pl
+BEGIN:VEVENT
+DTSTART;VALUE=DATE:20260102
+DTEND;VALUE=DATE:20260103
+UID:2026-pl-PL-0102-1@gcatholic.org
+SUMMARY:⚪ [W] Świętych Bazylego Wielkiego i Grzegorza z Nazjanzu\, bisku
+ pów i doktorów Kościoła
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;VALUE=DATE:20260223
+UID:2026-pl-PL-0223-1@gcatholic.org
+SUMMARY:🟣 [w*] Św. Polikarpa\, biskupa i męczennika
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;VALUE=DATE:20261101
+UID:2026-pl-PL-1101-1@gcatholic.org
+DESCRIPTION:Opis z dwukropkiem: zawija się\, a kontynuacja też ma dwukrope
+ k: https://gcatholic.org/calendar/2026/PL-pl#1101
+SUMMARY:⚪ [U] Wszystkich Świętych
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;VALUE=DATE:20261103
+UID:2026-pl-PL-1103-1@gcatholic.org
+SUMMARY:🟢 Wtorek XXXI tygodnia zwykłego
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;VALUE=DATE:20261103
+UID:2026-pl-PL-1103-2@gcatholic.org
+SUMMARY:⚪ [w] Św. Marcina de Porres\, zakonnika
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;VALUE=DATE:20261104
+UID:2026-pl-PL-1104-1@gcatholic.org
+SUMMARY:⚪ [W] Św. Karola Boromeusza\, biskupa
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;VALUE=DATE:20261108
+UID:2026-pl-PL-1108-1@gcatholic.org
+SUMMARY:🟢 XXXII Niedziela Zwykła
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;VALUE=DATE:20261109
+UID:2026-pl-PL-1109-1@gcatholic.org
+SUMMARY:⚪ [Ś] Rocznica poświęcenia Bazyliki Laterańskiej
+END:VEVENT
+END:VCALENDAR

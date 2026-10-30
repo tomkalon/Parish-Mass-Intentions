@@ -12,6 +12,8 @@ type deleteView struct {
 	When     string
 	Content  string
 	CloseURL string
+
+	IsPlaceholder bool
 }
 
 func newDeleteView(start time.Time, intention intentions.Intention) deleteView {
@@ -27,5 +29,7 @@ func newDeleteView(start time.Time, intention intentions.Intention) deleteView {
 		When:     when,
 		Content:  intention.Content,
 		CloseURL: "/?week=" + start.Format(intentions.DateLayout),
+
+		IsPlaceholder: intention.IsPlaceholder,
 	}
 }

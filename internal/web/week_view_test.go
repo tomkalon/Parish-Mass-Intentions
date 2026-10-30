@@ -195,3 +195,77 @@ func TestMarkEditing(t *testing.T) {
 		t.Error("intention 2 is marked as edited, want only 1")
 	}
 }
+
+func TestNewWeekViewDoesNotNumberPlaceholders(t *testing.T) {
+	start := time.Date(2026, 11, 2, 0, 0, 0, 0, intentions.TimeZone)
+	slot := newIntention(t, 1, "2026-11-02 18:00", false, "")
+	slot.IsPlaceholder = true
+
+	view := newWeekView(start, []intentions.Intention{
+		slot,
+		newIntention(t, 2, "2026-11-02 18:00", false, "+ Jan Kowalski"),
+		newIntention(t, 3, "2026-11-02 18:00", false, "+ Anna Nowak"),
+	})
+
+	var numbers []int
+	for _, intention := range view.Days[0].Masses[0].Parish {
+		numbers = append(numbers, intention.Number)
+	}
+	if want := []int{0, 1, 2}; !slices.Equal(numbers, want) {
+		t.Errorf("numbers = %v, want %v (placeholder without a number)", numbers, want)
+	}
+}
+
+func TestEmptyMassesText(t *testing.T) {
+	tests := []struct {
+		n    int
+		want string
+	}{
+		{n: 1, want: "1 msza nie ma uzupełnionej intencji."},
+		{n: 3, want: "3 msze nie mają uzupełnionej intencji."},
+		{n: 5, want: "5 mszy nie ma uzupełnionej intencji."},
+		{n: 12, want: "12 mszy nie ma uzupełnionej intencji."},
+		{n: 22, want: "22 msze nie mają uzupełnionej intencji."},
+	}
+
+	for _, tt := range tests {
+		if got := emptyMassesText(tt.n); got != tt.want {
+			t.Errorf("emptyMassesText(%d) = %q, want %q", tt.n, got, tt.want)
+		}
+	}
+}
+
+func TestWeekViewEmptyMasses(t *testing.T) {
+	start := time.Date(2026, 11, 2, 0, 0, 0, 0, intentions.TimeZone)
+	slot := func(id int, massAt string) intentions.Intention {
+		s := newIntention(t, id, massAt, false, "")
+		s.IsPlaceholder = true
+		return s
+	}
+
+	view := newWeekView(start, []intentions.Intention{
+		newIntention(t, 1, "2026-11-02 06:30", false, "+ Jan Kowalski"),
+		slot(2, "2026-11-02 18:00"),
+		slot(3, "2026-11-03 18:00"),
+		newIntention(t, 4, "2026-11-03 18:00", false, "+ Anna Nowak"),
+		slot(5, "2026-11-04 06:30"),
+		slot(6, "2026-11-04 18:00"),
+		newIntention(t, 7, "2026-11-04 18:00", true, "+ Piotr Wiśniewski"),
+	})
+
+	got := view.EmptyMasses()
+	if got == nil {
+		t.Fatal("EmptyMasses = nil, want a notice")
+	}
+	if want := "2 msze nie mają uzupełnionej intencji."; got.Text != want {
+		t.Errorf("Text = %q, want %q (Pn 18:00 and Śr 6:30 only)", got.Text, want)
+	}
+	if got.URL != "#d-2026-11-02" {
+		t.Errorf("URL = %q, want the first such day", got.URL)
+	}
+
+	full := newWeekView(start, []intentions.Intention{newIntention(t, 1, "2026-11-02 06:30", false, "+ Jan Kowalski")})
+	if notice := full.EmptyMasses(); notice != nil {
+		t.Errorf("EmptyMasses = %+v, want nil when every mass has an intention", notice)
+	}
+}

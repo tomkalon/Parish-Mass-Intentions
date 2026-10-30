@@ -18,10 +18,12 @@ var weekdayNames = [...]string{
 }
 
 type dayView struct {
-	Date   string
-	Label  string
-	NewURL string
-	Masses []massView
+	Date     string
+	Label    string
+	Feast    string
+	FeastURL string
+	NewURL   string
+	Masses   []massView
 
 	IsSelected bool
 }
@@ -43,8 +45,9 @@ type intentionView struct {
 	EditURL   string
 	DeleteURL string
 
-	IsSaved   bool
-	IsEditing bool
+	IsSaved       bool
+	IsEditing     bool
+	IsPlaceholder bool
 }
 
 func newDayView(day time.Time, list []intentions.Intention) dayView {
@@ -74,21 +77,34 @@ func newDayView(day time.Time, list []intentions.Intention) dayView {
 	}
 
 	return dayView{
-		Date:   date,
-		Label:  dayLabel(day),
-		NewURL: newIntentionURL(week, date, ""),
-		Masses: masses,
+		Date:     date,
+		Label:    dayLabel(day),
+		FeastURL: feastURL(week, date),
+		NewURL:   newIntentionURL(week, date, ""),
+		Masses:   masses,
 	}
 }
 
 func appendIntention(list []intentionView, intention intentions.Intention, week string) []intentionView {
-	return append(list, intentionView{
+	view := intentionView{
 		ID:        intention.ID,
-		Number:    len(list) + 1,
 		Content:   intention.Content,
 		EditURL:   editURL(week, intention.ID),
 		DeleteURL: deleteURL(week, intention.ID),
-	})
+
+		IsPlaceholder: intention.IsPlaceholder,
+	}
+
+	if !intention.IsPlaceholder {
+		view.Number = 1
+		for _, previous := range list {
+			if !previous.IsPlaceholder {
+				view.Number++
+			}
+		}
+	}
+
+	return append(list, view)
 }
 
 func dayLabel(day time.Time) string {

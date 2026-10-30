@@ -5,16 +5,26 @@ import (
 	"time"
 
 	"go-parafia/internal/intentions"
+	"go-parafia/internal/masses"
 )
 
 type weekView struct {
-	Start time.Time
-	Range string
-	Days  []dayView
+	Start     time.Time
+	Range     string
+	Days      []dayView
+	Schedules []masses.Schedule
+
+	SelectedScheduleID int
+	ParishName         string
+	Address            string
 
 	IsUpcoming bool
 	Form       *formView
 	Delete     *deleteView
+	Clear      *clearView
+	Feast      *feastView
+
+	ImportError string
 }
 
 func newWeekView(start time.Time, intentionsList []intentions.Intention) weekView {
@@ -37,6 +47,10 @@ func newWeekView(start time.Time, intentionsList []intentions.Intention) weekVie
 		Range: fmt.Sprintf("%s r. – %s r.", start.Format("2.1.2006"), end.Format("2.1.2006")),
 		Days:  days,
 	}
+}
+
+func (v weekView) Week() string {
+	return v.Start.Format(intentions.DateLayout)
 }
 
 func (v weekView) PrevURL() string {
@@ -63,6 +77,14 @@ func (v weekView) WeekURL() string {
 	return "/?week=" + v.Start.Format(intentions.DateLayout)
 }
 
+func (v weekView) SettingsURL() string {
+	return settingsURL(v.Week(), false)
+}
+
+func (v weekView) ClearURL() string {
+	return "/?clear=1&week=" + v.Start.Format(intentions.DateLayout)
+}
+
 func (v weekView) urlFor(start time.Time) string {
 	week := start.Format(intentions.DateLayout)
 	if v.Form == nil {
@@ -85,6 +107,12 @@ func (v weekView) IsEmpty() bool {
 	}
 
 	return true
+}
+
+func setFeasts(days []dayView, feasts map[string]string) {
+	for i := range days {
+		days[i].Feast = feasts[days[i].Date]
+	}
 }
 
 func markSaved(days []dayView, id int) {
@@ -110,5 +138,55 @@ func forEachIntention(days []dayView, fn func(intention *intentionView)) {
 				fn(&mass.Outside[k])
 			}
 		}
+	}
+}
+
+type emptyMassesNotice struct {
+	Text string
+	URL  string
+}
+
+func (v weekView) EmptyMasses() *emptyMassesNotice {
+	count := 0
+	first := ""
+	for _, day := range v.Days {
+		for _, mass := range day.Masses {
+			if !withoutIntention(mass) {
+				continue
+			}
+			count++
+			if first == "" {
+				first = day.Date
+			}
+		}
+	}
+	if count == 0 {
+		return nil
+	}
+
+	return &emptyMassesNotice{Text: emptyMassesText(count), URL: "#d-" + first}
+}
+
+func withoutIntention(mass massView) bool {
+	if len(mass.Outside) > 0 {
+		return false
+	}
+	for _, intention := range mass.Parish {
+		if !intention.IsPlaceholder {
+			return false
+		}
+	}
+
+	return len(mass.Parish) > 0
+}
+
+func emptyMassesText(n int) string {
+	switch {
+	case n == 1:
+		return "1 msza nie ma uzupełnionej intencji."
+	case n%10 >= 2 && n%10 <= 4 && (n%100 < 12 || n%100 > 14):
+		return fmt.Sprintf("%d msze nie mają uzupełnionej intencji.", n)
+	default:
+		return fmt.Sprintf("%d mszy nie ma uzupełnionej intencji.", n)
 	}
 }

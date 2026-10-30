@@ -9,9 +9,9 @@
       "0409": {
         "identity": {
           "name": "go-parafia",
-          "version": "0.1.0.0"
+          "version": "0.9.0.0"
         },
-        "description": "Go Parafia – intencje mszalne",
+        "description": "Intencje mszalne",
         "minimum-os": "win10",
         "execution-level": "as invoker",
         "ui-access": false,
@@ -33,17 +33,19 @@
     "#1": {
       "0000": {
         "fixed": {
-          "file_version": "0.1.0.0",
-          "product_version": "0.1.0.0"
+          "file_version": "0.9.0.0",
+          "product_version": "0.9.0.0"
         },
         "info": {
           "0415": {
-            "FileDescription": "Go Parafia – intencje mszalne",
-            "FileVersion": "0.1.0",
+            "CompanyName": "Gemma It Solutions",
+            "FileDescription": "Parafia – intencje mszalne",
+            "FileVersion": "0.9",
             "InternalName": "go-parafia",
-            "OriginalFilename": "go-parafia.exe",
+            "LegalCopyright": "© 2026 Tomasz Kaliński, Gemma It Solutions",
+            "OriginalFilename": "Intencje Mszalne.exe",
             "ProductName": "Go Parafia",
-            "ProductVersion": "0.1.0"
+            "ProductVersion": "0.9"
           }
         }
       }

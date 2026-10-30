@@ -5,22 +5,12 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
-
-	"github.com/glebarez/sqlite"
-	"gorm.io/gorm"
-
-	"go-parafia/internal/intentions"
 )
 
 func TestRouter(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "test.db")), &gorm.Config{})
+	db, err := openDatabase(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
-		t.Fatalf("opening test database: %v", err)
-	}
-
-	err = db.AutoMigrate(&intentions.Intention{})
-	if err != nil {
-		t.Fatalf("migrating test database: %v", err)
+		t.Fatal(err)
 	}
 
 	router := newRouter(db)
@@ -35,6 +25,7 @@ func TestRouter(t *testing.T) {
 		{path: "/static/app.js", wantContentType: "text/javascript; charset=utf-8"},
 		{path: "/pdf", wantContentType: "application/pdf"},
 		{path: "/print", wantContentType: "text/html; charset=utf-8"},
+		{path: "/settings", wantContentType: "text/html; charset=utf-8"},
 	}
 
 	for _, tt := range tests {

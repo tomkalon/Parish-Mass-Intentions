@@ -7,16 +7,64 @@
 	<script src="/static/app.js" defer></script>
 </head>
 <body{{if .Form}} class="has-panel"{{end}}>
-	<nav class="toolbar" aria-label="Wybór tygodnia"{{if .Delete}} inert{{end}}>
+	<nav class="toolbar" aria-label="Wybór tygodnia"{{if or .Delete .Clear .Feast}} inert{{end}}>
 		<a class="button" href="{{.PrevURL}}">← Poprzedni</a>
 		<a class="button" href="{{.NextURL}}">Następny →</a>
 		<a class="upcoming" href="/"{{if .IsUpcoming}} aria-current="true"{{end}}>Nadchodzący tydzień</a>
 		<a class="button toolbar-print" href="{{.PrintURL}}">Drukuj / PDF</a>
 		<a class="button button-primary toolbar-add" href="{{.NewURL}}">+ Dodaj intencję</a>
+		<a class="button button-icon" href="{{.SettingsURL}}" aria-label="Ustawienia" title="Ustawienia">
+			<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+				<g fill="currentColor">
+				<rect x="10.25" y="1" width="3.5" height="6" rx="1"/>
+				<rect x="10.25" y="1" width="3.5" height="6" rx="1" transform="rotate(45 12 12)"/>
+				<rect x="10.25" y="1" width="3.5" height="6" rx="1" transform="rotate(90 12 12)"/>
+				<rect x="10.25" y="1" width="3.5" height="6" rx="1" transform="rotate(135 12 12)"/>
+				<rect x="10.25" y="1" width="3.5" height="6" rx="1" transform="rotate(180 12 12)"/>
+				<rect x="10.25" y="1" width="3.5" height="6" rx="1" transform="rotate(225 12 12)"/>
+				<rect x="10.25" y="1" width="3.5" height="6" rx="1" transform="rotate(270 12 12)"/>
+				<rect x="10.25" y="1" width="3.5" height="6" rx="1" transform="rotate(315 12 12)"/>
+				</g>
+				<circle cx="12" cy="12" r="6.25" fill="none" stroke="currentColor" stroke-width="3.5"/>
+			</svg>
+		</a>
 	</nav>
 
-	<main{{if .Delete}} inert{{end}}>
+	<main{{if or .Delete .Clear .Feast}} inert{{end}}>
 		<h1>INTENCJE MSZY ŚWIĘTYCH – {{.Range}}</h1>
+
+		<div class="week-actions">
+			{{- if .Schedules}}
+			<form class="schedule-load" method="post" action="/slots">
+				<input type="hidden" name="week" value="{{.Week}}">
+				<label for="schedule">Porządek mszy</label>
+				<select class="select" id="schedule" name="schedule">
+					{{- range .Schedules}}
+					<option value="{{.ID}}"{{if eq .ID $.SelectedScheduleID}} selected{{end}}>{{.Name}}</option>
+					{{- end}}
+				</select>
+				<button class="button" type="submit">Wczytaj godziny mszy</button>
+			</form>
+			{{- end}}
+			<form method="post" action="/feasts/import">
+				<input type="hidden" name="week" value="{{.Week}}">
+				<button class="button" type="submit">Pobierz święta z GCatholic</button>
+			</form>
+			{{- if not .IsEmpty}}
+			<a class="delete-link" href="{{.ClearURL}}">Wyczyść tydzień</a>
+			{{- end}}
+		</div>
+
+		{{- with .EmptyMasses}}
+		<p class="week-notice" role="status"><span>{{.Text}}</span> <a href="{{.URL}}">Pokaż</a></p>
+		{{- end}}
+
+		{{- with .ImportError}}
+		<div class="form-alert week-alert" role="alert">
+			<span class="form-alert-icon" aria-hidden="true">!</span>
+			<p>{{.}}</p>
+		</div>
+		{{- end}}
 
 		{{- if .IsEmpty}}
 		<div class="empty-week">
@@ -31,6 +79,12 @@
 			<section class="day{{if .IsSelected}} is-selected{{end}}" id="d-{{.Date}}">
 				<div class="day-header">
 					<h2 class="day-name">{{.Label}}</h2>
+					{{- if .Feast}}
+					<span class="feast">{{.Feast}}</span>
+					<a class="feast-link" href="{{.FeastURL}}" aria-label="Zmień wspomnienie lub święto – {{.Label}}">Zmień</a>
+					{{- else}}
+					<a class="feast-link" href="{{.FeastURL}}" aria-label="Dodaj wspomnienie lub święto – {{.Label}}">+ święto</a>
+					{{- end}}
 					{{- if $.Form}}
 					<span class="pill">wybrany w formularzu</span>
 					{{- end}}
@@ -48,12 +102,21 @@
 						<ol class="intentions">
 							{{- range .Parish}}
 							<li class="intention{{if .IsSaved}} is-saved{{end}}{{if .IsEditing}} is-editing{{end}}" id="i-{{.ID}}">
+								{{- if .IsPlaceholder}}
+								<span class="number"></span>
+								<span class="placeholder">do uzupełnienia</span>
+								<span class="intention-actions">
+									<a class="action" href="{{.EditURL}}" aria-label="Uzupełnij intencję z godz. {{$time}}">Uzupełnij</a>
+									<a class="action action-delete" href="{{.DeleteURL}}" aria-label="Usuń nieuzupełnioną intencję z godz. {{$time}}">Usuń</a>
+								</span>
+								{{- else}}
 								<span class="number">{{.Number}}.</span>
 								<span>{{.Content}}</span>
 								<span class="intention-actions">
 									<a class="action" href="{{.EditURL}}" aria-label="Edytuj intencję {{.Number}}. z godz. {{$time}}">Edytuj</a>
 									<a class="action action-delete" href="{{.DeleteURL}}" aria-label="Usuń intencję {{.Number}}. z godz. {{$time}}">Usuń</a>
 								</span>
+								{{- end}}
 							</li>
 							{{- end}}
 						</ol>
@@ -92,10 +155,50 @@
 		<div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title" aria-describedby="dialog-when">
 			<h2 class="dialog-title" id="dialog-title">Usunąć intencję?</h2>
 			<p class="dialog-when" id="dialog-when">{{.When}}</p>
+			{{- if .IsPlaceholder}}
+			<p class="dialog-content placeholder">do uzupełnienia</p>
+			{{- else}}
 			<p class="dialog-content">{{.Content}}</p>
+			{{- end}}
 			<form class="dialog-actions" method="post" action="{{.Action}}">
 				<button class="button button-danger" type="submit" autofocus>Usuń</button>
 				<a class="button" href="{{.CloseURL}}" data-close>Anuluj</a>
+			</form>
+		</div>
+	</div>
+	{{- end}}
+
+	{{- with .Feast}}
+	<div class="dialog-backdrop">
+		<div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+			<form method="post" action="{{.Action}}">
+				<h2 class="dialog-title" id="dialog-title">Wspomnienie / święto</h2>
+				<p class="dialog-when">{{.Day}}</p>
+				<label class="label" for="feast">Opis dnia</label>
+				<input class="input{{if .Error}} is-invalid{{end}}" type="text" id="feast" name="feast" value="{{.Feast}}" maxlength="{{.MaxLength}}" autofocus aria-describedby="{{if .Error}}feast-error {{end}}feast-hint"{{if .Error}} aria-invalid="true"{{end}}>
+				{{- with .Error}}
+				<p class="field-error" id="feast-error">{{.}}</p>
+				{{- end}}
+				<p class="hint" id="feast-hint">Np. „wspomnienie św. Karola Boromeusza”. Puste pole usuwa wpis.</p>
+				<div class="dialog-actions">
+					<button class="button button-primary" type="submit">Zapisz</button>
+					<a class="button" href="{{.CloseURL}}" data-close>Anuluj</a>
+				</div>
+			</form>
+		</div>
+	</div>
+	{{- end}}
+
+	{{- with .Clear}}
+	<div class="dialog-backdrop">
+		<div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dialog-title" aria-describedby="dialog-content">
+			<h2 class="dialog-title" id="dialog-title">Wyczyścić tydzień?</h2>
+			<p class="dialog-when">{{$.Range}}</p>
+			<p class="dialog-content" id="dialog-content">Do usunięcia: {{.Count}}{{if .Placeholders}} (w tym {{.Placeholders}} do uzupełnienia){{end}}. Tej operacji nie można cofnąć.</p>
+			<form class="dialog-actions" method="post" action="/clear">
+				<input type="hidden" name="week" value="{{$.Week}}">
+				<button class="button button-danger" type="submit">Wyczyść tydzień</button>
+				<a class="button" href="{{$.WeekURL}}" data-close autofocus>Anuluj</a>
 			</form>
 		</div>
 	</div>

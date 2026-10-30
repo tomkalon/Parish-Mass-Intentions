@@ -12,7 +12,7 @@ func prepareDataDir() (string, error) {
 	return ".", nil
 }
 
-func run(router http.Handler) error {
+func run(router http.Handler, _ string) error {
 	server := &http.Server{
 		Addr:              "127.0.0.1:8080",
 		Handler:           router,

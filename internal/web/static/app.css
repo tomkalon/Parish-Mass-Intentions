@@ -58,7 +58,7 @@ body {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
-	gap: 8px 12px;
+	gap: 8px;
 	/* Full-width background, contents aligned with the 960px column below. */
 	padding: 12px max(var(--gutter), (100% - var(--content-width)) / 2 + var(--gutter));
 	background: var(--bg);
@@ -84,7 +84,7 @@ body {
 }
 
 .upcoming {
-	margin-left: 8px;
+	margin-left: 4px;
 	color: var(--accent);
 	font-weight: 600;
 	text-underline-offset: 3px;
@@ -112,6 +112,53 @@ h1 {
 	font: 700 25px/1.3 var(--font-serif);
 	letter-spacing: .03em;
 	text-align: center;
+}
+
+.week-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 12px 24px;
+	margin: 0 0 20px;
+}
+
+.week-alert {
+	margin: 0 0 20px;
+}
+
+.week-notice {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 12px;
+	margin: 0 0 16px;
+	padding: 8px 14px;
+	border-left: 4px solid var(--accent);
+	border-radius: var(--radius);
+	background: var(--selected-mass);
+	color: var(--ink-2);
+	font-size: 15px;
+}
+
+.week-notice a {
+	color: var(--accent);
+	font-weight: 600;
+	text-underline-offset: 3px;
+}
+
+.schedule-load {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 12px;
+	color: var(--ink-2);
+	font-size: 15px;
+}
+
+.schedule-load .select {
+	width: auto;
+	height: 44px;
+	font-size: 16px;
 }
 
 .week {
@@ -142,6 +189,22 @@ h1 {
 .day-name {
 	margin: 0;
 	font: 700 21px/1.3 var(--font-serif);
+}
+
+.feast {
+	color: var(--muted);
+	font-size: 15px;
+	font-style: italic;
+}
+
+.feast-link {
+	color: var(--muted);
+	font-size: 14px;
+	text-underline-offset: 3px;
+}
+
+.feast-link:hover {
+	color: var(--accent);
 }
 
 .empty {
@@ -178,6 +241,14 @@ h1 {
 
 .toolbar-print {
 	margin-left: auto;
+}
+
+.button-icon {
+	padding: 0 11px;
+}
+
+.button-icon svg {
+	display: block;
 }
 
 .button,
@@ -303,6 +374,11 @@ h1 {
 
 .number {
 	font-weight: 700;
+}
+
+.placeholder {
+	color: var(--muted);
+	font-style: italic;
 }
 
 .intention-actions {
@@ -544,6 +620,19 @@ h1 {
 	font: 600 19px var(--font-ui);
 }
 
+.input {
+	display: block;
+	width: 100%;
+	height: 48px;
+	margin-top: 6px;
+	padding: 0 12px;
+	border: 1px solid var(--line-strong);
+	border-radius: var(--radius);
+	background: var(--surface);
+	color: var(--ink);
+	font: 17px var(--font-ui);
+}
+
 .textarea {
 	display: block;
 	width: 100%;
@@ -644,7 +733,8 @@ h1 {
 }
 
 .select.is-invalid,
-.textarea.is-invalid {
+.textarea.is-invalid,
+.input.is-invalid {
 	border: 1.5px solid var(--danger);
 	background: var(--danger-field);
 }
@@ -700,6 +790,10 @@ h1 {
 	gap: 12px;
 }
 
+.hint + .dialog-actions {
+	margin-top: 20px;
+}
+
 .button-danger {
 	background: var(--danger);
 	border-color: var(--danger);
@@ -734,4 +828,110 @@ h1 {
 	width: 100%;
 	border: 0;
 	background: #CFC8BE;
+}
+
+/* Settings */
+
+.settings > * {
+	max-width: 700px;
+}
+
+.settings h1 {
+	text-align: left;
+}
+
+.notice {
+	margin: 0 0 20px;
+	padding: 12px 14px;
+	border-radius: var(--radius);
+	background: var(--accent-soft);
+	color: var(--accent);
+	font-weight: 600;
+}
+
+.settings .form-alert {
+	margin: 0 0 20px;
+}
+
+.settings-form {
+	display: grid;
+	gap: 28px;
+	justify-items: start;
+}
+
+.settings-section {
+	display: grid;
+	gap: 18px;
+	width: 100%;
+	margin: 0;
+	padding: 18px 24px 22px;
+	border: 1px solid var(--line);
+	border-radius: var(--radius-card);
+	background: var(--surface);
+}
+
+.settings-section legend {
+	padding: 0 6px;
+	font: 700 19px/1.3 var(--font-serif);
+}
+
+.settings-section > .hint {
+	margin: 0;
+}
+
+.settings-section .checkbox {
+	margin: -12px -10px 0;
+}
+
+.checkbox-hint {
+	display: block;
+	color: var(--muted);
+	font-size: 14px;
+}
+
+.schedules {
+	margin-top: 28px;
+}
+
+.settings-heading {
+	margin: 0;
+	font: 700 19px/1.3 var(--font-serif);
+}
+
+.schedule-row {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 10px 0;
+	border-top: 1px solid var(--line);
+}
+
+.schedule-name {
+	margin: 0;
+	font-size: 17px;
+	font-weight: 600;
+}
+
+.schedule-summary {
+	margin: 2px 0 0;
+	color: var(--muted);
+	font-size: 14px;
+}
+
+.schedule-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 12px 16px;
+}
+
+.schedule-actions .delete-link {
+	margin-left: auto;
+}
+
+.app-credit {
+	margin: 32px 0 0;
+	color: var(--muted);
+	font-size: 13px;
 }

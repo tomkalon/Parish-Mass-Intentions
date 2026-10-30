@@ -1,11 +1,18 @@
 package web
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -13,8 +20,17 @@ import (
 	"github.com/go-chi/chi/v5"
 	"gorm.io/gorm"
 
+	"go-parafia/internal/calendar"
+	"go-parafia/internal/gcatholic"
 	"go-parafia/internal/intentions"
+	"go-parafia/internal/masses"
+	"go-parafia/internal/settings"
 )
+
+var testSchedules = []masses.Schedule{
+	{Name: "Porządek zwykły", Masses: [7][]string{time.Monday: {"06:30", "18:00"}, time.Sunday: {"07:00", "10:00"}}},
+	{Name: "Wakacje", Masses: [7][]string{time.Sunday: {"09:00"}}},
+}
 
 func newTestHandler(t *testing.T, now time.Time) *handler {
 	t.Helper()
@@ -24,12 +40,29 @@ func newTestHandler(t *testing.T, now time.Time) *handler {
 		t.Fatalf("opening test database: %v", err)
 	}
 
-	err = db.AutoMigrate(&intentions.Intention{})
+	err = db.AutoMigrate(&intentions.Intention{}, &settings.Setting{}, &calendar.Day{})
 	if err != nil {
 		t.Fatalf("migrating test database: %v", err)
 	}
+	err = masses.Migrate(db)
+	if err != nil {
+		t.Fatalf("migrating schedules: %v", err)
+	}
+	for _, s := range testSchedules {
+		_, err = masses.Save(db, s)
+		if err != nil {
+			t.Fatalf("saving schedule %q: %v", s.Name, err)
+		}
+	}
 
-	return &handler{db: db, now: func() time.Time { return now }, validate: intentions.NewValidator()}
+	return &handler{
+		db:       db,
+		now:      func() time.Time { return now },
+		validate: intentions.NewValidator(),
+		fetchCelebrations: func(context.Context, int) ([]gcatholic.Celebration, error) {
+			return nil, errors.New("no network in tests")
+		},
+	}
 }
 
 func getWeek(t *testing.T, h *handler, target string) *httptest.ResponseRecorder {
@@ -861,5 +894,1335 @@ func TestPrintPreview(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("invalid week: status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func postSlots(t *testing.T, h *handler, form url.Values) *httptest.ResponseRecorder {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodPost, "/slots", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	h.createSlots(rec, req)
+
+	return rec
+}
+
+func placeholderTimes(t *testing.T, db *gorm.DB) []string {
+	t.Helper()
+
+	var slots []intentions.Intention
+	err := db.Where("is_placeholder = ?", true).Order("mass_at").Find(&slots).Error
+	if err != nil {
+		t.Fatalf("loading slots: %v", err)
+	}
+
+	times := make([]string, 0, len(slots))
+	for _, slot := range slots {
+		times = append(times, slot.MassAt.In(intentions.TimeZone).Format(intentions.MassAtLayout))
+	}
+
+	return times
+}
+
+func TestCreateSlots(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedIntention(t, h.db, "2026-11-02 18:00", false, "+ Jan Kowalski")
+
+	rec := postSlots(t, h, url.Values{"week": {"2026-11-04"}, "schedule": {"1"}})
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if got, want := rec.Header().Get("Location"), "/?week=2026-11-02"; got != want {
+		t.Errorf("Location = %q, want %q", got, want)
+	}
+
+	want := []string{"2026-11-02 06:30", "2026-11-08 07:00", "2026-11-08 10:00"}
+	if got := placeholderTimes(t, h.db); !slices.Equal(got, want) {
+		t.Errorf("slots = %q, want %q", got, want)
+	}
+}
+
+func TestCreateSlotsUsesChosenSchedule(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	postSlots(t, h, url.Values{"week": {"2026-11-02"}, "schedule": {"2"}})
+
+	want := []string{"2026-11-08 09:00"}
+	if got := placeholderTimes(t, h.db); !slices.Equal(got, want) {
+		t.Errorf("slots = %q, want %q", got, want)
+	}
+}
+
+func TestCreateSlotsTwiceDoesNotDuplicate(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	form := url.Values{"week": {"2026-11-02"}, "schedule": {"1"}}
+
+	postSlots(t, h, form)
+	postSlots(t, h, form)
+
+	if got := countIntentions(t, h.db); got != 4 {
+		t.Errorf("intentions = %d, want 4", got)
+	}
+}
+
+func TestCreateSlotsConcurrently(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	form := url.Values{"week": {"2026-11-02"}, "schedule": {"1"}}
+
+	var wg sync.WaitGroup
+	for range 5 {
+		wg.Go(func() {
+			rec := postSlots(t, h, form)
+			if rec.Code != http.StatusSeeOther {
+				t.Errorf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+			}
+		})
+	}
+	wg.Wait()
+
+	if got := countIntentions(t, h.db); got != 4 {
+		t.Errorf("intentions = %d, want 4", got)
+	}
+}
+
+func TestCreateSlotsInvalid(t *testing.T) {
+	tests := []struct {
+		name string
+		form url.Values
+	}{
+		{name: "invalid week", form: url.Values{"week": {"jutro"}, "schedule": {"1"}}},
+		{name: "unknown schedule", form: url.Values{"week": {"2026-11-02"}, "schedule": {"99"}}},
+		{name: "schedule is not a number", form: url.Values{"week": {"2026-11-02"}, "schedule": {"Porządek zwykły"}}},
+		{name: "missing schedule", form: url.Values{"week": {"2026-11-02"}}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+			rec := postSlots(t, h, tt.form)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+			}
+			if got := countIntentions(t, h.db); got != 0 {
+				t.Errorf("intentions = %d, want 0", got)
+			}
+		})
+	}
+}
+
+func TestCreateSlotsDatabaseError(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	err := h.db.Migrator().DropTable(&intentions.Intention{})
+	if err != nil {
+		t.Fatalf("dropping intentions table: %v", err)
+	}
+
+	rec := postSlots(t, h, url.Values{"week": {"2026-11-02"}, "schedule": {"1"}})
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestCreateSlotsRoute(t *testing.T) {
+	db := newTestHandler(t, time.Now()).db
+
+	rec := postToRouter(t, db, "/slots", url.Values{"week": {"2026-11-02"}, "schedule": {"1"}})
+
+	if rec.Code != http.StatusSeeOther {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+}
+
+func TestWeekShowsScheduleForm(t *testing.T) {
+	rec := getWeek(t, newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone)), "/")
+
+	body := rec.Body.String()
+	for _, want := range []string{
+		`<form class="schedule-load" method="post" action="/slots">`,
+		`<input type="hidden" name="week" value="2026-11-02">`,
+		`<option value="1">Porządek zwykły</option>`,
+		`<option value="2">Wakacje</option>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+}
+
+func TestWeekWithoutSchedulesHidesScheduleForm(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	err := masses.Delete(h.db, 1)
+	if err == nil {
+		err = masses.Delete(h.db, 2)
+	}
+	if err != nil {
+		t.Fatalf("deleting schedules: %v", err)
+	}
+
+	body := getWeek(t, h, "/").Body.String()
+
+	if strings.Contains(body, "schedule-load") {
+		t.Error("body contains the schedule form, want none without schedules")
+	}
+}
+
+func seedPlaceholder(t *testing.T, db *gorm.DB, massAt string) int {
+	t.Helper()
+
+	slot := newIntention(t, 0, massAt, false, "")
+	slot.IsPlaceholder = true
+	err := db.Create(&slot).Error
+	if err != nil {
+		t.Fatalf("creating slot: %v", err)
+	}
+
+	return slot.ID
+}
+
+func TestWeekShowsPlaceholder(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	id := seedPlaceholder(t, h.db, "2026-11-02 06:30")
+
+	body := getWeek(t, h, "/").Body.String()
+
+	for _, want := range []string{
+		`<span class="number"></span>`,
+		`<span class="placeholder">do uzupełnienia</span>`,
+		fmt.Sprintf(`<a class="action" href="/?edit=%d&amp;week=2026-11-02" aria-label="Uzupełnij intencję z godz. 6:30">Uzupełnij</a>`, id),
+		fmt.Sprintf(`<a class="action action-delete" href="/?delete=%d&amp;week=2026-11-02" aria-label="Usuń nieuzupełnioną intencję z godz. 6:30">Usuń</a>`, id),
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+	if strings.Contains(body, "Edytuj intencję") {
+		t.Error("placeholder has the regular edit link, want Uzupełnij")
+	}
+}
+
+func TestWeekNumbersIntentionsWithoutPlaceholders(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedPlaceholder(t, h.db, "2026-11-02 18:00")
+	seedIntention(t, h.db, "2026-11-02 18:00", false, "+ Jan Kowalski")
+
+	body := getWeek(t, h, "/").Body.String()
+
+	if !strings.Contains(body, `aria-label="Edytuj intencję 1. z godz. 18:00">Edytuj</a>`) {
+		t.Error("the only real intention is not number 1")
+	}
+	if strings.Contains(body, "intencję 2.") {
+		t.Error("the placeholder is counted in the numbering")
+	}
+}
+
+func TestPlaceholderEditPanelHasEmptyContent(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	id := seedPlaceholder(t, h.db, "2026-11-02 06:30")
+
+	body := getWeek(t, h, fmt.Sprintf("/?week=2026-11-02&edit=%d", id)).Body.String()
+
+	if !strings.Contains(body, `autofocus></textarea>`) {
+		t.Error("edit panel for a placeholder does not have an empty content field")
+	}
+}
+
+func TestPlaceholderDeleteDialog(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	id := seedPlaceholder(t, h.db, "2026-11-02 06:30")
+
+	body := getWeek(t, h, fmt.Sprintf("/?week=2026-11-02&delete=%d", id)).Body.String()
+
+	if !strings.Contains(body, `<p class="dialog-content placeholder">do uzupełnienia</p>`) {
+		t.Error("delete dialog for a placeholder does not say it is empty")
+	}
+}
+
+func TestCreateSlotsRemembersSchedule(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	postSlots(t, h, url.Values{"week": {"2026-11-02"}, "schedule": {"2"}})
+
+	setting, err := settings.Load(h.db)
+	if err != nil {
+		t.Fatalf("loading settings: %v", err)
+	}
+	if setting.SelectedScheduleID != 2 {
+		t.Errorf("SelectedScheduleID = %d, want 2 (Wakacje)", setting.SelectedScheduleID)
+	}
+}
+
+func TestCreateSlotsRemembersScheduleWhenNothingToCreate(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedIntention(t, h.db, "2026-11-08 09:00", false, "+ Jan Kowalski")
+
+	postSlots(t, h, url.Values{"week": {"2026-11-02"}, "schedule": {"2"}})
+
+	if got := countIntentions(t, h.db); got != 1 {
+		t.Fatalf("intentions = %d, want 1 (the only mass of Wakacje is taken)", got)
+	}
+	setting, err := settings.Load(h.db)
+	if err != nil {
+		t.Fatalf("loading settings: %v", err)
+	}
+	if setting.SelectedScheduleID != 2 {
+		t.Errorf("SelectedScheduleID = %d, want 2 (Wakacje)", setting.SelectedScheduleID)
+	}
+}
+
+func TestCreateSlotsWithoutSettingsTable(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	err := h.db.Migrator().DropTable(&settings.Setting{})
+	if err != nil {
+		t.Fatalf("dropping settings table: %v", err)
+	}
+
+	rec := postSlots(t, h, url.Values{"week": {"2026-11-02"}, "schedule": {"1"}})
+
+	if rec.Code != http.StatusSeeOther {
+		t.Errorf("status = %d, want %d (slots are saved, settings are only a convenience)", rec.Code, http.StatusSeeOther)
+	}
+	if got := countIntentions(t, h.db); got != 4 {
+		t.Errorf("intentions = %d, want 4", got)
+	}
+}
+
+func TestWeekPreselectsRememberedSchedule(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	err := settings.SaveSchedule(h.db, 2)
+	if err != nil {
+		t.Fatalf("saving schedule: %v", err)
+	}
+
+	body := getWeek(t, h, "/").Body.String()
+
+	for _, want := range []string{
+		`<option value="1">Porządek zwykły</option>`,
+		`<option value="2" selected>Wakacje</option>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+}
+
+func TestWeekWithUnknownRememberedSchedule(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	err := settings.SaveSchedule(h.db, 99)
+	if err != nil {
+		t.Fatalf("saving schedule: %v", err)
+	}
+
+	body := getWeek(t, h, "/").Body.String()
+
+	if strings.Contains(body, " selected>") {
+		t.Error("an option is selected, want none for a deleted schedule")
+	}
+}
+
+func TestWeekWithoutSettingsTable(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	err := h.db.Migrator().DropTable(&settings.Setting{})
+	if err != nil {
+		t.Fatalf("dropping settings table: %v", err)
+	}
+
+	rec := getWeek(t, h, "/")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (settings are only a convenience)", rec.Code, http.StatusOK)
+	}
+	if !strings.Contains(rec.Body.String(), `<option value="2">Wakacje</option>`) {
+		t.Error("schedule form is missing")
+	}
+}
+
+func TestWeekShowsClearLink(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	link := `<a class="delete-link" href="/?clear=1&amp;week=2026-11-02">Wyczyść tydzień</a>`
+
+	if body := getWeek(t, h, "/").Body.String(); strings.Contains(body, link) {
+		t.Error("empty week has the clear link")
+	}
+
+	seedPlaceholder(t, h.db, "2026-11-02 06:30")
+
+	if body := getWeek(t, h, "/").Body.String(); !strings.Contains(body, link) {
+		t.Errorf("body does not contain %q", link)
+	}
+}
+
+func TestWeekWithClearDialog(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedPlaceholder(t, h.db, "2026-11-02 06:30")
+	seedIntention(t, h.db, "2026-11-02 18:00", false, "+ Jan Kowalski")
+	seedIntention(t, h.db, "2026-11-08 10:00", true, "+ Anna Nowak")
+	seedIntention(t, h.db, "2026-11-09 10:00", false, "next week")
+
+	body := getWeek(t, h, "/?week=2026-11-02&clear=1").Body.String()
+
+	for _, want := range []string{
+		`<main inert>`,
+		`<h2 class="dialog-title" id="dialog-title">Wyczyścić tydzień?</h2>`,
+		`<p class="dialog-when">2.11.2026 r. – 8.11.2026 r.</p>`,
+		`Do usunięcia: 3 intencje (w tym 1 do uzupełnienia). Tej operacji nie można cofnąć.`,
+		`<form class="dialog-actions" method="post" action="/clear">`,
+		`<input type="hidden" name="week" value="2026-11-02">`,
+		`<a class="button" href="/?week=2026-11-02" data-close autofocus>Anuluj</a>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+	if strings.Contains(body, `type="submit" autofocus`) {
+		t.Error("the destructive button has autofocus, want it on Anuluj")
+	}
+}
+
+func TestWeekClearDialogForEmptyWeek(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	body := getWeek(t, h, "/?week=2026-11-02&clear=1").Body.String()
+
+	if strings.Contains(body, "Wyczyścić tydzień?") || strings.Contains(body, "inert") {
+		t.Error("empty week shows the clear dialog")
+	}
+}
+
+func postClear(t *testing.T, h *handler, form url.Values) *httptest.ResponseRecorder {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodPost, "/clear", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	h.clearWeek(rec, req)
+
+	return rec
+}
+
+func TestClearWeek(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedIntention(t, h.db, "2026-11-01 18:00", false, "previous week")
+	seedPlaceholder(t, h.db, "2026-11-02 06:30")
+	seedIntention(t, h.db, "2026-11-08 18:00", true, "+ Anna Nowak")
+	seedIntention(t, h.db, "2026-11-09 06:30", false, "next week")
+
+	rec := postClear(t, h, url.Values{"week": {"2026-11-05"}})
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if got, want := rec.Header().Get("Location"), "/?week=2026-11-02"; got != want {
+		t.Errorf("Location = %q, want %q", got, want)
+	}
+
+	var left []intentions.Intention
+	err := h.db.Order("mass_at").Find(&left).Error
+	if err != nil {
+		t.Fatalf("loading intentions: %v", err)
+	}
+	var got []string
+	for _, intention := range left {
+		got = append(got, intention.Content)
+	}
+	if want := []string{"previous week", "next week"}; !slices.Equal(got, want) {
+		t.Errorf("left = %q, want %q", got, want)
+	}
+}
+
+func TestClearWeekInvalid(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedIntention(t, h.db, "2026-11-02 18:00", false, "+ Jan Kowalski")
+
+	rec := postClear(t, h, url.Values{"week": {"jutro"}})
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	if got := countIntentions(t, h.db); got != 1 {
+		t.Errorf("intentions = %d, want 1", got)
+	}
+}
+
+func TestClearWeekDatabaseError(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	err := h.db.Migrator().DropTable(&intentions.Intention{})
+	if err != nil {
+		t.Fatalf("dropping intentions table: %v", err)
+	}
+
+	rec := postClear(t, h, url.Values{"week": {"2026-11-02"}})
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestClearWeekRoute(t *testing.T) {
+	db := newTestHandler(t, time.Now()).db
+
+	rec := postToRouter(t, db, "/clear", url.Values{"week": {"2026-11-02"}})
+
+	if rec.Code != http.StatusSeeOther {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+}
+
+func TestWeekShowsFeast(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	err := calendar.SaveFeast(h.db, "2026-11-04", "wspomnienie św. Karola Boromeusza")
+	if err != nil {
+		t.Fatalf("saving feast: %v", err)
+	}
+
+	body := getWeek(t, h, "/").Body.String()
+
+	want := `<h2 class="day-name">Środa 4.11.</h2>
+					<span class="feast">wspomnienie św. Karola Boromeusza</span>`
+	if !strings.Contains(body, want) {
+		t.Errorf("body does not contain %q", want)
+	}
+	if got := strings.Count(body, `class="feast"`); got != 1 {
+		t.Errorf("feast appears %d times, want 1", got)
+	}
+}
+
+func TestWeekFeastsDatabaseError(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	err := h.db.Migrator().DropTable(&calendar.Day{})
+	if err != nil {
+		t.Fatalf("dropping days table: %v", err)
+	}
+
+	if rec := getWeek(t, h, "/"); rec.Code != http.StatusInternalServerError {
+		t.Errorf("week: status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+	if rec := getPDF(t, h, "/pdf"); rec.Code != http.StatusInternalServerError {
+		t.Errorf("pdf: status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestWeekShowsFeastLinks(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	err := calendar.SaveFeast(h.db, "2026-11-04", "wspomnienie św. Karola Boromeusza")
+	if err != nil {
+		t.Fatalf("saving feast: %v", err)
+	}
+
+	body := getWeek(t, h, "/").Body.String()
+
+	for _, want := range []string{
+		`<a class="feast-link" href="/?feast=2026-11-03&amp;week=2026-11-02" aria-label="Dodaj wspomnienie lub święto – Wtorek 3.11.">+ święto</a>`,
+		`<a class="feast-link" href="/?feast=2026-11-04&amp;week=2026-11-02" aria-label="Zmień wspomnienie lub święto – Środa 4.11.">Zmień</a>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+	if got := strings.Count(body, "+ święto</a>"); got != 6 {
+		t.Errorf(`"+ święto" links = %d, want 6`, got)
+	}
+}
+
+func TestWeekWithFeastDialog(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	err := calendar.SaveFeast(h.db, "2026-11-04", "wspomnienie św. Karola Boromeusza")
+	if err != nil {
+		t.Fatalf("saving feast: %v", err)
+	}
+
+	body := getWeek(t, h, "/?week=2026-11-02&feast=2026-11-04").Body.String()
+
+	for _, want := range []string{
+		`<main inert>`,
+		`<form method="post" action="/days/2026-11-04">`,
+		`<h2 class="dialog-title" id="dialog-title">Wspomnienie / święto</h2>`,
+		`<p class="dialog-when">Środa 4.11.</p>`,
+		`value="wspomnienie św. Karola Boromeusza" maxlength="300" autofocus`,
+		`<a class="button" href="/?week=2026-11-02" data-close>Anuluj</a>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+}
+
+func TestWeekFeastDialogForDayWithoutFeast(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	body := getWeek(t, h, "/?week=2026-11-02&feast=2026-11-03").Body.String()
+
+	if !strings.Contains(body, `name="feast" value="" maxlength="300"`) {
+		t.Error("dialog for a day without a feast does not have an empty field")
+	}
+}
+
+func TestWeekFeastDialogInvalidDate(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	rec := getWeek(t, h, "/?week=2026-11-02&feast=jutro")
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func loadFeast(t *testing.T, db *gorm.DB, date string) string {
+	t.Helper()
+
+	feast, err := calendar.Feast(db, date)
+	if err != nil {
+		t.Fatalf("loading feast: %v", err)
+	}
+
+	return feast
+}
+
+func TestSaveFeast(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	rec := postToRouter(t, h.db, "/days/2026-11-04", url.Values{"feast": {"  wspomnienie św. Karola Boromeusza  "}})
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if got, want := rec.Header().Get("Location"), "/?week=2026-11-02#d-2026-11-04"; got != want {
+		t.Errorf("Location = %q, want %q", got, want)
+	}
+	if got, want := loadFeast(t, h.db, "2026-11-04"), "wspomnienie św. Karola Boromeusza"; got != want {
+		t.Errorf("feast = %q, want %q", got, want)
+	}
+}
+
+func TestSaveEmptyFeastRemovesIt(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	err := calendar.SaveFeast(h.db, "2026-11-04", "wspomnienie św. Karola Boromeusza")
+	if err != nil {
+		t.Fatalf("saving feast: %v", err)
+	}
+
+	rec := postToRouter(t, h.db, "/days/2026-11-04", url.Values{"feast": {"   "}})
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if got := loadFeast(t, h.db, "2026-11-04"); got != "" {
+		t.Errorf("feast = %q, want it removed", got)
+	}
+}
+
+func TestSaveFeastTooLong(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	long := strings.Repeat("ś", maxFeastLength+1)
+
+	rec := postToRouter(t, h.db, "/days/2026-11-04", url.Values{"feast": {long}})
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`<p class="field-error" id="feast-error">Maksymalnie 300 znaków.</p>`,
+		`value="` + long + `"`,
+		`aria-invalid="true"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+	if got := loadFeast(t, h.db, "2026-11-04"); got != "" {
+		t.Errorf("feast = %q, want nothing saved", got)
+	}
+}
+
+func TestSaveFeastAtMaxLength(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	rec := postToRouter(t, h.db, "/days/2026-11-04", url.Values{"feast": {strings.Repeat("ś", maxFeastLength)}})
+
+	if rec.Code != http.StatusSeeOther {
+		t.Errorf("status = %d, want %d (limit counts letters, not bytes)", rec.Code, http.StatusSeeOther)
+	}
+}
+
+func TestSaveFeastInvalidDate(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	rec := postToRouter(t, h.db, "/days/jutro", url.Values{"feast": {"święto"}})
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestSaveFeastDatabaseError(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	err := h.db.Migrator().DropTable(&calendar.Day{})
+	if err != nil {
+		t.Fatalf("dropping days table: %v", err)
+	}
+
+	rec := postToRouter(t, h.db, "/days/2026-11-04", url.Values{"feast": {"święto"}})
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func fakeCelebrations(byYear map[int][]gcatholic.Celebration, requested *[]int) func(context.Context, int) ([]gcatholic.Celebration, error) {
+	return func(_ context.Context, year int) ([]gcatholic.Celebration, error) {
+		if requested != nil {
+			*requested = append(*requested, year)
+		}
+		return byYear[year], nil
+	}
+}
+
+func postImport(t *testing.T, h *handler, week string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	form := url.Values{"week": {week}}
+	req := httptest.NewRequest(http.MethodPost, "/feasts/import", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	h.importFeasts(rec, req)
+
+	return rec
+}
+
+func TestImportFeasts(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	err := calendar.SaveFeast(h.db, "2026-11-04", "odpust parafialny")
+	if err != nil {
+		t.Fatalf("saving feast: %v", err)
+	}
+
+	var requested []int
+	h.fetchCelebrations = fakeCelebrations(map[int][]gcatholic.Celebration{2026: {
+		{Date: "2026-11-01", Rank: "U", Name: "Wszystkich Świętych"},
+		{Date: "2026-11-03", Name: "Wtorek XXXI tygodnia zwykłego"},
+		{Date: "2026-11-03", Rank: "w", Name: "Św. Marcina de Porres, zakonnika"},
+		{Date: "2026-11-04", Rank: "W", Name: "Św. Karola Boromeusza, biskupa"},
+		{Date: "2026-11-08", Name: "XXXII Niedziela Zwykła"},
+		{Date: "2026-11-09", Rank: "Ś", Name: "Rocznica poświęcenia Bazyliki Laterańskiej"},
+	}}, &requested)
+
+	rec := postImport(t, h, "2026-11-05")
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if got, want := rec.Header().Get("Location"), "/?week=2026-11-02"; got != want {
+		t.Errorf("Location = %q, want %q", got, want)
+	}
+	if !slices.Equal(requested, []int{2026}) {
+		t.Errorf("requested years = %v, want [2026]", requested)
+	}
+
+	got, err := calendar.FeastsForWeek(h.db, time.Date(2026, 11, 2, 0, 0, 0, 0, intentions.TimeZone))
+	if err != nil {
+		t.Fatalf("loading feasts: %v", err)
+	}
+	want := map[string]string{
+		"2026-11-03": "wspomnienie dowolne św. Marcina de Porres, zakonnika",
+		"2026-11-04": "odpust parafialny",
+		"2026-11-08": "XXXII Niedziela Zwykła",
+	}
+	if !maps.Equal(got, want) {
+		t.Errorf("feasts = %q, want %q", got, want)
+	}
+	if feast := loadFeast(t, h.db, "2026-11-01"); feast != "" {
+		t.Errorf("feast outside the week saved: %q", feast)
+	}
+}
+
+func TestImportFeastsAcrossNewYear(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	var requested []int
+	h.fetchCelebrations = fakeCelebrations(map[int][]gcatholic.Celebration{
+		2026: {{Date: "2026-12-28", Rank: "Ś", Name: "Świętych Młodzianków, męczenników"}},
+		2027: {{Date: "2027-01-01", Rank: "U", Name: "Świętej Bożej Rodzicielki Maryi"}},
+	}, &requested)
+
+	postImport(t, h, "2026-12-30")
+
+	if !slices.Equal(requested, []int{2026, 2027}) {
+		t.Errorf("requested years = %v, want [2026 2027]", requested)
+	}
+	if got := loadFeast(t, h.db, "2026-12-28"); got != "święto Świętych Młodzianków, męczenników" {
+		t.Errorf("2026-12-28 = %q", got)
+	}
+	if got := loadFeast(t, h.db, "2027-01-01"); got != "uroczystość Świętej Bożej Rodzicielki Maryi" {
+		t.Errorf("2027-01-01 = %q", got)
+	}
+}
+
+func TestImportFeastsFetchError(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	h.fetchCelebrations = func(context.Context, int) ([]gcatholic.Celebration, error) {
+		return nil, errors.New("no network")
+	}
+
+	rec := postImport(t, h, "2026-11-02")
+
+	if rec.Code != http.StatusBadGateway {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadGateway)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`<div class="form-alert week-alert" role="alert">`,
+		"<p>Nie udało się pobrać kalendarza z GCatholic. Sprawdź połączenie z internetem i spróbuj ponownie.</p>",
+		`<h1>INTENCJE MSZY ŚWIĘTYCH – 2.11.2026 r. – 8.11.2026 r.</h1>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+}
+
+func TestImportFeastsInvalidWeek(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	called := false
+	h.fetchCelebrations = func(context.Context, int) ([]gcatholic.Celebration, error) {
+		called = true
+		return nil, nil
+	}
+
+	rec := postImport(t, h, "jutro")
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	if called {
+		t.Error("GCatholic was asked despite the invalid week")
+	}
+}
+
+func TestImportFeastsDatabaseError(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	h.fetchCelebrations = fakeCelebrations(map[int][]gcatholic.Celebration{2026: {
+		{Date: "2026-11-04", Rank: "W", Name: "Św. Karola Boromeusza, biskupa"},
+	}}, nil)
+
+	err := h.db.Migrator().DropTable(&calendar.Day{})
+	if err != nil {
+		t.Fatalf("dropping days table: %v", err)
+	}
+
+	rec := postImport(t, h, "2026-11-02")
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestImportFeastsRoute(t *testing.T) {
+	db := newTestHandler(t, time.Now()).db
+
+	rec := postToRouter(t, db, "/feasts/import", url.Values{"week": {"jutro"}})
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d (route registered, no request to GCatholic)", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestWeekShowsImportButton(t *testing.T) {
+	body := getWeek(t, newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone)), "/").Body.String()
+
+	want := `<form method="post" action="/feasts/import">
+				<input type="hidden" name="week" value="2026-11-02">
+				<button class="button" type="submit">Pobierz święta z GCatholic</button>`
+	if !strings.Contains(body, want) {
+		t.Errorf("body does not contain %q", want)
+	}
+	if strings.Contains(body, "week-alert") {
+		t.Error("week view shows the import error without an import")
+	}
+}
+
+func getSettings(t *testing.T, h *handler, target string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, target, nil)
+	rec := httptest.NewRecorder()
+	h.settingsPage(rec, req)
+
+	return rec
+}
+
+func postSettings(t *testing.T, h *handler, form url.Values) *httptest.ResponseRecorder {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	h.saveSettings(rec, req)
+
+	return rec
+}
+
+func TestWeekShowsSettingsLink(t *testing.T) {
+	body := getWeek(t, newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone)), "/").Body.String()
+
+	want := `<a class="button button-icon" href="/settings?week=2026-11-02" aria-label="Ustawienia" title="Ustawienia">`
+	if !strings.Contains(body, want) {
+		t.Errorf("body does not contain %q", want)
+	}
+}
+
+func TestSettingsPageDefaults(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	rec := getSettings(t, h, "/settings?week=2026-11-04")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`<a class="button" href="/?week=2026-11-02" data-close>← Wróć do tygodnia</a>`,
+		`<input type="hidden" name="week" value="2026-11-02">`,
+		`name="parish_name" value="Parafia pw. Trójcy Przenajświętszej i św. Leopolda w Rzezawie" maxlength="200" required`,
+		`name="address" value="" maxlength="200"`,
+		`<input type="checkbox" name="import" value="solemnities" checked> <span>Uroczystości</span>`,
+		`<input type="checkbox" name="import" value="other-days" checked> <span>Niedziele i dni szczególne<span class="checkbox-hint">`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+	if got := strings.Count(body, `name="import"`); got != 5 {
+		t.Errorf("checkboxes = %d, want 5", got)
+	}
+	if strings.Contains(body, "Zapisano.") {
+		t.Error("page says Zapisano. before saving")
+	}
+}
+
+func TestSettingsPageWithoutWeek(t *testing.T) {
+	body := getSettings(t, newTestHandler(t, time.Now()), "/settings").Body.String()
+
+	if !strings.Contains(body, `<a class="button" href="/" data-close>← Wróć do tygodnia</a>`) {
+		t.Error("back link without a week does not go to /")
+	}
+}
+
+func TestSaveSettings(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	err := settings.SaveSchedule(h.db, 2)
+	if err != nil {
+		t.Fatalf("saving schedule: %v", err)
+	}
+
+	rec := postSettings(t, h, url.Values{
+		"week":        {"2026-11-02"},
+		"parish_name": {"  Parafia św. Jana  "},
+		"address":     {"ul. Kościelna 1, 32-765 Rzezawa"},
+		"import":      {"solemnities", "feasts", "memorials"},
+	})
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if got, want := rec.Header().Get("Location"), "/settings?saved=1&week=2026-11-02"; got != want {
+		t.Errorf("Location = %q, want %q", got, want)
+	}
+
+	got, err := settings.Load(h.db)
+	if err != nil {
+		t.Fatalf("loading settings: %v", err)
+	}
+	want := settings.Setting{
+		ID:                 1,
+		ParishName:         "Parafia św. Jana",
+		Address:            "ul. Kościelna 1, 32-765 Rzezawa",
+		SelectedScheduleID: 2,
+		FeastImport:        settings.FeastImport{SkipOptionalMemorials: true, SkipOtherDays: true},
+	}
+	if got != want {
+		t.Errorf("settings = %+v, want %+v", got, want)
+	}
+
+	body := getSettings(t, h, "/settings?saved=1&week=2026-11-02").Body.String()
+	for _, want := range []string{
+		`<p class="notice" role="status">Zapisano.</p>`,
+		`<input type="checkbox" name="import" value="memorials" checked>`,
+		`<input type="checkbox" name="import" value="optional-memorials"> <span>Wspomnienia dowolne</span>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("page after saving does not contain %q", want)
+		}
+	}
+}
+
+func TestSaveSettingsInvalid(t *testing.T) {
+	tests := []struct {
+		name string
+		form url.Values
+		want string
+	}{
+		{
+			name: "empty parish name",
+			form: url.Values{"parish_name": {"   "}, "address": {"ul. Kościelna 1"}, "import": {"feasts"}},
+			want: `<p class="field-error" id="parish_name-error">Pole jest wymagane.</p>`,
+		},
+		{
+			name: "address too long",
+			form: url.Values{"parish_name": {"Parafia"}, "address": {strings.Repeat("ś", maxSettingLength+1)}},
+			want: `<p class="field-error" id="address-error">Maksymalnie 200 znaków.</p>`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newTestHandler(t, time.Now())
+
+			rec := postSettings(t, h, tt.form)
+
+			if rec.Code != http.StatusUnprocessableEntity {
+				t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
+			}
+			body := rec.Body.String()
+			if !strings.Contains(body, tt.want) {
+				t.Errorf("body does not contain %q", tt.want)
+			}
+			if !strings.Contains(body, `aria-invalid="true"`) {
+				t.Error("invalid field is not marked aria-invalid")
+			}
+
+			got, err := settings.Load(h.db)
+			if err != nil {
+				t.Fatalf("loading settings: %v", err)
+			}
+			if got.ParishName != settings.DefaultParishName || got.Address != "" {
+				t.Errorf("settings changed despite errors: %+v", got)
+			}
+		})
+	}
+}
+
+func TestSaveSettingsKeepsTypedValuesOnError(t *testing.T) {
+	rec := postSettings(t, newTestHandler(t, time.Now()), url.Values{
+		"parish_name": {""},
+		"address":     {"ul. Kościelna 1"},
+		"import":      {"feasts"},
+	})
+
+	body := rec.Body.String()
+	for _, want := range []string{
+		`name="address" value="ul. Kościelna 1"`,
+		`<input type="checkbox" name="import" value="feasts" checked>`,
+		`<input type="checkbox" name="import" value="solemnities"> <span>Uroczystości</span>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+}
+
+func TestSettingsRoutes(t *testing.T) {
+	db := newTestHandler(t, time.Now()).db
+
+	rec := postToRouter(t, db, "/settings", url.Values{"parish_name": {"Parafia św. Jana"}})
+
+	if rec.Code != http.StatusSeeOther {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+}
+
+func TestImportFeastsSkipsUncheckedKinds(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	err := settings.SaveParish(h.db, settings.Setting{
+		ParishName:  settings.DefaultParishName,
+		FeastImport: settings.FeastImport{SkipOptionalMemorials: true, SkipOtherDays: true},
+	})
+	if err != nil {
+		t.Fatalf("saving settings: %v", err)
+	}
+	h.fetchCelebrations = fakeCelebrations(map[int][]gcatholic.Celebration{2026: {
+		{Date: "2026-11-03", Name: "Wtorek XXXI tygodnia zwykłego"},
+		{Date: "2026-11-03", Rank: "w", Name: "Św. Marcina de Porres, zakonnika"},
+		{Date: "2026-11-04", Rank: "W", Name: "Św. Karola Boromeusza, biskupa"},
+		{Date: "2026-11-07", Name: "Sobota XXXI tygodnia zwykłego"},
+		{Date: "2026-11-07", Rank: "w", Name: "Najświętszej Maryi Panny"},
+	}}, nil)
+
+	postImport(t, h, "2026-11-02")
+
+	got, err := calendar.FeastsForWeek(h.db, time.Date(2026, 11, 2, 0, 0, 0, 0, intentions.TimeZone))
+	if err != nil {
+		t.Fatalf("loading feasts: %v", err)
+	}
+	want := map[string]string{"2026-11-04": "wspomnienie św. Karola Boromeusza, biskupa"}
+	if !maps.Equal(got, want) {
+		t.Errorf("feasts = %q, want %q", got, want)
+	}
+}
+
+func TestWeekPDFUsesParishSettings(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	err := h.db.Migrator().DropTable(&settings.Setting{})
+	if err != nil {
+		t.Fatalf("dropping settings table: %v", err)
+	}
+
+	if rec := getPDF(t, h, "/pdf"); rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d (the parish name is part of the sheet)", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestImportFeastsNeverAddsOrdinaryWeekdays(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	h.fetchCelebrations = fakeCelebrations(map[int][]gcatholic.Celebration{2026: {
+		{Date: "2026-11-02", Name: "Wspomnienie wszystkich wiernych zmarłych"},
+		{Date: "2026-11-05", Name: "Czwartek XXXI tygodnia zwykłego"},
+		{Date: "2026-11-06", Name: "Piątek XXXI tygodnia zwykłego"},
+		{Date: "2026-11-08", Name: "XXXII Niedziela Zwykła"},
+	}}, nil)
+
+	postImport(t, h, "2026-11-02")
+
+	got, err := calendar.FeastsForWeek(h.db, time.Date(2026, 11, 2, 0, 0, 0, 0, intentions.TimeZone))
+	if err != nil {
+		t.Fatalf("loading feasts: %v", err)
+	}
+	want := map[string]string{
+		"2026-11-02": "Wspomnienie wszystkich wiernych zmarłych",
+		"2026-11-08": "XXXII Niedziela Zwykła",
+	}
+	if !maps.Equal(got, want) {
+		t.Errorf("feasts = %q, want %q (ordinary weekdays are never imported)", got, want)
+	}
+}
+
+func serveRouter(t *testing.T, db *gorm.DB, method, target string, form url.Values) *httptest.ResponseRecorder {
+	t.Helper()
+
+	router := chi.NewRouter()
+	RegisterRoutes(router, db)
+
+	var body io.Reader
+	if form != nil {
+		body = strings.NewReader(form.Encode())
+	}
+	req := httptest.NewRequest(method, target, body)
+	if form != nil {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	return rec
+}
+
+func TestSettingsListsSchedules(t *testing.T) {
+	h := newTestHandler(t, time.Now())
+
+	body := serveRouter(t, h.db, http.MethodGet, "/settings?week=2026-11-04", nil).Body.String()
+
+	for _, want := range []string{
+		`<section class="settings-section schedules" id="porzadki" aria-labelledby="schedules-title">`,
+		`<p class="schedule-name">Porządek zwykły</p>`,
+		`<p class="schedule-summary">Pn: 6:30, 18:00 · Nd: 7:00, 10:00</p>`,
+		`<a class="action" href="/settings/schedules/1?week=2026-11-02" aria-label="Zmień porządek Porządek zwykły">Zmień</a>`,
+		`<a class="action action-delete" href="/settings?delete_schedule=2&amp;week=2026-11-02" aria-label="Usuń porządek Wakacje">Usuń</a>`,
+		`<a class="button" href="/settings/schedules/new?week=2026-11-02">+ Dodaj porządek</a>`,
+		`<a class="delete-link" href="/settings?restore=1&amp;week=2026-11-02">Przywróć domyślne</a>`,
+		`<p class="app-credit">Go Parafia · autor: Tomasz Kaliński, Gemma It Solutions</p>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+	if strings.Contains(body, "inert") {
+		t.Error("settings page is inert without a dialog")
+	}
+}
+
+func TestScheduleFormNewAndEdit(t *testing.T) {
+	db := newTestHandler(t, time.Now()).db
+
+	body := serveRouter(t, db, http.MethodGet, "/settings/schedules/new?week=2026-11-02", nil).Body.String()
+	for _, want := range []string{
+		`<h1>Nowy porządek mszy</h1>`,
+		`<form class="settings-form" method="post" action="/settings/schedules">`,
+		`<a class="button" href="/settings?week=2026-11-02#porzadki" data-close>← Wróć do ustawień</a>`,
+		`<label class="label" for="day-1">Poniedziałek</label>`,
+		`id="day-0" name="day-0" value=""`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("new form does not contain %q", want)
+		}
+	}
+
+	body = serveRouter(t, db, http.MethodGet, "/settings/schedules/1", nil).Body.String()
+	for _, want := range []string{
+		`<h1>Zmień porządek mszy</h1>`,
+		`<form class="settings-form" method="post" action="/settings/schedules/1">`,
+		`name="name" value="Porządek zwykły"`,
+		`id="day-1" name="day-1" value="6:30, 18:00"`,
+		`id="day-0" name="day-0" value="7:00, 10:00"`,
+		`id="day-2" name="day-2" value=""`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("edit form does not contain %q", want)
+		}
+	}
+
+	if rec := serveRouter(t, db, http.MethodGet, "/settings/schedules/99", nil); rec.Code != http.StatusNotFound {
+		t.Errorf("missing schedule: status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+func TestCreateAndUpdateSchedule(t *testing.T) {
+	db := newTestHandler(t, time.Now()).db
+
+	rec := serveRouter(t, db, http.MethodPost, "/settings/schedules", url.Values{
+		"week": {"2026-11-02"}, "name": {"Zimowy"}, "day-1": {"7:00"}, "day-0": {"8:00, 11:00"},
+	})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("create: status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if got, want := rec.Header().Get("Location"), "/settings?saved=1&week=2026-11-02#porzadki"; got != want {
+		t.Errorf("Location = %q, want %q", got, want)
+	}
+
+	rec = serveRouter(t, db, http.MethodPost, "/settings/schedules/2", url.Values{"name": {"Wakacje 2027"}, "day-0": {"9:30"}})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("update: status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+
+	schedules, err := masses.Load(db)
+	if err != nil {
+		t.Fatalf("loading schedules: %v", err)
+	}
+	var got []string
+	for _, s := range schedules {
+		got = append(got, s.Name+" → "+scheduleSummary(s))
+	}
+	want := []string{
+		"Porządek zwykły → Pn: 6:30, 18:00 · Nd: 7:00, 10:00",
+		"Wakacje 2027 → Nd: 9:30",
+		"Zimowy → Pn: 7:00 · Nd: 8:00, 11:00",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("schedules = %q, want %q", got, want)
+	}
+}
+
+func TestSaveScheduleInvalid(t *testing.T) {
+	db := newTestHandler(t, time.Now()).db
+
+	rec := serveRouter(t, db, http.MethodPost, "/settings/schedules/1", url.Values{
+		"name": {"Wakacje"}, "day-1": {"6:30, 18:00"}, "day-3": {"6:10, 18:00"},
+	})
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`<p class="field-error" id="name-error">Porządek o tej nazwie już istnieje.</p>`,
+		`<p class="field-error" id="day-3-error">Godzina „6:10” nie jest pełnym kwadransem (:00, :15, :30, :45).</p>`,
+		`id="day-3" name="day-3" value="6:10, 18:00"`,
+		`id="day-1" name="day-1" value="6:30, 18:00"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+
+	s, err := masses.Find(db, 1)
+	if err != nil {
+		t.Fatalf("loading schedule: %v", err)
+	}
+	if s.Name != "Porządek zwykły" {
+		t.Errorf("schedule changed despite errors: %q", s.Name)
+	}
+}
+
+func TestDeleteScheduleWithConfirmation(t *testing.T) {
+	db := newTestHandler(t, time.Now()).db
+
+	body := serveRouter(t, db, http.MethodGet, "/settings?delete_schedule=2&week=2026-11-02", nil).Body.String()
+	for _, want := range []string{
+		`<main class="settings" inert>`,
+		`<h2 class="dialog-title" id="dialog-title">Usunąć porządek mszy?</h2>`,
+		`„Wakacje” (Nd: 9:00).`,
+		`<form class="dialog-actions" method="post" action="/settings/schedules/2/delete">`,
+		`<a class="button" href="/settings?week=2026-11-02#porzadki" data-close autofocus>Anuluj</a>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("dialog does not contain %q", want)
+		}
+	}
+
+	rec := serveRouter(t, db, http.MethodPost, "/settings/schedules/2/delete", url.Values{"week": {"2026-11-02"}})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+
+	schedules, err := masses.Load(db)
+	if err != nil {
+		t.Fatalf("loading schedules: %v", err)
+	}
+	if len(schedules) != 1 || schedules[0].Name != "Porządek zwykły" {
+		t.Errorf("schedules after delete = %+v", schedules)
+	}
+
+	if rec := serveRouter(t, db, http.MethodPost, "/settings/schedules/2/delete", url.Values{}); rec.Code != http.StatusNotFound {
+		t.Errorf("deleting again: status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+func TestRestoreSchedulesWithConfirmation(t *testing.T) {
+	db := newTestHandler(t, time.Now()).db
+
+	body := serveRouter(t, db, http.MethodGet, "/settings?restore=1", nil).Body.String()
+	if !strings.Contains(body, `<form class="dialog-actions" method="post" action="/settings/schedules/restore">`) {
+		t.Error("restore dialog is missing")
+	}
+
+	rec := serveRouter(t, db, http.MethodPost, "/settings/schedules/restore", url.Values{})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+
+	schedules, err := masses.Load(db)
+	if err != nil {
+		t.Fatalf("loading schedules: %v", err)
+	}
+	defaults, err := masses.Default()
+	if err != nil {
+		t.Fatalf("loading defaults: %v", err)
+	}
+	if len(schedules) != len(defaults) || schedules[0].Name != defaults[0].Name {
+		t.Errorf("schedules after restore = %d (first %q), want the %d defaults", len(schedules), schedules[0].Name, len(defaults))
+	}
+}
+
+func TestWeekShowsEmptyMassesNotice(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedPlaceholder(t, h.db, "2026-11-03 06:30")
+
+	body := getWeek(t, h, "/").Body.String()
+
+	want := `<p class="week-notice" role="status"><span>1 msza nie ma uzupełnionej intencji.</span> <a href="#d-2026-11-03">Pokaż</a></p>`
+	if !strings.Contains(body, want) {
+		t.Errorf("body does not contain %q", want)
 	}
 }

@@ -54,6 +54,7 @@ func TestLayoutWeek(t *testing.T) {
 		newIntention(t, 2, "2026-11-02 18:00", false, "+ Anna Nowak"),
 		newIntention(t, 3, "2026-11-02 18:00", true, "+ Piotr Wiśniewski"),
 	})
+	view.ParishName = "Parafia pw. Trójcy Przenajświętszej i św. Leopolda w Rzezawie"
 
 	pages := layoutWeek(view, fakeMeasurer{})
 
@@ -145,7 +146,7 @@ func intentionsPerMass(t *testing.T, count int) []intentions.Intention {
 func TestLayoutWeekShrinksBeforeAddingAPage(t *testing.T) {
 	start := time.Date(2026, 11, 2, 0, 0, 0, 0, intentions.TimeZone)
 	m := fakeMeasurer{}
-	header := layoutHeader(start, m)
+	header := layoutHeader(newWeekView(start, nil), m)
 	smallest := pdfStyles[len(pdfStyles)-1]
 
 	for count := 1; count < 300; count++ {
@@ -210,5 +211,122 @@ func TestWriteWeekPDF(t *testing.T) {
 
 	if !bytes.HasPrefix(buf.Bytes(), []byte("%PDF-")) {
 		t.Errorf("output does not start with %%PDF-: %q", buf.Bytes()[:min(20, buf.Len())])
+	}
+}
+
+func TestLayoutWeekSkipsPlaceholders(t *testing.T) {
+	start := time.Date(2026, 11, 2, 0, 0, 0, 0, intentions.TimeZone)
+	placeholder := func(massAt string) intentions.Intention {
+		slot := newIntention(t, 0, massAt, false, "")
+		slot.IsPlaceholder = true
+		return slot
+	}
+	view := newWeekView(start, []intentions.Intention{
+		placeholder("2026-11-02 06:30"),
+		placeholder("2026-11-03 18:00"),
+		newIntention(t, 3, "2026-11-03 18:00", false, "+ Jan Kowalski"),
+	})
+
+	texts := pageTexts(layoutWeek(view, fakeMeasurer{})[0])
+
+	if slices.Contains(texts, "6:30") {
+		t.Error("a mass with only a placeholder is printed")
+	}
+	for _, want := range []string{"18:00", "+ Jan Kowalski"} {
+		if !slices.Contains(texts, want) {
+			t.Errorf("page does not contain %q", want)
+		}
+	}
+	if slices.Contains(texts, "1.") {
+		t.Error("the only printed intention is numbered, the placeholder must not count")
+	}
+	if got := strings.Count(strings.Join(texts, "\n"), "— brak intencji —"); got != 6 {
+		t.Errorf(`"— brak intencji —" appears %d times, want 6 (Monday has only a placeholder)`, got)
+	}
+}
+
+func TestLayoutWeekPrintsFeast(t *testing.T) {
+	start := time.Date(2026, 11, 2, 0, 0, 0, 0, intentions.TimeZone)
+	view := newWeekView(start, []intentions.Intention{
+		newIntention(t, 1, "2026-11-04 18:00", false, "+ Jan Kowalski"),
+	})
+	setFeasts(view.Days, map[string]string{
+		"2026-11-04": "wspomnienie św. Karola Boromeusza",
+		"2026-11-05": "dzień bez mszy",
+	})
+
+	runs := layoutWeek(view, fakeMeasurer{})[0].Runs
+	find := func(text string) pdfRun {
+		t.Helper()
+		i := slices.IndexFunc(runs, func(run pdfRun) bool { return run.Text == text })
+		if i < 0 {
+			t.Fatalf("page does not contain %q", text)
+		}
+		return runs[i]
+	}
+
+	feast := find("wspomnienie św. Karola Boromeusza")
+	mass := find("18:00")
+	if feast.Font != fontItalic {
+		t.Errorf("feast font = %v, want italic", feast.Font)
+	}
+	if feast.Baseline >= mass.Baseline {
+		t.Errorf("feast baseline %.1f is not above the mass baseline %.1f", feast.Baseline, mass.Baseline)
+	}
+
+	quiet := find("dzień bez mszy")
+	var empty []pdfRun
+	for _, run := range runs {
+		if run.Text == "— brak intencji —" && run.Baseline > quiet.Baseline && run.Baseline < quiet.Baseline+30 {
+			empty = append(empty, run)
+		}
+	}
+	if len(empty) != 1 {
+		t.Errorf("day with a feast and no masses: %d „— brak intencji —” lines right below the feast, want 1", len(empty))
+	}
+}
+
+func TestLayoutHeader(t *testing.T) {
+	start := time.Date(2026, 11, 2, 0, 0, 0, 0, intentions.TimeZone)
+
+	tests := []struct {
+		name       string
+		parishName string
+		address    string
+		want       []string
+	}{
+		{
+			name:       "name and address",
+			parishName: "Parafia św. Jana",
+			address:    "ul. Kościelna 1, 32-765 Rzezawa",
+			want:       []string{"Parafia św. Jana", "ul. Kościelna 1, 32-765 Rzezawa", "INTENCJE MSZY ŚWIĘTYCH", "2 – 8 listopada 2026"},
+		},
+		{
+			name:       "name without address",
+			parishName: "Parafia św. Jana",
+			want:       []string{"Parafia św. Jana", "INTENCJE MSZY ŚWIĘTYCH", "2 – 8 listopada 2026"},
+		},
+		{
+			name: "nothing configured",
+			want: []string{"INTENCJE MSZY ŚWIĘTYCH", "2 – 8 listopada 2026"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			view := newWeekView(start, nil)
+			view.ParishName = tt.parishName
+			view.Address = tt.address
+
+			header := layoutHeader(view, fakeMeasurer{})
+
+			var got []string
+			for _, run := range header.Runs {
+				got = append(got, run.Text)
+			}
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("header = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }

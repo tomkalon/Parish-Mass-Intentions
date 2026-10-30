@@ -18,6 +18,7 @@ import (
 
 	"go-parafia/internal/intentions"
 	"go-parafia/internal/masses"
+	"go-parafia/internal/settings"
 )
 
 var testSchedules = []masses.Schedule{
@@ -33,7 +34,7 @@ func newTestHandler(t *testing.T, now time.Time) *handler {
 		t.Fatalf("opening test database: %v", err)
 	}
 
-	err = db.AutoMigrate(&intentions.Intention{})
+	err = db.AutoMigrate(&intentions.Intention{}, &settings.Setting{})
 	if err != nil {
 		t.Fatalf("migrating test database: %v", err)
 	}
@@ -1092,5 +1093,108 @@ func TestPlaceholderDeleteDialog(t *testing.T) {
 
 	if !strings.Contains(body, `<p class="dialog-content placeholder">do uzupełnienia</p>`) {
 		t.Error("delete dialog for a placeholder does not say it is empty")
+	}
+}
+
+func TestCreateSlotsRemembersSchedule(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	postSlots(t, h, url.Values{"week": {"2026-11-02"}, "schedule": {"Wakacje"}})
+
+	setting, err := settings.Load(h.db)
+	if err != nil {
+		t.Fatalf("loading settings: %v", err)
+	}
+	if setting.SelectedSchedule != "Wakacje" {
+		t.Errorf("SelectedSchedule = %q, want %q", setting.SelectedSchedule, "Wakacje")
+	}
+}
+
+func TestCreateSlotsRemembersScheduleWhenNothingToCreate(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedIntention(t, h.db, "2026-11-08 09:00", false, "+ Jan Kowalski")
+
+	postSlots(t, h, url.Values{"week": {"2026-11-02"}, "schedule": {"Wakacje"}})
+
+	if got := countIntentions(t, h.db); got != 1 {
+		t.Fatalf("intentions = %d, want 1 (the only mass of Wakacje is taken)", got)
+	}
+	setting, err := settings.Load(h.db)
+	if err != nil {
+		t.Fatalf("loading settings: %v", err)
+	}
+	if setting.SelectedSchedule != "Wakacje" {
+		t.Errorf("SelectedSchedule = %q, want %q", setting.SelectedSchedule, "Wakacje")
+	}
+}
+
+func TestCreateSlotsWithoutSettingsTable(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	err := h.db.Migrator().DropTable(&settings.Setting{})
+	if err != nil {
+		t.Fatalf("dropping settings table: %v", err)
+	}
+
+	rec := postSlots(t, h, url.Values{"week": {"2026-11-02"}, "schedule": {"Porządek zwykły"}})
+
+	if rec.Code != http.StatusSeeOther {
+		t.Errorf("status = %d, want %d (slots are saved, settings are only a convenience)", rec.Code, http.StatusSeeOther)
+	}
+	if got := countIntentions(t, h.db); got != 4 {
+		t.Errorf("intentions = %d, want 4", got)
+	}
+}
+
+func TestWeekPreselectsRememberedSchedule(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	err := settings.SaveSchedule(h.db, "Wakacje")
+	if err != nil {
+		t.Fatalf("saving schedule: %v", err)
+	}
+
+	body := getWeek(t, h, "/").Body.String()
+
+	for _, want := range []string{
+		`<option value="Porządek zwykły">Porządek zwykły</option>`,
+		`<option value="Wakacje" selected>Wakacje</option>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+}
+
+func TestWeekWithUnknownRememberedSchedule(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	err := settings.SaveSchedule(h.db, "Porządek zimowy")
+	if err != nil {
+		t.Fatalf("saving schedule: %v", err)
+	}
+
+	body := getWeek(t, h, "/").Body.String()
+
+	if strings.Contains(body, " selected>") {
+		t.Error("an option is selected, want none for a schedule missing from the file")
+	}
+}
+
+func TestWeekWithoutSettingsTable(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	err := h.db.Migrator().DropTable(&settings.Setting{})
+	if err != nil {
+		t.Fatalf("dropping settings table: %v", err)
+	}
+
+	rec := getWeek(t, h, "/")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (settings are only a convenience)", rec.Code, http.StatusOK)
+	}
+	if !strings.Contains(rec.Body.String(), `<option value="Wakacje">Wakacje</option>`) {
+		t.Error("schedule form is missing")
 	}
 }

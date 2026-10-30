@@ -24,7 +24,7 @@
 			<label for="schedule">Porządek mszy</label>
 			<select class="select" id="schedule" name="schedule">
 				{{- range .Schedules}}
-				<option value="{{.Name}}">{{.Name}}</option>
+				<option value="{{.Name}}"{{if eq .Name $.SelectedSchedule}} selected{{end}}>{{.Name}}</option>
 				{{- end}}
 			</select>
 			<button class="button" type="submit">Wczytaj godziny mszy</button>

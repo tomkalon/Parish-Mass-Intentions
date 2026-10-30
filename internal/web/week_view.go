@@ -14,6 +14,8 @@ type weekView struct {
 	Days      []dayView
 	Schedules []masses.Schedule
 
+	SelectedSchedule string
+
 	IsUpcoming bool
 	Form       *formView
 	Delete     *deleteView

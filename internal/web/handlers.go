@@ -22,6 +22,7 @@ import (
 
 	"go-parafia/internal/intentions"
 	"go-parafia/internal/masses"
+	"go-parafia/internal/settings"
 )
 
 //go:embed templates/*.html
@@ -228,6 +229,11 @@ func (h *handler) createSlots(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	err = settings.SaveSchedule(h.db, name)
+	if err != nil {
+		log.Printf("error saving selected schedule %q: %v", name, err)
+	}
+
 	http.Redirect(w, r, "/?week="+start.Format(intentions.DateLayout), http.StatusSeeOther)
 }
 
@@ -344,6 +350,12 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 	view := newWeekView(start, list)
 	view.IsUpcoming = start.Equal(intentions.NextWeekStart(h.now()))
 	view.Schedules = h.schedules
+
+	setting, err := settings.Load(h.db)
+	if err != nil {
+		log.Printf("error loading settings: %v", err)
+	}
+	view.SelectedSchedule = setting.SelectedSchedule
 
 	if state.form != nil {
 		view.Form = state.form

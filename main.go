@@ -10,6 +10,7 @@ import (
 
 	"go-parafia/internal/intentions"
 	"go-parafia/internal/masses"
+	"go-parafia/internal/settings"
 )
 
 func main() {
@@ -40,7 +41,7 @@ func openDatabase(path string) (*gorm.DB, error) {
 		return nil, fmt.Errorf("error opening database %s: %w", path, err)
 	}
 
-	err = db.AutoMigrate(&intentions.Intention{})
+	err = db.AutoMigrate(&intentions.Intention{}, &settings.Setting{})
 	if err != nil {
 		return nil, fmt.Errorf("error migrating database %s: %w", path, err)
 	}

@@ -6,22 +6,13 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/glebarez/sqlite"
-	"gorm.io/gorm"
-
-	"go-parafia/internal/intentions"
 	"go-parafia/internal/masses"
 )
 
 func TestRouter(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "test.db")), &gorm.Config{})
+	db, err := openDatabase(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
-		t.Fatalf("opening test database: %v", err)
-	}
-
-	err = db.AutoMigrate(&intentions.Intention{})
-	if err != nil {
-		t.Fatalf("migrating test database: %v", err)
+		t.Fatal(err)
 	}
 
 	schedules, err := masses.Default()

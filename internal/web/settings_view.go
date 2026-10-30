@@ -28,10 +28,14 @@ var feastKinds = []feastKind{
 	{value: "feasts", label: "Święta", kind: gcatholic.Feast, skip: func(f *settings.FeastImport) *bool { return &f.SkipFeasts }},
 	{value: "memorials", label: "Wspomnienia obowiązkowe", kind: gcatholic.Memorial, skip: func(f *settings.FeastImport) *bool { return &f.SkipMemorials }},
 	{value: "optional-memorials", label: "Wspomnienia dowolne", kind: gcatholic.OptionalMemorial, skip: func(f *settings.FeastImport) *bool { return &f.SkipOptionalMemorials }},
-	{value: "other-days", label: "Niedziele i dni powszednie", hint: "np. „XXXII Niedziela Zwykła”, „Wtorek XXXI tygodnia zwykłego”", kind: gcatholic.Other, skip: func(f *settings.FeastImport) *bool { return &f.SkipOtherDays }},
+	{value: "other-days", label: "Niedziele i dni szczególne", hint: "np. „XXXII Niedziela Zwykła”, „Środa Popielcowa”, „Wielki Czwartek”", kind: gcatholic.Other, skip: func(f *settings.FeastImport) *bool { return &f.SkipOtherDays }},
 }
 
 func skipped(f settings.FeastImport, kind gcatholic.Kind) bool {
+	if kind == gcatholic.Weekday {
+		return true
+	}
+
 	for _, k := range feastKinds {
 		if k.kind == kind {
 			return *k.skip(&f)

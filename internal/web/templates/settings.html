@@ -53,7 +53,7 @@
 				<legend>Pobieranie świąt z GCatholic</legend>
 				<p class="hint">Rodzaje obchodów dopisywane przyciskiem „Pobierz święta z GCatholic”.</p>
 				{{- range .Kinds}}
-				<label class="checkbox"><input type="checkbox" name="import" value="{{.Value}}"{{if .Checked}} checked{{end}}> {{.Label}}{{with .Hint}} <span class="checkbox-hint">{{.}}</span>{{end}}</label>
+				<label class="checkbox"><input type="checkbox" name="import" value="{{.Value}}"{{if .Checked}} checked{{end}}> <span>{{.Label}}{{with .Hint}}<span class="checkbox-hint">{{.}}</span>{{end}}</span></label>
 				{{- end}}
 			</fieldset>
 

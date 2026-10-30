@@ -58,7 +58,7 @@ body {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
-	gap: 8px 12px;
+	gap: 8px;
 	/* Full-width background, contents aligned with the 960px column below. */
 	padding: 12px max(var(--gutter), (100% - var(--content-width)) / 2 + var(--gutter));
 	background: var(--bg);
@@ -84,7 +84,7 @@ body {
 }
 
 .upcoming {
-	margin-left: 8px;
+	margin-left: 4px;
 	color: var(--accent);
 	font-weight: 600;
 	text-underline-offset: 3px;
@@ -812,8 +812,8 @@ h1 {
 
 /* Settings */
 
-.settings {
-	max-width: 760px;
+.settings > * {
+	max-width: 700px;
 }
 
 .settings h1 {
@@ -864,6 +864,7 @@ h1 {
 }
 
 .checkbox-hint {
+	display: block;
 	color: var(--muted);
 	font-size: 14px;
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -27,6 +28,7 @@ type Kind int
 
 const (
 	Other Kind = iota
+	Weekday
 	Solemnity
 	Feast
 	Memorial
@@ -41,8 +43,34 @@ var rankKinds = map[string]Kind{
 	"w*": OptionalMemorial,
 }
 
+var weekdayPrefixes = []string{"Poniedziałek ", "Wtorek ", "Środa ", "Czwartek ", "Piątek ", "Sobota "}
+
 func (c Celebration) Kind() Kind {
-	return rankKinds[c.Rank]
+	if kind, ok := rankKinds[c.Rank]; ok {
+		return kind
+	}
+	if isWeekday(c.Name) {
+		return Weekday
+	}
+
+	return Other
+}
+
+func isWeekday(name string) bool {
+	if strings.HasPrefix(name, "Dzień adwentu") {
+		return true
+	}
+
+	startsWithDay := slices.ContainsFunc(weekdayPrefixes, func(prefix string) bool {
+		return strings.HasPrefix(name, prefix)
+	})
+	if !startsWithDay {
+		return false
+	}
+
+	lower := strings.ToLower(name)
+
+	return strings.Contains(lower, " tygodnia ") || strings.Contains(lower, " przed ") || strings.Contains(lower, " po ")
 }
 
 var rankWords = map[string]string{

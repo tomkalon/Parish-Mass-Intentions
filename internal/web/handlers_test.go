@@ -1619,7 +1619,7 @@ func TestImportFeasts(t *testing.T) {
 		t.Fatalf("loading feasts: %v", err)
 	}
 	want := map[string]string{
-		"2026-11-03": "Wtorek XXXI tygodnia zwykłego; wspomnienie dowolne św. Marcina de Porres, zakonnika",
+		"2026-11-03": "wspomnienie dowolne św. Marcina de Porres, zakonnika",
 		"2026-11-04": "odpust parafialny",
 		"2026-11-08": "XXXII Niedziela Zwykła",
 	}
@@ -1780,8 +1780,8 @@ func TestSettingsPageDefaults(t *testing.T) {
 		`<input type="hidden" name="week" value="2026-11-02">`,
 		`name="parish_name" value="Parafia pw. Trójcy Przenajświętszej i św. Leopolda w Rzezawie" maxlength="200" required`,
 		`name="address" value="" maxlength="200"`,
-		`<input type="checkbox" name="import" value="solemnities" checked> Uroczystości`,
-		`<input type="checkbox" name="import" value="other-days" checked> Niedziele i dni powszednie`,
+		`<input type="checkbox" name="import" value="solemnities" checked> <span>Uroczystości</span>`,
+		`<input type="checkbox" name="import" value="other-days" checked> <span>Niedziele i dni szczególne<span class="checkbox-hint">`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body does not contain %q", want)
@@ -1843,7 +1843,7 @@ func TestSaveSettings(t *testing.T) {
 	for _, want := range []string{
 		`<p class="notice" role="status">Zapisano.</p>`,
 		`<input type="checkbox" name="import" value="memorials" checked>`,
-		`<input type="checkbox" name="import" value="optional-memorials"> Wspomnienia dowolne`,
+		`<input type="checkbox" name="import" value="optional-memorials"> <span>Wspomnienia dowolne</span>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page after saving does not contain %q", want)
@@ -1908,7 +1908,7 @@ func TestSaveSettingsKeepsTypedValuesOnError(t *testing.T) {
 	for _, want := range []string{
 		`name="address" value="ul. Kościelna 1"`,
 		`<input type="checkbox" name="import" value="feasts" checked>`,
-		`<input type="checkbox" name="import" value="solemnities"> Uroczystości`,
+		`<input type="checkbox" name="import" value="solemnities"> <span>Uroczystości</span>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body does not contain %q", want)
@@ -1965,5 +1965,29 @@ func TestWeekPDFUsesParishSettings(t *testing.T) {
 
 	if rec := getPDF(t, h, "/pdf"); rec.Code != http.StatusInternalServerError {
 		t.Errorf("status = %d, want %d (the parish name is part of the sheet)", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestImportFeastsNeverAddsOrdinaryWeekdays(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	h.fetchCelebrations = fakeCelebrations(map[int][]gcatholic.Celebration{2026: {
+		{Date: "2026-11-02", Name: "Wspomnienie wszystkich wiernych zmarłych"},
+		{Date: "2026-11-05", Name: "Czwartek XXXI tygodnia zwykłego"},
+		{Date: "2026-11-06", Name: "Piątek XXXI tygodnia zwykłego"},
+		{Date: "2026-11-08", Name: "XXXII Niedziela Zwykła"},
+	}}, nil)
+
+	postImport(t, h, "2026-11-02")
+
+	got, err := calendar.FeastsForWeek(h.db, time.Date(2026, 11, 2, 0, 0, 0, 0, intentions.TimeZone))
+	if err != nil {
+		t.Fatalf("loading feasts: %v", err)
+	}
+	want := map[string]string{
+		"2026-11-02": "Wspomnienie wszystkich wiernych zmarłych",
+		"2026-11-08": "XXXII Niedziela Zwykła",
+	}
+	if !maps.Equal(got, want) {
+		t.Errorf("feasts = %q, want %q (ordinary weekdays are never imported)", got, want)
 	}
 }

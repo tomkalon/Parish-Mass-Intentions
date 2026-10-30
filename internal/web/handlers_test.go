@@ -1,11 +1,14 @@
 package web
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -14,7 +17,13 @@ import (
 	"gorm.io/gorm"
 
 	"go-parafia/internal/intentions"
+	"go-parafia/internal/masses"
 )
+
+var testSchedules = []masses.Schedule{
+	{Name: "Porządek zwykły", Masses: [7][]string{time.Monday: {"06:30", "18:00"}, time.Sunday: {"07:00", "10:00"}}},
+	{Name: "Wakacje", Masses: [7][]string{time.Sunday: {"09:00"}}},
+}
 
 func newTestHandler(t *testing.T, now time.Time) *handler {
 	t.Helper()
@@ -29,7 +38,7 @@ func newTestHandler(t *testing.T, now time.Time) *handler {
 		t.Fatalf("migrating test database: %v", err)
 	}
 
-	return &handler{db: db, now: func() time.Time { return now }, validate: intentions.NewValidator()}
+	return &handler{db: db, now: func() time.Time { return now }, validate: intentions.NewValidator(), schedules: testSchedules}
 }
 
 func getWeek(t *testing.T, h *handler, target string) *httptest.ResponseRecorder {
@@ -258,7 +267,7 @@ func TestWeekDatabaseError(t *testing.T) {
 
 func TestStaticFiles(t *testing.T) {
 	router := chi.NewRouter()
-	RegisterRoutes(router, nil)
+	RegisterRoutes(router, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/static/app.css", nil)
 	rec := httptest.NewRecorder()
@@ -463,7 +472,7 @@ func postToRouter(t *testing.T, db *gorm.DB, path string, form url.Values) *http
 	t.Helper()
 
 	router := chi.NewRouter()
-	RegisterRoutes(router, db)
+	RegisterRoutes(router, db, testSchedules)
 
 	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -861,5 +870,227 @@ func TestPrintPreview(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("invalid week: status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func postSlots(t *testing.T, h *handler, form url.Values) *httptest.ResponseRecorder {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodPost, "/slots", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	h.createSlots(rec, req)
+
+	return rec
+}
+
+func placeholderTimes(t *testing.T, db *gorm.DB) []string {
+	t.Helper()
+
+	var slots []intentions.Intention
+	err := db.Where("is_placeholder = ?", true).Order("mass_at").Find(&slots).Error
+	if err != nil {
+		t.Fatalf("loading slots: %v", err)
+	}
+
+	times := make([]string, 0, len(slots))
+	for _, slot := range slots {
+		times = append(times, slot.MassAt.In(intentions.TimeZone).Format(intentions.MassAtLayout))
+	}
+
+	return times
+}
+
+func TestCreateSlots(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedIntention(t, h.db, "2026-11-02 18:00", false, "+ Jan Kowalski")
+
+	rec := postSlots(t, h, url.Values{"week": {"2026-11-04"}, "schedule": {"Porządek zwykły"}})
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if got, want := rec.Header().Get("Location"), "/?week=2026-11-02"; got != want {
+		t.Errorf("Location = %q, want %q", got, want)
+	}
+
+	want := []string{"2026-11-02 06:30", "2026-11-08 07:00", "2026-11-08 10:00"}
+	if got := placeholderTimes(t, h.db); !slices.Equal(got, want) {
+		t.Errorf("slots = %q, want %q", got, want)
+	}
+}
+
+func TestCreateSlotsUsesChosenSchedule(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	postSlots(t, h, url.Values{"week": {"2026-11-02"}, "schedule": {"Wakacje"}})
+
+	want := []string{"2026-11-08 09:00"}
+	if got := placeholderTimes(t, h.db); !slices.Equal(got, want) {
+		t.Errorf("slots = %q, want %q", got, want)
+	}
+}
+
+func TestCreateSlotsTwiceDoesNotDuplicate(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	form := url.Values{"week": {"2026-11-02"}, "schedule": {"Porządek zwykły"}}
+
+	postSlots(t, h, form)
+	postSlots(t, h, form)
+
+	if got := countIntentions(t, h.db); got != 4 {
+		t.Errorf("intentions = %d, want 4", got)
+	}
+}
+
+func TestCreateSlotsConcurrently(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	form := url.Values{"week": {"2026-11-02"}, "schedule": {"Porządek zwykły"}}
+
+	var wg sync.WaitGroup
+	for range 5 {
+		wg.Go(func() {
+			rec := postSlots(t, h, form)
+			if rec.Code != http.StatusSeeOther {
+				t.Errorf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+			}
+		})
+	}
+	wg.Wait()
+
+	if got := countIntentions(t, h.db); got != 4 {
+		t.Errorf("intentions = %d, want 4", got)
+	}
+}
+
+func TestCreateSlotsInvalid(t *testing.T) {
+	tests := []struct {
+		name string
+		form url.Values
+	}{
+		{name: "invalid week", form: url.Values{"week": {"jutro"}, "schedule": {"Porządek zwykły"}}},
+		{name: "unknown schedule", form: url.Values{"week": {"2026-11-02"}, "schedule": {"Porządek zimowy"}}},
+		{name: "missing schedule", form: url.Values{"week": {"2026-11-02"}}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+			rec := postSlots(t, h, tt.form)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+			}
+			if got := countIntentions(t, h.db); got != 0 {
+				t.Errorf("intentions = %d, want 0", got)
+			}
+		})
+	}
+}
+
+func TestCreateSlotsDatabaseError(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	err := h.db.Migrator().DropTable(&intentions.Intention{})
+	if err != nil {
+		t.Fatalf("dropping intentions table: %v", err)
+	}
+
+	rec := postSlots(t, h, url.Values{"week": {"2026-11-02"}, "schedule": {"Porządek zwykły"}})
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestCreateSlotsRoute(t *testing.T) {
+	db := newTestHandler(t, time.Now()).db
+
+	rec := postToRouter(t, db, "/slots", url.Values{"week": {"2026-11-02"}, "schedule": {"Porządek zwykły"}})
+
+	if rec.Code != http.StatusSeeOther {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+}
+
+func TestWeekShowsScheduleForm(t *testing.T) {
+	rec := getWeek(t, newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone)), "/")
+
+	body := rec.Body.String()
+	for _, want := range []string{
+		`<form class="schedule-load" method="post" action="/slots">`,
+		`<input type="hidden" name="week" value="2026-11-02">`,
+		`<option value="Porządek zwykły">Porządek zwykły</option>`,
+		`<option value="Wakacje">Wakacje</option>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+}
+
+func TestWeekWithoutSchedulesHidesScheduleForm(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	h.schedules = nil
+
+	body := getWeek(t, h, "/").Body.String()
+
+	if strings.Contains(body, "schedule-load") {
+		t.Error("body contains the schedule form, want none without schedules")
+	}
+}
+
+func seedPlaceholder(t *testing.T, db *gorm.DB, massAt string) int {
+	t.Helper()
+
+	slot := newIntention(t, 0, massAt, false, "")
+	slot.IsPlaceholder = true
+	err := db.Create(&slot).Error
+	if err != nil {
+		t.Fatalf("creating slot: %v", err)
+	}
+
+	return slot.ID
+}
+
+func TestWeekShowsPlaceholder(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	id := seedPlaceholder(t, h.db, "2026-11-02 06:30")
+
+	body := getWeek(t, h, "/").Body.String()
+
+	for _, want := range []string{
+		`<span class="placeholder">do uzupełnienia</span>`,
+		fmt.Sprintf(`<a class="action" href="/?edit=%d&amp;week=2026-11-02" aria-label="Uzupełnij intencję 1. z godz. 6:30">Uzupełnij</a>`, id),
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+	if strings.Contains(body, "Edytuj intencję 1. z godz. 6:30") {
+		t.Error("placeholder has the regular edit link, want Uzupełnij")
+	}
+}
+
+func TestPlaceholderEditPanelHasEmptyContent(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	id := seedPlaceholder(t, h.db, "2026-11-02 06:30")
+
+	body := getWeek(t, h, fmt.Sprintf("/?week=2026-11-02&edit=%d", id)).Body.String()
+
+	if !strings.Contains(body, `autofocus></textarea>`) {
+		t.Error("edit panel for a placeholder does not have an empty content field")
+	}
+}
+
+func TestPlaceholderDeleteDialog(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	id := seedPlaceholder(t, h.db, "2026-11-02 06:30")
+
+	body := getWeek(t, h, fmt.Sprintf("/?week=2026-11-02&delete=%d", id)).Body.String()
+
+	if !strings.Contains(body, `<p class="dialog-content placeholder">do uzupełnienia</p>`) {
+		t.Error("delete dialog for a placeholder does not say it is empty")
 	}
 }

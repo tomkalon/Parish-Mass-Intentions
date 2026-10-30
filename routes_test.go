@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"go-parafia/internal/intentions"
+	"go-parafia/internal/masses"
 )
 
 func TestRouter(t *testing.T) {
@@ -23,7 +24,12 @@ func TestRouter(t *testing.T) {
 		t.Fatalf("migrating test database: %v", err)
 	}
 
-	router := newRouter(db)
+	schedules, err := masses.Default()
+	if err != nil {
+		t.Fatalf("loading schedules: %v", err)
+	}
+
+	router := newRouter(db, schedules)
 
 	tests := []struct {
 		path            string

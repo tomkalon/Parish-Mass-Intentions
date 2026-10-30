@@ -114,6 +114,23 @@ h1 {
 	text-align: center;
 }
 
+.schedule-load {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: center;
+	gap: 8px 12px;
+	margin: 0 0 20px;
+	color: var(--ink-2);
+	font-size: 15px;
+}
+
+.schedule-load .select {
+	width: auto;
+	height: 44px;
+	font-size: 16px;
+}
+
 .week {
 	overflow: hidden;
 	background: var(--surface);
@@ -303,6 +320,11 @@ h1 {
 
 .number {
 	font-weight: 700;
+}
+
+.placeholder {
+	color: var(--muted);
+	font-style: italic;
 }
 
 .intention-actions {

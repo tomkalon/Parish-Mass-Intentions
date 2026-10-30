@@ -10,8 +10,10 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -19,6 +21,7 @@ import (
 	"gorm.io/gorm"
 
 	"go-parafia/internal/intentions"
+	"go-parafia/internal/masses"
 )
 
 //go:embed templates/*.html
@@ -32,18 +35,21 @@ var weekTemplate = template.Must(template.ParseFS(templateFS, "templates/week.ht
 var printTemplate = template.Must(template.ParseFS(templateFS, "templates/print.html"))
 
 type handler struct {
-	now      func() time.Time
-	db       *gorm.DB
-	validate *validator.Validate
+	now       func() time.Time
+	db        *gorm.DB
+	validate  *validator.Validate
+	schedules []masses.Schedule
+	slotsMu   sync.Mutex
 }
 
-func RegisterRoutes(router chi.Router, db *gorm.DB) {
-	h := &handler{now: time.Now, db: db, validate: intentions.NewValidator()}
+func RegisterRoutes(router chi.Router, db *gorm.DB, schedules []masses.Schedule) {
+	h := &handler{now: time.Now, db: db, validate: intentions.NewValidator(), schedules: schedules}
 
 	router.Get("/", h.week)
 	router.Post("/intentions", h.create)
 	router.Post("/intentions/{id}", h.update)
 	router.Post("/intentions/{id}/delete", h.delete)
+	router.Post("/slots", h.createSlots)
 	router.Get("/pdf", h.pdf)
 	router.Get("/print", h.printPreview)
 	router.Handle("/static/*", http.FileServerFS(staticFS))
@@ -179,6 +185,52 @@ func (h *handler) delete(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/?week="+week, http.StatusSeeOther)
 }
 
+func (h *handler) createSlots(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		http.Error(w, "nieprawidłowe dane formularza", http.StatusBadRequest)
+		return
+	}
+
+	week, err := time.ParseInLocation(intentions.DateLayout, r.PostForm.Get("week"), intentions.TimeZone)
+	if err != nil {
+		http.Error(w, "nieprawidłowa data tygodnia, oczekiwano RRRR-MM-DD", http.StatusBadRequest)
+		return
+	}
+	start := intentions.WeekStart(week)
+
+	name := r.PostForm.Get("schedule")
+	i := slices.IndexFunc(h.schedules, func(s masses.Schedule) bool {
+		return s.Name == name
+	})
+	if i < 0 {
+		http.Error(w, "nieznany porządek mszy", http.StatusBadRequest)
+		return
+	}
+
+	h.slotsMu.Lock()
+	defer h.slotsMu.Unlock()
+
+	existing, err := intentions.ForWeek(h.db, start)
+	if err != nil {
+		log.Printf("error loading week intention: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	slots := h.schedules[i].Slots(start, existing)
+	if len(slots) > 0 {
+		err = h.db.Create(&slots).Error
+		if err != nil {
+			log.Printf("error creating slots for week %s: %v", start.Format(intentions.DateLayout), err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	http.Redirect(w, r, "/?week="+start.Format(intentions.DateLayout), http.StatusSeeOther)
+}
+
 func (h *handler) findIntention(w http.ResponseWriter, idParam string) (intentions.Intention, bool) {
 	id, err := strconv.Atoi(idParam)
 	if err != nil {
@@ -291,6 +343,7 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 
 	view := newWeekView(start, list)
 	view.IsUpcoming = start.Equal(intentions.NextWeekStart(h.now()))
+	view.Schedules = h.schedules
 
 	if state.form != nil {
 		view.Form = state.form

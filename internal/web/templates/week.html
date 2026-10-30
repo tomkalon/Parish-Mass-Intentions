@@ -18,6 +18,19 @@
 	<main{{if .Delete}} inert{{end}}>
 		<h1>INTENCJE MSZY ŚWIĘTYCH – {{.Range}}</h1>
 
+		{{- if .Schedules}}
+		<form class="schedule-load" method="post" action="/slots">
+			<input type="hidden" name="week" value="{{.Week}}">
+			<label for="schedule">Porządek mszy</label>
+			<select class="select" id="schedule" name="schedule">
+				{{- range .Schedules}}
+				<option value="{{.Name}}">{{.Name}}</option>
+				{{- end}}
+			</select>
+			<button class="button" type="submit">Wczytaj godziny mszy</button>
+		</form>
+		{{- end}}
+
 		{{- if .IsEmpty}}
 		<div class="empty-week">
 			<p class="empty-week-title">W tym tygodniu nie ma jeszcze żadnych intencji.</p>
@@ -49,9 +62,17 @@
 							{{- range .Parish}}
 							<li class="intention{{if .IsSaved}} is-saved{{end}}{{if .IsEditing}} is-editing{{end}}" id="i-{{.ID}}">
 								<span class="number">{{.Number}}.</span>
+								{{- if .IsPlaceholder}}
+								<span class="placeholder">do uzupełnienia</span>
+								{{- else}}
 								<span>{{.Content}}</span>
+								{{- end}}
 								<span class="intention-actions">
+									{{- if .IsPlaceholder}}
+									<a class="action" href="{{.EditURL}}" aria-label="Uzupełnij intencję {{.Number}}. z godz. {{$time}}">Uzupełnij</a>
+									{{- else}}
 									<a class="action" href="{{.EditURL}}" aria-label="Edytuj intencję {{.Number}}. z godz. {{$time}}">Edytuj</a>
+									{{- end}}
 									<a class="action action-delete" href="{{.DeleteURL}}" aria-label="Usuń intencję {{.Number}}. z godz. {{$time}}">Usuń</a>
 								</span>
 							</li>
@@ -92,7 +113,11 @@
 		<div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title" aria-describedby="dialog-when">
 			<h2 class="dialog-title" id="dialog-title">Usunąć intencję?</h2>
 			<p class="dialog-when" id="dialog-when">{{.When}}</p>
+			{{- if .IsPlaceholder}}
+			<p class="dialog-content placeholder">do uzupełnienia</p>
+			{{- else}}
 			<p class="dialog-content">{{.Content}}</p>
+			{{- end}}
 			<form class="dialog-actions" method="post" action="{{.Action}}">
 				<button class="button button-danger" type="submit" autofocus>Usuń</button>
 				<a class="button" href="{{.CloseURL}}" data-close>Anuluj</a>

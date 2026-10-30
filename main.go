@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	"go-parafia/internal/intentions"
+	"go-parafia/internal/masses"
 )
 
 func main() {
@@ -22,7 +23,12 @@ func main() {
 		log.Fatal(err)
 	}
 
-	err = run(newRouter(db))
+	schedules, err := masses.Default()
+	if err != nil {
+		log.Fatalf("error loading mass schedules: %v", err)
+	}
+
+	err = run(newRouter(db, schedules))
 	if err != nil {
 		log.Fatalf("error running application: %v", err)
 	}

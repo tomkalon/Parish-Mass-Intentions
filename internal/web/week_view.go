@@ -5,12 +5,14 @@ import (
 	"time"
 
 	"go-parafia/internal/intentions"
+	"go-parafia/internal/masses"
 )
 
 type weekView struct {
-	Start time.Time
-	Range string
-	Days  []dayView
+	Start     time.Time
+	Range     string
+	Days      []dayView
+	Schedules []masses.Schedule
 
 	IsUpcoming bool
 	Form       *formView
@@ -37,6 +39,10 @@ func newWeekView(start time.Time, intentionsList []intentions.Intention) weekVie
 		Range: fmt.Sprintf("%s r. – %s r.", start.Format("2.1.2006"), end.Format("2.1.2006")),
 		Days:  days,
 	}
+}
+
+func (v weekView) Week() string {
+	return v.Start.Format(intentions.DateLayout)
 }
 
 func (v weekView) PrevURL() string {

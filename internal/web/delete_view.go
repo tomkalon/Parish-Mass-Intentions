@@ -27,7 +27,7 @@ func newDeleteView(start time.Time, intention intentions.Intention) deleteView {
 		when += " · za zmarłych"
 	}
 	if intention.IsGregorian {
-		when += " · gregorianka"
+		when += " · msza gregoriańska"
 	}
 
 	return deleteView{

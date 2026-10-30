@@ -25,6 +25,6 @@ func (i *Intention) Apply(input Input) {
 	i.Content = input.Content
 	i.IsOutsideParish = input.IsOutsideParish
 	i.IsGregorian = input.IsGregorian
-	i.IsDeceased = input.IsDeceased
+	i.IsDeceased = input.IsDeceased || input.IsGregorian
 	i.IsPlaceholder = false
 }

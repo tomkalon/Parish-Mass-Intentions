@@ -2258,13 +2258,19 @@ func TestWeekShowsIntentionBadges(t *testing.T) {
 		t.Fatalf("creating intention: %v", err)
 	}
 	seedIntention(t, h.db, "2026-11-02 06:30", false, "W int. Parafian")
+	deceased := newIntention(t, 0, "2026-11-03 18:00", false, "+ Jan Kowalski")
+	deceased.IsDeceased = true
+	err = h.db.Create(&deceased).Error
+	if err != nil {
+		t.Fatalf("creating intention: %v", err)
+	}
 
 	body := getWeek(t, h, "/").Body.String()
 
 	for _, want := range []string{
-		`<span>&#43; Anna Kutyba <span class="badge badge-deceased" title="Intencja za zmarłych">`,
-		`</svg>za zmarłych</span> <span class="badge badge-gregorian" title="Msza gregoriańska">`,
-		`</svg>gregorianka</span></span>`,
+		`<span>&#43; Anna Kutyba <span class="badge badge-gregorian" title="Msza gregoriańska">`,
+		`</svg>gregoriańska</span></span>`,
+		`<span>&#43; Jan Kowalski <span class="badge badge-deceased" title="Intencja za zmarłych">`,
 		`<span>W int. Parafian</span>`,
 	} {
 		if !strings.Contains(body, want) {
@@ -2272,7 +2278,7 @@ func TestWeekShowsIntentionBadges(t *testing.T) {
 		}
 	}
 	if got := strings.Count(body, `class="badge `); got != 2 {
-		t.Errorf("badges = %d, want 2 (only the marked intention)", got)
+		t.Errorf("badges = %d, want 2 (gregorian alone, without a repeated ZA ZMARŁYCH, and one for Jan)", got)
 	}
 }
 

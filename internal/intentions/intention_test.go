@@ -19,8 +19,8 @@ func TestApplyCopiesFlags(t *testing.T) {
 	intention := Intention{IsGregorian: true, IsDeceased: true}
 
 	intention.Apply(Input{MassAt: "2026-11-02 18:00", Content: "+ Anna Kutyba", IsGregorian: true})
-	if !intention.IsGregorian || intention.IsDeceased {
-		t.Errorf("flags = gregorian %v, deceased %v; want true, false", intention.IsGregorian, intention.IsDeceased)
+	if !intention.IsGregorian || !intention.IsDeceased {
+		t.Errorf("flags = gregorian %v, deceased %v; want true, true (a gregorian mass is always for the deceased)", intention.IsGregorian, intention.IsDeceased)
 	}
 
 	intention.Apply(Input{MassAt: "2026-11-02 18:00", Content: "+ Anna Kutyba", IsDeceased: true})

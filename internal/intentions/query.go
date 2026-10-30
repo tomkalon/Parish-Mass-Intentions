@@ -18,6 +18,20 @@ func ForWeek(db *gorm.DB, start time.Time) ([]Intention, error) {
 	return list, nil
 }
 
+func Save(db *gorm.DB, intention *Intention) error {
+	intention.MassAt = intention.MassAt.In(TimeZone)
+
+	return db.Transaction(func(tx *gorm.DB) error {
+		err := tx.Save(intention).Error
+		if err != nil {
+			return err
+		}
+
+		return tx.Where("mass_at = ? AND is_placeholder = ? AND id <> ?", intention.MassAt, true, intention.ID).
+			Delete(&Intention{}).Error
+	})
+}
+
 func DeleteWeek(db *gorm.DB, start time.Time) error {
 	return inWeek(db, start).Delete(&Intention{}).Error
 }

@@ -4,6 +4,7 @@ import (
 	"maps"
 	"net/url"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -77,5 +78,18 @@ func TestScheduleFromFormErrors(t *testing.T) {
 	}
 	if !maps.Equal(errs, want) {
 		t.Errorf("errors = %q, want %q", errs, want)
+	}
+}
+
+func TestScheduleFromFormNameTooLong(t *testing.T) {
+	_, errs := scheduleFromForm(url.Values{"name": {strings.Repeat("ś", maxScheduleNameLength+1)}})
+
+	if got, want := errs["name"], "Maksymalnie 100 znaków."; got != want {
+		t.Errorf("name error = %q, want %q", got, want)
+	}
+
+	_, errs = scheduleFromForm(url.Values{"name": {strings.Repeat("ś", maxScheduleNameLength)}})
+	if got := errs["name"]; got != "" {
+		t.Errorf("name at max length has error %q", got)
 	}
 }

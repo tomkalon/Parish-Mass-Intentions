@@ -30,6 +30,9 @@
 				<p class="field-error" id="day-error">{{.}}</p>
 				{{- end}}
 				<p class="hint">Inny tydzień? Użyj strzałek „Poprzedni / Następny” w widoku w tle.</p>
+				{{- if .EditID}}
+				<p class="hint">Ta sama intencja w innym terminie? Zmień dzień lub godzinę i kliknij „Kopiuj”.</p>
+				{{- end}}
 			</fieldset>
 
 			<div class="field">
@@ -62,9 +65,12 @@
 
 		<footer class="panel-footer">
 			<button class="button button-primary" type="submit">Zapisz</button>
+			{{- if .EditID}}
+			<button class="button" type="submit" formaction="/intentions" name="copy" value="1" title="Dodaj taką samą intencję w wybranym dniu i godzinie">Kopiuj</button>
+			{{- end}}
 			<a class="button" href="{{.CloseURL}}">Anuluj</a>
 			{{- if .EditID}}
-			<a class="delete-link" href="{{.DeleteURL}}">Usuń intencję</a>
+			<a class="delete-link" href="{{.DeleteURL}}" aria-label="Usuń intencję">Usuń</a>
 			{{- end}}
 		</footer>
 	</form>

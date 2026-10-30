@@ -553,7 +553,7 @@ func TestWeekWithEditPanel(t *testing.T) {
 		`<option value="18:00" selected>18:00</option>`,
 		`>&#43; Anna Kutyba (greg.)</textarea>`,
 		`name="outside" checked`,
-		`<a class="delete-link" href="/?delete=1&amp;week=2026-11-02">Usuń intencję</a>`,
+		`<a class="delete-link" href="/?delete=1&amp;week=2026-11-02" aria-label="Usuń intencję">Usuń</a>`,
 		`<li class="intention is-editing" id="i-1">`,
 		`href="/?day=2026-10-27&amp;edit=1&amp;time=18%3A00&amp;week=2026-10-26"`,
 	} {
@@ -1884,6 +1884,11 @@ func TestSaveSettingsInvalid(t *testing.T) {
 			form: url.Values{"parish_name": {"Parafia"}, "address": {strings.Repeat("ś", maxSettingLength+1)}},
 			want: `<p class="field-error" id="address-error">Maksymalnie 200 znaków.</p>`,
 		},
+		{
+			name: "parish name too long",
+			form: url.Values{"parish_name": {strings.Repeat("ś", maxSettingLength+1)}},
+			want: `<p class="field-error" id="parish_name-error">Maksymalnie 200 znaków.</p>`,
+		},
 	}
 
 	for _, tt := range tests {
@@ -2300,5 +2305,173 @@ func TestEditPanelShowsFlags(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("edit panel does not contain %q", want)
 		}
+	}
+}
+
+func TestEditPanelHasCopyButton(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedIntention(t, h.db, "2026-11-03 18:00", false, "+ Jan Kowalski")
+	copyButton := `<button class="button" type="submit" formaction="/intentions" name="copy" value="1"`
+
+	edit := getWeek(t, h, "/?week=2026-11-02&edit=1").Body.String()
+	if !strings.Contains(edit, copyButton) {
+		t.Errorf("edit panel does not contain %q", copyButton)
+	}
+	if !strings.Contains(edit, "Zmień dzień lub godzinę i kliknij „Kopiuj”.") {
+		t.Error("edit panel does not explain the copy button")
+	}
+
+	if body := getWeek(t, h, "/?week=2026-11-02&new=1").Body.String(); strings.Contains(body, copyButton) {
+		t.Error("new intention panel has the copy button")
+	}
+}
+
+func TestCopyIntention(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	original := newIntention(t, 0, "2026-11-03 18:00", true, "+ Anna Kutyba")
+	original.IsGregorian = true
+	original.IsDeceased = true
+	err := h.db.Create(&original).Error
+	if err != nil {
+		t.Fatalf("creating intention: %v", err)
+	}
+
+	form := url.Values{
+		"week":      {"2026-11-02"},
+		"day":       {"2026-11-04"},
+		"time":      {"18:00"},
+		"content":   {"+ Anna Kutyba"},
+		"outside":   {"on"},
+		"deceased":  {"on"},
+		"gregorian": {"on"},
+		"copy":      {"1"},
+	}
+	rec := postToRouter(t, h.db, "/intentions", form)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if got, want := rec.Header().Get("Location"), "/?edit=2&saved=2&week=2026-11-02"; got != want {
+		t.Errorf("Location = %q, want %q (the panel stays open on the copy)", got, want)
+	}
+
+	var all []intentions.Intention
+	err = h.db.Order("id").Find(&all).Error
+	if err != nil {
+		t.Fatalf("loading intentions: %v", err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("intentions = %d, want 2 (original + copy)", len(all))
+	}
+	if day := all[0].MassAt.In(intentions.TimeZone).Format(intentions.DateLayout); day != "2026-11-03" {
+		t.Errorf("original moved to %s, want it unchanged on 2026-11-03", day)
+	}
+	copied := all[1]
+	if day := copied.MassAt.In(intentions.TimeZone).Format(intentions.MassAtLayout); day != "2026-11-04 18:00" {
+		t.Errorf("copy at %s, want 2026-11-04 18:00", day)
+	}
+	if copied.Content != "+ Anna Kutyba" || !copied.IsOutsideParish || !copied.IsGregorian || !copied.IsDeceased {
+		t.Errorf("copy = %+v, want the same content and flags", copied)
+	}
+}
+
+func TestCopyIntoPlaceholderSlot(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedIntention(t, h.db, "2026-11-02 18:00", false, "Jan Nowak")
+	slot := newIntention(t, 0, "2026-11-08 07:00", false, "")
+	slot.IsPlaceholder = true
+	err := h.db.Create(&slot).Error
+	if err != nil {
+		t.Fatalf("creating placeholder: %v", err)
+	}
+
+	form := url.Values{
+		"week":    {"2026-11-02"},
+		"day":     {"2026-11-08"},
+		"time":    {"07:00"},
+		"content": {"Jan Nowak"},
+		"copy":    {"1"},
+	}
+	rec := postToRouter(t, h.db, "/intentions", form)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+
+	var placeholders int64
+	err = h.db.Model(&intentions.Intention{}).Where("is_placeholder = ?", true).Count(&placeholders).Error
+	if err != nil {
+		t.Fatalf("counting placeholders: %v", err)
+	}
+	if placeholders != 0 {
+		t.Errorf("placeholders = %d, want 0 (the copy fills the 7:00 slot)", placeholders)
+	}
+
+	body := getWeek(t, h, "/?week=2026-11-02").Body.String()
+	if strings.Contains(body, "do uzupełnienia") {
+		t.Error("week view still shows an empty slot")
+	}
+}
+
+func TestMoveIntentionIntoPlaceholderSlot(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedIntention(t, h.db, "2026-11-02 18:00", false, "Jan Nowak")
+	slot := newIntention(t, 0, "2026-11-08 07:00", false, "")
+	slot.IsPlaceholder = true
+	err := h.db.Create(&slot).Error
+	if err != nil {
+		t.Fatalf("creating placeholder: %v", err)
+	}
+
+	form := url.Values{
+		"week":    {"2026-11-02"},
+		"day":     {"2026-11-08"},
+		"time":    {"07:00"},
+		"content": {"Jan Nowak"},
+	}
+	rec := postToRouter(t, h.db, "/intentions/1", form)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+
+	var all []intentions.Intention
+	err = h.db.Find(&all).Error
+	if err != nil {
+		t.Fatalf("loading intentions: %v", err)
+	}
+	if len(all) != 1 || all[0].ID != 1 || all[0].IsPlaceholder {
+		t.Errorf("intentions = %+v, want only the moved intention 1", all)
+	}
+}
+
+func TestScheduleNotFoundOrInvalidID(t *testing.T) {
+	valid := url.Values{"name": {"Rekolekcje"}, "day-0": {"7:00"}}
+
+	tests := []struct {
+		name   string
+		method string
+		target string
+		form   url.Values
+		want   int
+	}{
+		{name: "edit form, missing", method: http.MethodGet, target: "/settings/schedules/99", want: http.StatusNotFound},
+		{name: "edit form, invalid id", method: http.MethodGet, target: "/settings/schedules/abc", want: http.StatusBadRequest},
+		{name: "save, missing", method: http.MethodPost, target: "/settings/schedules/99", form: valid, want: http.StatusNotFound},
+		{name: "save, invalid id", method: http.MethodPost, target: "/settings/schedules/abc", form: valid, want: http.StatusBadRequest},
+		{name: "delete, missing", method: http.MethodPost, target: "/settings/schedules/99/delete", form: url.Values{}, want: http.StatusNotFound},
+		{name: "delete, invalid id", method: http.MethodPost, target: "/settings/schedules/abc/delete", form: url.Values{}, want: http.StatusBadRequest},
+		{name: "delete dialog, missing", method: http.MethodGet, target: "/settings?delete_schedule=99", want: http.StatusNotFound},
+		{name: "delete dialog, invalid id", method: http.MethodGet, target: "/settings?delete_schedule=abc", want: http.StatusBadRequest},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := newTestHandler(t, time.Now()).db
+
+			rec := serveRouter(t, db, tt.method, tt.target, tt.form)
+
+			if rec.Code != tt.want {
+				t.Errorf("status = %d, want %d", rec.Code, tt.want)
+			}
+		})
 	}
 }

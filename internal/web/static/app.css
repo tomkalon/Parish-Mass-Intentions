@@ -523,19 +523,22 @@ h1 {
 
 .panel-footer {
 	display: flex;
-	gap: 12px;
-	padding: 16px 24px;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 10px;
+	padding: 12px 24px;
 	background: var(--surface-2);
 	border-top: 1px solid var(--line);
 }
 
 .panel-footer .button {
-	min-height: 50px;
-	font-size: 17px;
+	min-height: 44px;
+	padding: 0 14px;
+	font-size: 16px;
 }
 
 .panel-footer .button-primary {
-	padding: 0 28px;
+	padding: 0 22px;
 }
 
 .delete-link {

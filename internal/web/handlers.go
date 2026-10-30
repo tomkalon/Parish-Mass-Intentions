@@ -739,7 +739,7 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 
 	intention.Apply(input)
 
-	err = h.db.Save(&intention).Error
+	err = intentions.Save(h.db, &intention)
 	if err != nil {
 		log.Printf("error saving intention %d: %v", intention.ID, err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
@@ -747,6 +747,15 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 	}
 
 	week := intentions.WeekStart(intention.MassAt).Format(intentions.DateLayout)
+	if r.PostForm.Get("copy") == "1" {
+		query := url.Values{}
+		query.Set("week", week)
+		query.Set("edit", strconv.Itoa(intention.ID))
+		query.Set("saved", strconv.Itoa(intention.ID))
+		http.Redirect(w, r, "/?"+query.Encode(), http.StatusSeeOther)
+		return
+	}
+
 	http.Redirect(w, r, fmt.Sprintf("/?week=%s&saved=%d#i-%d", week, intention.ID, intention.ID), http.StatusSeeOther)
 }
 

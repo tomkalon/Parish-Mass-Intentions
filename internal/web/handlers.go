@@ -3,6 +3,7 @@ package web
 import (
 	"bytes"
 	"cmp"
+	"context"
 	"embed"
 	"errors"
 	"fmt"
@@ -22,6 +23,7 @@ import (
 	"gorm.io/gorm"
 
 	"go-parafia/internal/calendar"
+	"go-parafia/internal/gcatholic"
 	"go-parafia/internal/intentions"
 	"go-parafia/internal/masses"
 	"go-parafia/internal/settings"
@@ -38,15 +40,25 @@ var weekTemplate = template.Must(template.ParseFS(templateFS, "templates/week.ht
 var printTemplate = template.Must(template.ParseFS(templateFS, "templates/print.html"))
 
 type handler struct {
-	now       func() time.Time
-	db        *gorm.DB
-	validate  *validator.Validate
-	schedules []masses.Schedule
-	slotsMu   sync.Mutex
+	now               func() time.Time
+	db                *gorm.DB
+	validate          *validator.Validate
+	schedules         []masses.Schedule
+	slotsMu           sync.Mutex
+	fetchCelebrations func(ctx context.Context, year int) ([]gcatholic.Celebration, error)
 }
 
 func RegisterRoutes(router chi.Router, db *gorm.DB, schedules []masses.Schedule) {
-	h := &handler{now: time.Now, db: db, validate: intentions.NewValidator(), schedules: schedules}
+	client := &http.Client{Timeout: 20 * time.Second}
+	h := &handler{
+		now:       time.Now,
+		db:        db,
+		validate:  intentions.NewValidator(),
+		schedules: schedules,
+		fetchCelebrations: func(ctx context.Context, year int) ([]gcatholic.Celebration, error) {
+			return gcatholic.Fetch(ctx, client, gcatholic.BaseURL, year)
+		},
+	}
 
 	router.Get("/", h.week)
 	router.Post("/intentions", h.create)
@@ -55,6 +67,7 @@ func RegisterRoutes(router chi.Router, db *gorm.DB, schedules []masses.Schedule)
 	router.Post("/slots", h.createSlots)
 	router.Post("/clear", h.clearWeek)
 	router.Post("/days/{date}", h.saveFeast)
+	router.Post("/feasts/import", h.importFeasts)
 	router.Get("/pdf", h.pdf)
 	router.Get("/print", h.printPreview)
 	router.Handle("/static/*", http.FileServerFS(staticFS))
@@ -215,6 +228,54 @@ func (h *handler) delete(w http.ResponseWriter, r *http.Request) {
 
 	week := intentions.WeekStart(intention.MassAt).Format(intentions.DateLayout)
 	http.Redirect(w, r, "/?week="+week, http.StatusSeeOther)
+}
+
+const importErrorMessage = "Nie udało się pobrać kalendarza z GCatholic. Sprawdź połączenie z internetem i spróbuj ponownie."
+
+func (h *handler) importFeasts(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		http.Error(w, "nieprawidłowe dane formularza", http.StatusBadRequest)
+		return
+	}
+
+	start, err := postedWeekStart(r)
+	if err != nil {
+		http.Error(w, "nieprawidłowa data tygodnia, oczekiwano RRRR-MM-DD", http.StatusBadRequest)
+		return
+	}
+
+	years := []int{start.Year()}
+	if end := start.AddDate(0, 0, 6); end.Year() != start.Year() {
+		years = append(years, end.Year())
+	}
+
+	feasts := make(map[string]string)
+	for _, year := range years {
+		celebrations, err := h.fetchCelebrations(r.Context(), year)
+		if err != nil {
+			log.Printf("error fetching GCatholic calendar %d: %v", year, err)
+			h.renderWeek(w, http.StatusBadGateway, start, weekState{importError: importErrorMessage})
+			return
+		}
+
+		texts := gcatholic.Texts(celebrations)
+		for i := range 7 {
+			date := start.AddDate(0, 0, i).Format(intentions.DateLayout)
+			if text, ok := texts[date]; ok {
+				feasts[date] = text
+			}
+		}
+	}
+
+	err = calendar.AddMissing(h.db, feasts)
+	if err != nil {
+		log.Printf("error saving imported feasts for week %s: %v", start.Format(intentions.DateLayout), err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, "/?week="+start.Format(intentions.DateLayout), http.StatusSeeOther)
 }
 
 func (h *handler) saveFeast(w http.ResponseWriter, r *http.Request) {
@@ -431,11 +492,12 @@ func formErrors(day, massTime string, messages map[string]string) map[string]str
 }
 
 type weekState struct {
-	form   *formView
-	delete *deleteView
-	feast  *feastView
-	clear  bool
-	saved  int
+	form        *formView
+	delete      *deleteView
+	feast       *feastView
+	clear       bool
+	saved       int
+	importError string
 }
 
 func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time, state weekState) {
@@ -475,6 +537,7 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 		view.Clear = &c
 	}
 	view.Feast = state.feast
+	view.ImportError = state.importError
 	markSaved(view.Days, state.saved)
 
 	render(w, status, weekTemplate, view)

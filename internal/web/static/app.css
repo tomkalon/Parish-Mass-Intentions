@@ -122,6 +122,10 @@ h1 {
 	margin: 0 0 20px;
 }
 
+.week-alert {
+	margin: 0 0 20px;
+}
+
 .schedule-load {
 	display: flex;
 	flex-wrap: wrap;

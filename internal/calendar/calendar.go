@@ -1,9 +1,12 @@
 package calendar
 
 import (
+	"maps"
+	"slices"
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"go-parafia/internal/intentions"
 )
@@ -37,6 +40,20 @@ func Feast(db *gorm.DB, date string) (string, error) {
 	err := db.Limit(1).Find(&day, "date = ?", date).Error
 
 	return day.Feast, err
+}
+
+func AddMissing(db *gorm.DB, feasts map[string]string) error {
+	var days []Day
+	for _, date := range slices.Sorted(maps.Keys(feasts)) {
+		if feasts[date] != "" {
+			days = append(days, Day{Date: date, Feast: feasts[date]})
+		}
+	}
+	if len(days) == 0 {
+		return nil
+	}
+
+	return db.Clauses(clause.OnConflict{DoNothing: true}).Create(&days).Error
 }
 
 func SaveFeast(db *gorm.DB, date, feast string) error {

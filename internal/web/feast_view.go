@@ -7,7 +7,7 @@ import (
 	"go-parafia/internal/intentions"
 )
 
-const maxFeastLength = 150
+const maxFeastLength = 300
 
 type feastView struct {
 	Action   string
@@ -26,6 +26,10 @@ func newFeastView(day time.Time) feastView {
 		Day:      dayLabel(day),
 		CloseURL: "/?week=" + week,
 	}
+}
+
+func (f feastView) MaxLength() int {
+	return maxFeastLength
 }
 
 func feastURL(week, date string) string {

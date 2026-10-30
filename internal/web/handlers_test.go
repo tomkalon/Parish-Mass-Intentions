@@ -1,7 +1,10 @@
 package web
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -17,6 +20,7 @@ import (
 	"gorm.io/gorm"
 
 	"go-parafia/internal/calendar"
+	"go-parafia/internal/gcatholic"
 	"go-parafia/internal/intentions"
 	"go-parafia/internal/masses"
 	"go-parafia/internal/settings"
@@ -40,7 +44,15 @@ func newTestHandler(t *testing.T, now time.Time) *handler {
 		t.Fatalf("migrating test database: %v", err)
 	}
 
-	return &handler{db: db, now: func() time.Time { return now }, validate: intentions.NewValidator(), schedules: testSchedules}
+	return &handler{
+		db:        db,
+		now:       func() time.Time { return now },
+		validate:  intentions.NewValidator(),
+		schedules: testSchedules,
+		fetchCelebrations: func(context.Context, int) ([]gcatholic.Celebration, error) {
+			return nil, errors.New("no network in tests")
+		},
+	}
 }
 
 func getWeek(t *testing.T, h *handler, target string) *httptest.ResponseRecorder {
@@ -1420,7 +1432,7 @@ func TestWeekWithFeastDialog(t *testing.T) {
 		`<form method="post" action="/days/2026-11-04">`,
 		`<h2 class="dialog-title" id="dialog-title">Wspomnienie / święto</h2>`,
 		`<p class="dialog-when">Środa 4.11.</p>`,
-		`value="wspomnienie św. Karola Boromeusza" maxlength="150" autofocus`,
+		`value="wspomnienie św. Karola Boromeusza" maxlength="300" autofocus`,
 		`<a class="button" href="/?week=2026-11-02" data-close>Anuluj</a>`,
 	} {
 		if !strings.Contains(body, want) {
@@ -1434,7 +1446,7 @@ func TestWeekFeastDialogForDayWithoutFeast(t *testing.T) {
 
 	body := getWeek(t, h, "/?week=2026-11-02&feast=2026-11-03").Body.String()
 
-	if !strings.Contains(body, `name="feast" value="" maxlength="150"`) {
+	if !strings.Contains(body, `name="feast" value="" maxlength="300"`) {
 		t.Error("dialog for a day without a feast does not have an empty field")
 	}
 }
@@ -1504,7 +1516,7 @@ func TestSaveFeastTooLong(t *testing.T) {
 	}
 	body := rec.Body.String()
 	for _, want := range []string{
-		`<p class="field-error" id="feast-error">Maksymalnie 150 znaków.</p>`,
+		`<p class="field-error" id="feast-error">Maksymalnie 300 znaków.</p>`,
 		`value="` + long + `"`,
 		`aria-invalid="true"`,
 	} {
@@ -1549,5 +1561,177 @@ func TestSaveFeastDatabaseError(t *testing.T) {
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func fakeCelebrations(byYear map[int][]gcatholic.Celebration, requested *[]int) func(context.Context, int) ([]gcatholic.Celebration, error) {
+	return func(_ context.Context, year int) ([]gcatholic.Celebration, error) {
+		if requested != nil {
+			*requested = append(*requested, year)
+		}
+		return byYear[year], nil
+	}
+}
+
+func postImport(t *testing.T, h *handler, week string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	form := url.Values{"week": {week}}
+	req := httptest.NewRequest(http.MethodPost, "/feasts/import", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	h.importFeasts(rec, req)
+
+	return rec
+}
+
+func TestImportFeasts(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	err := calendar.SaveFeast(h.db, "2026-11-04", "odpust parafialny")
+	if err != nil {
+		t.Fatalf("saving feast: %v", err)
+	}
+
+	var requested []int
+	h.fetchCelebrations = fakeCelebrations(map[int][]gcatholic.Celebration{2026: {
+		{Date: "2026-11-01", Rank: "U", Name: "Wszystkich Świętych"},
+		{Date: "2026-11-03", Name: "Wtorek XXXI tygodnia zwykłego"},
+		{Date: "2026-11-03", Rank: "w", Name: "Św. Marcina de Porres, zakonnika"},
+		{Date: "2026-11-04", Rank: "W", Name: "Św. Karola Boromeusza, biskupa"},
+		{Date: "2026-11-08", Name: "XXXII Niedziela Zwykła"},
+		{Date: "2026-11-09", Rank: "Ś", Name: "Rocznica poświęcenia Bazyliki Laterańskiej"},
+	}}, &requested)
+
+	rec := postImport(t, h, "2026-11-05")
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if got, want := rec.Header().Get("Location"), "/?week=2026-11-02"; got != want {
+		t.Errorf("Location = %q, want %q", got, want)
+	}
+	if !slices.Equal(requested, []int{2026}) {
+		t.Errorf("requested years = %v, want [2026]", requested)
+	}
+
+	got, err := calendar.FeastsForWeek(h.db, time.Date(2026, 11, 2, 0, 0, 0, 0, intentions.TimeZone))
+	if err != nil {
+		t.Fatalf("loading feasts: %v", err)
+	}
+	want := map[string]string{
+		"2026-11-03": "Wtorek XXXI tygodnia zwykłego; wspomnienie dowolne św. Marcina de Porres, zakonnika",
+		"2026-11-04": "odpust parafialny",
+		"2026-11-08": "XXXII Niedziela Zwykła",
+	}
+	if !maps.Equal(got, want) {
+		t.Errorf("feasts = %q, want %q", got, want)
+	}
+	if feast := loadFeast(t, h.db, "2026-11-01"); feast != "" {
+		t.Errorf("feast outside the week saved: %q", feast)
+	}
+}
+
+func TestImportFeastsAcrossNewYear(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	var requested []int
+	h.fetchCelebrations = fakeCelebrations(map[int][]gcatholic.Celebration{
+		2026: {{Date: "2026-12-28", Rank: "Ś", Name: "Świętych Młodzianków, męczenników"}},
+		2027: {{Date: "2027-01-01", Rank: "U", Name: "Świętej Bożej Rodzicielki Maryi"}},
+	}, &requested)
+
+	postImport(t, h, "2026-12-30")
+
+	if !slices.Equal(requested, []int{2026, 2027}) {
+		t.Errorf("requested years = %v, want [2026 2027]", requested)
+	}
+	if got := loadFeast(t, h.db, "2026-12-28"); got != "święto Świętych Młodzianków, męczenników" {
+		t.Errorf("2026-12-28 = %q", got)
+	}
+	if got := loadFeast(t, h.db, "2027-01-01"); got != "uroczystość Świętej Bożej Rodzicielki Maryi" {
+		t.Errorf("2027-01-01 = %q", got)
+	}
+}
+
+func TestImportFeastsFetchError(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	h.fetchCelebrations = func(context.Context, int) ([]gcatholic.Celebration, error) {
+		return nil, errors.New("no network")
+	}
+
+	rec := postImport(t, h, "2026-11-02")
+
+	if rec.Code != http.StatusBadGateway {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadGateway)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`<div class="form-alert week-alert" role="alert">`,
+		"<p>Nie udało się pobrać kalendarza z GCatholic. Sprawdź połączenie z internetem i spróbuj ponownie.</p>",
+		`<h1>INTENCJE MSZY ŚWIĘTYCH – 2.11.2026 r. – 8.11.2026 r.</h1>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+}
+
+func TestImportFeastsInvalidWeek(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	called := false
+	h.fetchCelebrations = func(context.Context, int) ([]gcatholic.Celebration, error) {
+		called = true
+		return nil, nil
+	}
+
+	rec := postImport(t, h, "jutro")
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	if called {
+		t.Error("GCatholic was asked despite the invalid week")
+	}
+}
+
+func TestImportFeastsDatabaseError(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	h.fetchCelebrations = fakeCelebrations(map[int][]gcatholic.Celebration{2026: {
+		{Date: "2026-11-04", Rank: "W", Name: "Św. Karola Boromeusza, biskupa"},
+	}}, nil)
+
+	err := h.db.Migrator().DropTable(&calendar.Day{})
+	if err != nil {
+		t.Fatalf("dropping days table: %v", err)
+	}
+
+	rec := postImport(t, h, "2026-11-02")
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestImportFeastsRoute(t *testing.T) {
+	db := newTestHandler(t, time.Now()).db
+
+	rec := postToRouter(t, db, "/feasts/import", url.Values{"week": {"jutro"}})
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d (route registered, no request to GCatholic)", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestWeekShowsImportButton(t *testing.T) {
+	body := getWeek(t, newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone)), "/").Body.String()
+
+	want := `<form method="post" action="/feasts/import">
+				<input type="hidden" name="week" value="2026-11-02">
+				<button class="button" type="submit">Pobierz święta z GCatholic</button>`
+	if !strings.Contains(body, want) {
+		t.Errorf("body does not contain %q", want)
+	}
+	if strings.Contains(body, "week-alert") {
+		t.Error("week view shows the import error without an import")
 	}
 }

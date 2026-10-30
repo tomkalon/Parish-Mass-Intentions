@@ -31,10 +31,21 @@
 				<button class="button" type="submit">Wczytaj godziny mszy</button>
 			</form>
 			{{- end}}
+			<form method="post" action="/feasts/import">
+				<input type="hidden" name="week" value="{{.Week}}">
+				<button class="button" type="submit">Pobierz święta z GCatholic</button>
+			</form>
 			{{- if not .IsEmpty}}
 			<a class="delete-link" href="{{.ClearURL}}">Wyczyść tydzień</a>
 			{{- end}}
 		</div>
+
+		{{- with .ImportError}}
+		<div class="form-alert week-alert" role="alert">
+			<span class="form-alert-icon" aria-hidden="true">!</span>
+			<p>{{.}}</p>
+		</div>
+		{{- end}}
 
 		{{- if .IsEmpty}}
 		<div class="empty-week">
@@ -145,7 +156,7 @@
 				<h2 class="dialog-title" id="dialog-title">Wspomnienie / święto</h2>
 				<p class="dialog-when">{{.Day}}</p>
 				<label class="label" for="feast">Opis dnia</label>
-				<input class="input{{if .Error}} is-invalid{{end}}" type="text" id="feast" name="feast" value="{{.Feast}}" maxlength="150" autofocus aria-describedby="{{if .Error}}feast-error {{end}}feast-hint"{{if .Error}} aria-invalid="true"{{end}}>
+				<input class="input{{if .Error}} is-invalid{{end}}" type="text" id="feast" name="feast" value="{{.Feast}}" maxlength="{{.MaxLength}}" autofocus aria-describedby="{{if .Error}}feast-error {{end}}feast-hint"{{if .Error}} aria-invalid="true"{{end}}>
 				{{- with .Error}}
 				<p class="field-error" id="feast-error">{{.}}</p>
 				{{- end}}

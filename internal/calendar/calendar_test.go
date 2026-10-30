@@ -169,3 +169,40 @@ func TestFeast(t *testing.T) {
 		})
 	}
 }
+
+func TestAddMissingKeepsExistingEntries(t *testing.T) {
+	db := newTestDB(t)
+	saveFeast(t, db, "2026-11-04", "odpust parafialny")
+
+	err := AddMissing(db, map[string]string{
+		"2026-11-03": "Wtorek XXXI tygodnia zwykłego",
+		"2026-11-04": "wspomnienie św. Karola Boromeusza, biskupa",
+		"2026-11-05": "",
+	})
+	if err != nil {
+		t.Fatalf("AddMissing: %v", err)
+	}
+
+	got, err := FeastsForWeek(db, time.Date(2026, 11, 2, 0, 0, 0, 0, intentions.TimeZone))
+	if err != nil {
+		t.Fatalf("FeastsForWeek: %v", err)
+	}
+	want := map[string]string{
+		"2026-11-03": "Wtorek XXXI tygodnia zwykłego",
+		"2026-11-04": "odpust parafialny",
+	}
+	if !maps.Equal(got, want) {
+		t.Errorf("after AddMissing = %q, want %q", got, want)
+	}
+}
+
+func TestAddMissingNothingToAdd(t *testing.T) {
+	db := newTestDB(t)
+
+	for _, feasts := range []map[string]string{nil, {"2026-11-05": ""}} {
+		err := AddMissing(db, feasts)
+		if err != nil {
+			t.Errorf("AddMissing(%q): %v", feasts, err)
+		}
+	}
+}

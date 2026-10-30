@@ -21,6 +21,8 @@ type weekView struct {
 	Delete     *deleteView
 	Clear      *clearView
 	Feast      *feastView
+
+	ImportError string
 }
 
 func newWeekView(start time.Time, intentionsList []intentions.Intention) weekView {

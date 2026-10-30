@@ -15,11 +15,13 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
 	"gorm.io/gorm"
 
+	"go-parafia/internal/calendar"
 	"go-parafia/internal/intentions"
 	"go-parafia/internal/masses"
 	"go-parafia/internal/settings"
@@ -52,6 +54,7 @@ func RegisterRoutes(router chi.Router, db *gorm.DB, schedules []masses.Schedule)
 	router.Post("/intentions/{id}/delete", h.delete)
 	router.Post("/slots", h.createSlots)
 	router.Post("/clear", h.clearWeek)
+	router.Post("/days/{date}", h.saveFeast)
 	router.Get("/pdf", h.pdf)
 	router.Get("/print", h.printPreview)
 	router.Handle("/static/*", http.FileServerFS(staticFS))
@@ -96,6 +99,21 @@ func (h *handler) week(w http.ResponseWriter, r *http.Request) {
 		state.form = &f
 	case query.Get("clear") == "1":
 		state.clear = true
+	case query.Get("feast") != "":
+		day, err := time.ParseInLocation(intentions.DateLayout, query.Get("feast"), intentions.TimeZone)
+		if err != nil {
+			http.Error(w, "nieprawidłowa data dnia, oczekiwano RRRR-MM-DD", http.StatusBadRequest)
+			return
+		}
+
+		f := newFeastView(day)
+		f.Feast, err = calendar.Feast(h.db, day.Format(intentions.DateLayout))
+		if err != nil {
+			log.Printf("error loading feast for %s: %v", day.Format(intentions.DateLayout), err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		state.feast = &f
 	}
 
 	state.saved, _ = strconv.Atoi(query.Get("saved"))
@@ -141,8 +159,18 @@ func (h *handler) pdf(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	feasts, err := calendar.FeastsForWeek(h.db, start)
+	if err != nil {
+		log.Printf("error loading week feasts: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	view := newWeekView(start, list)
+	setFeasts(view.Days, feasts)
+
 	var buf bytes.Buffer
-	err = writeWeekPDF(&buf, newWeekView(start, list))
+	err = writeWeekPDF(&buf, view)
 	if err != nil {
 		log.Printf("error generating pdf for week %s: %v", start.Format(intentions.DateLayout), err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
@@ -187,6 +215,41 @@ func (h *handler) delete(w http.ResponseWriter, r *http.Request) {
 
 	week := intentions.WeekStart(intention.MassAt).Format(intentions.DateLayout)
 	http.Redirect(w, r, "/?week="+week, http.StatusSeeOther)
+}
+
+func (h *handler) saveFeast(w http.ResponseWriter, r *http.Request) {
+	day, err := time.ParseInLocation(intentions.DateLayout, chi.URLParam(r, "date"), intentions.TimeZone)
+	if err != nil {
+		http.Error(w, "nieprawidłowa data dnia, oczekiwano RRRR-MM-DD", http.StatusBadRequest)
+		return
+	}
+
+	err = r.ParseForm()
+	if err != nil {
+		http.Error(w, "nieprawidłowe dane formularza", http.StatusBadRequest)
+		return
+	}
+
+	date := day.Format(intentions.DateLayout)
+	start := intentions.WeekStart(day)
+	feast := strings.TrimSpace(r.PostForm.Get("feast"))
+
+	if utf8.RuneCountInString(feast) > maxFeastLength {
+		f := newFeastView(day)
+		f.Feast = feast
+		f.Error = fmt.Sprintf("Maksymalnie %d znaków.", maxFeastLength)
+		h.renderWeek(w, http.StatusUnprocessableEntity, start, weekState{feast: &f})
+		return
+	}
+
+	err = calendar.SaveFeast(h.db, date, feast)
+	if err != nil {
+		log.Printf("error saving feast for %s: %v", date, err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, "/?week="+start.Format(intentions.DateLayout)+"#d-"+date, http.StatusSeeOther)
 }
 
 func (h *handler) clearWeek(w http.ResponseWriter, r *http.Request) {
@@ -370,6 +433,7 @@ func formErrors(day, massTime string, messages map[string]string) map[string]str
 type weekState struct {
 	form   *formView
 	delete *deleteView
+	feast  *feastView
 	clear  bool
 	saved  int
 }
@@ -382,7 +446,15 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 		return
 	}
 
+	feasts, err := calendar.FeastsForWeek(h.db, start)
+	if err != nil {
+		log.Printf("error loading week feasts: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
 	view := newWeekView(start, list)
+	setFeasts(view.Days, feasts)
 	view.IsUpcoming = start.Equal(intentions.NextWeekStart(h.now()))
 	view.Schedules = h.schedules
 
@@ -402,6 +474,7 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 		c := newClearView(list)
 		view.Clear = &c
 	}
+	view.Feast = state.feast
 	markSaved(view.Days, state.saved)
 
 	render(w, status, weekTemplate, view)

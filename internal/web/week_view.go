@@ -20,6 +20,7 @@ type weekView struct {
 	Form       *formView
 	Delete     *deleteView
 	Clear      *clearView
+	Feast      *feastView
 }
 
 func newWeekView(start time.Time, intentionsList []intentions.Intention) weekView {
@@ -98,6 +99,12 @@ func (v weekView) IsEmpty() bool {
 	}
 
 	return true
+}
+
+func setFeasts(days []dayView, feasts map[string]string) {
+	for i := range days {
+		days[i].Feast = feasts[days[i].Date]
+	}
 }
 
 func markSaved(days []dayView, id int) {

@@ -7,7 +7,7 @@
 	<script src="/static/app.js" defer></script>
 </head>
 <body{{if .Form}} class="has-panel"{{end}}>
-	<nav class="toolbar" aria-label="Wybór tygodnia"{{if or .Delete .Clear}} inert{{end}}>
+	<nav class="toolbar" aria-label="Wybór tygodnia"{{if or .Delete .Clear .Feast}} inert{{end}}>
 		<a class="button" href="{{.PrevURL}}">← Poprzedni</a>
 		<a class="button" href="{{.NextURL}}">Następny →</a>
 		<a class="upcoming" href="/"{{if .IsUpcoming}} aria-current="true"{{end}}>Nadchodzący tydzień</a>
@@ -15,7 +15,7 @@
 		<a class="button button-primary toolbar-add" href="{{.NewURL}}">+ Dodaj intencję</a>
 	</nav>
 
-	<main{{if or .Delete .Clear}} inert{{end}}>
+	<main{{if or .Delete .Clear .Feast}} inert{{end}}>
 		<h1>INTENCJE MSZY ŚWIĘTYCH – {{.Range}}</h1>
 
 		<div class="week-actions">
@@ -49,6 +49,12 @@
 			<section class="day{{if .IsSelected}} is-selected{{end}}" id="d-{{.Date}}">
 				<div class="day-header">
 					<h2 class="day-name">{{.Label}}</h2>
+					{{- if .Feast}}
+					<span class="feast">{{.Feast}}</span>
+					<a class="feast-link" href="{{.FeastURL}}" aria-label="Zmień wspomnienie lub święto – {{.Label}}">Zmień</a>
+					{{- else}}
+					<a class="feast-link" href="{{.FeastURL}}" aria-label="Dodaj wspomnienie lub święto – {{.Label}}">+ święto</a>
+					{{- end}}
 					{{- if $.Form}}
 					<span class="pill">wybrany w formularzu</span>
 					{{- end}}
@@ -127,6 +133,27 @@
 			<form class="dialog-actions" method="post" action="{{.Action}}">
 				<button class="button button-danger" type="submit" autofocus>Usuń</button>
 				<a class="button" href="{{.CloseURL}}" data-close>Anuluj</a>
+			</form>
+		</div>
+	</div>
+	{{- end}}
+
+	{{- with .Feast}}
+	<div class="dialog-backdrop">
+		<div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+			<form method="post" action="{{.Action}}">
+				<h2 class="dialog-title" id="dialog-title">Wspomnienie / święto</h2>
+				<p class="dialog-when">{{.Day}}</p>
+				<label class="label" for="feast">Opis dnia</label>
+				<input class="input{{if .Error}} is-invalid{{end}}" type="text" id="feast" name="feast" value="{{.Feast}}" maxlength="150" autofocus aria-describedby="{{if .Error}}feast-error {{end}}feast-hint"{{if .Error}} aria-invalid="true"{{end}}>
+				{{- with .Error}}
+				<p class="field-error" id="feast-error">{{.}}</p>
+				{{- end}}
+				<p class="hint" id="feast-hint">Np. „wspomnienie św. Karola Boromeusza”. Puste pole usuwa wpis.</p>
+				<div class="dialog-actions">
+					<button class="button button-primary" type="submit">Zapisz</button>
+					<a class="button" href="{{.CloseURL}}" data-close>Anuluj</a>
+				</div>
 			</form>
 		</div>
 	</div>

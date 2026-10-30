@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"gorm.io/gorm"
 
+	"go-parafia/internal/calendar"
 	"go-parafia/internal/intentions"
 	"go-parafia/internal/masses"
 	"go-parafia/internal/settings"
@@ -34,7 +35,7 @@ func newTestHandler(t *testing.T, now time.Time) *handler {
 		t.Fatalf("opening test database: %v", err)
 	}
 
-	err = db.AutoMigrate(&intentions.Intention{}, &settings.Setting{})
+	err = db.AutoMigrate(&intentions.Intention{}, &settings.Setting{}, &calendar.Day{})
 	if err != nil {
 		t.Fatalf("migrating test database: %v", err)
 	}
@@ -1345,5 +1346,208 @@ func TestClearWeekRoute(t *testing.T) {
 
 	if rec.Code != http.StatusSeeOther {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+}
+
+func TestWeekShowsFeast(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	err := calendar.SaveFeast(h.db, "2026-11-04", "wspomnienie św. Karola Boromeusza")
+	if err != nil {
+		t.Fatalf("saving feast: %v", err)
+	}
+
+	body := getWeek(t, h, "/").Body.String()
+
+	want := `<h2 class="day-name">Środa 4.11.</h2>
+					<span class="feast">wspomnienie św. Karola Boromeusza</span>`
+	if !strings.Contains(body, want) {
+		t.Errorf("body does not contain %q", want)
+	}
+	if got := strings.Count(body, `class="feast"`); got != 1 {
+		t.Errorf("feast appears %d times, want 1", got)
+	}
+}
+
+func TestWeekFeastsDatabaseError(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	err := h.db.Migrator().DropTable(&calendar.Day{})
+	if err != nil {
+		t.Fatalf("dropping days table: %v", err)
+	}
+
+	if rec := getWeek(t, h, "/"); rec.Code != http.StatusInternalServerError {
+		t.Errorf("week: status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+	if rec := getPDF(t, h, "/pdf"); rec.Code != http.StatusInternalServerError {
+		t.Errorf("pdf: status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestWeekShowsFeastLinks(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	err := calendar.SaveFeast(h.db, "2026-11-04", "wspomnienie św. Karola Boromeusza")
+	if err != nil {
+		t.Fatalf("saving feast: %v", err)
+	}
+
+	body := getWeek(t, h, "/").Body.String()
+
+	for _, want := range []string{
+		`<a class="feast-link" href="/?feast=2026-11-03&amp;week=2026-11-02" aria-label="Dodaj wspomnienie lub święto – Wtorek 3.11.">+ święto</a>`,
+		`<a class="feast-link" href="/?feast=2026-11-04&amp;week=2026-11-02" aria-label="Zmień wspomnienie lub święto – Środa 4.11.">Zmień</a>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+	if got := strings.Count(body, "+ święto</a>"); got != 6 {
+		t.Errorf(`"+ święto" links = %d, want 6`, got)
+	}
+}
+
+func TestWeekWithFeastDialog(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	err := calendar.SaveFeast(h.db, "2026-11-04", "wspomnienie św. Karola Boromeusza")
+	if err != nil {
+		t.Fatalf("saving feast: %v", err)
+	}
+
+	body := getWeek(t, h, "/?week=2026-11-02&feast=2026-11-04").Body.String()
+
+	for _, want := range []string{
+		`<main inert>`,
+		`<form method="post" action="/days/2026-11-04">`,
+		`<h2 class="dialog-title" id="dialog-title">Wspomnienie / święto</h2>`,
+		`<p class="dialog-when">Środa 4.11.</p>`,
+		`value="wspomnienie św. Karola Boromeusza" maxlength="150" autofocus`,
+		`<a class="button" href="/?week=2026-11-02" data-close>Anuluj</a>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+}
+
+func TestWeekFeastDialogForDayWithoutFeast(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	body := getWeek(t, h, "/?week=2026-11-02&feast=2026-11-03").Body.String()
+
+	if !strings.Contains(body, `name="feast" value="" maxlength="150"`) {
+		t.Error("dialog for a day without a feast does not have an empty field")
+	}
+}
+
+func TestWeekFeastDialogInvalidDate(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	rec := getWeek(t, h, "/?week=2026-11-02&feast=jutro")
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func loadFeast(t *testing.T, db *gorm.DB, date string) string {
+	t.Helper()
+
+	feast, err := calendar.Feast(db, date)
+	if err != nil {
+		t.Fatalf("loading feast: %v", err)
+	}
+
+	return feast
+}
+
+func TestSaveFeast(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	rec := postToRouter(t, h.db, "/days/2026-11-04", url.Values{"feast": {"  wspomnienie św. Karola Boromeusza  "}})
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if got, want := rec.Header().Get("Location"), "/?week=2026-11-02#d-2026-11-04"; got != want {
+		t.Errorf("Location = %q, want %q", got, want)
+	}
+	if got, want := loadFeast(t, h.db, "2026-11-04"), "wspomnienie św. Karola Boromeusza"; got != want {
+		t.Errorf("feast = %q, want %q", got, want)
+	}
+}
+
+func TestSaveEmptyFeastRemovesIt(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	err := calendar.SaveFeast(h.db, "2026-11-04", "wspomnienie św. Karola Boromeusza")
+	if err != nil {
+		t.Fatalf("saving feast: %v", err)
+	}
+
+	rec := postToRouter(t, h.db, "/days/2026-11-04", url.Values{"feast": {"   "}})
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if got := loadFeast(t, h.db, "2026-11-04"); got != "" {
+		t.Errorf("feast = %q, want it removed", got)
+	}
+}
+
+func TestSaveFeastTooLong(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	long := strings.Repeat("ś", maxFeastLength+1)
+
+	rec := postToRouter(t, h.db, "/days/2026-11-04", url.Values{"feast": {long}})
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`<p class="field-error" id="feast-error">Maksymalnie 150 znaków.</p>`,
+		`value="` + long + `"`,
+		`aria-invalid="true"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+	if got := loadFeast(t, h.db, "2026-11-04"); got != "" {
+		t.Errorf("feast = %q, want nothing saved", got)
+	}
+}
+
+func TestSaveFeastAtMaxLength(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	rec := postToRouter(t, h.db, "/days/2026-11-04", url.Values{"feast": {strings.Repeat("ś", maxFeastLength)}})
+
+	if rec.Code != http.StatusSeeOther {
+		t.Errorf("status = %d, want %d (limit counts letters, not bytes)", rec.Code, http.StatusSeeOther)
+	}
+}
+
+func TestSaveFeastInvalidDate(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	rec := postToRouter(t, h.db, "/days/jutro", url.Values{"feast": {"święto"}})
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestSaveFeastDatabaseError(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	err := h.db.Migrator().DropTable(&calendar.Day{})
+	if err != nil {
+		t.Fatalf("dropping days table: %v", err)
+	}
+
+	rec := postToRouter(t, h.db, "/days/2026-11-04", url.Values{"feast": {"święto"}})
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
 	}
 }

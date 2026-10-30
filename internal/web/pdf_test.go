@@ -243,3 +243,44 @@ func TestLayoutWeekSkipsPlaceholders(t *testing.T) {
 		t.Errorf(`"— brak intencji —" appears %d times, want 6 (Monday has only a placeholder)`, got)
 	}
 }
+
+func TestLayoutWeekPrintsFeast(t *testing.T) {
+	start := time.Date(2026, 11, 2, 0, 0, 0, 0, intentions.TimeZone)
+	view := newWeekView(start, []intentions.Intention{
+		newIntention(t, 1, "2026-11-04 18:00", false, "+ Jan Kowalski"),
+	})
+	setFeasts(view.Days, map[string]string{
+		"2026-11-04": "wspomnienie św. Karola Boromeusza",
+		"2026-11-05": "dzień bez mszy",
+	})
+
+	runs := layoutWeek(view, fakeMeasurer{})[0].Runs
+	find := func(text string) pdfRun {
+		t.Helper()
+		i := slices.IndexFunc(runs, func(run pdfRun) bool { return run.Text == text })
+		if i < 0 {
+			t.Fatalf("page does not contain %q", text)
+		}
+		return runs[i]
+	}
+
+	feast := find("wspomnienie św. Karola Boromeusza")
+	mass := find("18:00")
+	if feast.Font != fontItalic {
+		t.Errorf("feast font = %v, want italic", feast.Font)
+	}
+	if feast.Baseline >= mass.Baseline {
+		t.Errorf("feast baseline %.1f is not above the mass baseline %.1f", feast.Baseline, mass.Baseline)
+	}
+
+	quiet := find("dzień bez mszy")
+	var empty []pdfRun
+	for _, run := range runs {
+		if run.Text == "— brak intencji —" && run.Baseline > quiet.Baseline && run.Baseline < quiet.Baseline+30 {
+			empty = append(empty, run)
+		}
+	}
+	if len(empty) != 1 {
+		t.Errorf("day with a feast and no masses: %d „— brak intencji —” lines right below the feast, want 1", len(empty))
+	}
+}

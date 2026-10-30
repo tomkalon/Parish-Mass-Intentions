@@ -18,10 +18,12 @@ var weekdayNames = [...]string{
 }
 
 type dayView struct {
-	Date   string
-	Label  string
-	NewURL string
-	Masses []massView
+	Date     string
+	Label    string
+	Feast    string
+	FeastURL string
+	NewURL   string
+	Masses   []massView
 
 	IsSelected bool
 }
@@ -75,10 +77,11 @@ func newDayView(day time.Time, list []intentions.Intention) dayView {
 	}
 
 	return dayView{
-		Date:   date,
-		Label:  dayLabel(day),
-		NewURL: newIntentionURL(week, date, ""),
-		Masses: masses,
+		Date:     date,
+		Label:    dayLabel(day),
+		FeastURL: feastURL(week, date),
+		NewURL:   newIntentionURL(week, date, ""),
+		Masses:   masses,
 	}
 }
 

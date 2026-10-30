@@ -167,6 +167,22 @@ h1 {
 	font: 700 21px/1.3 var(--font-serif);
 }
 
+.feast {
+	color: var(--muted);
+	font-size: 15px;
+	font-style: italic;
+}
+
+.feast-link {
+	color: var(--muted);
+	font-size: 14px;
+	text-underline-offset: 3px;
+}
+
+.feast-link:hover {
+	color: var(--accent);
+}
+
 .empty {
 	margin: 0;
 	color: var(--muted);
@@ -572,6 +588,19 @@ h1 {
 	font: 600 19px var(--font-ui);
 }
 
+.input {
+	display: block;
+	width: 100%;
+	height: 48px;
+	margin-top: 6px;
+	padding: 0 12px;
+	border: 1px solid var(--line-strong);
+	border-radius: var(--radius);
+	background: var(--surface);
+	color: var(--ink);
+	font: 17px var(--font-ui);
+}
+
 .textarea {
 	display: block;
 	width: 100%;
@@ -672,7 +701,8 @@ h1 {
 }
 
 .select.is-invalid,
-.textarea.is-invalid {
+.textarea.is-invalid,
+.input.is-invalid {
 	border: 1.5px solid var(--danger);
 	background: var(--danger-field);
 }
@@ -726,6 +756,10 @@ h1 {
 .dialog-actions {
 	display: flex;
 	gap: 12px;
+}
+
+.hint + .dialog-actions {
+	margin-top: 20px;
 }
 
 .button-danger {

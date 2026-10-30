@@ -299,7 +299,13 @@ func layoutDay(date time.Time, day dayView, style pdfStyle, last bool, m textMea
 	leftHeight := nameLine + dateSize*1.3
 
 	massesX := marginSide + 112*px + 14*px
-	rightHeight := layoutMasses(&block, printableMasses(day.Masses), massesX, marginSide+contentWidth-massesX, top, style, m)
+	massesWidth := marginSide + contentWidth - massesX
+
+	massesTop := top
+	if day.Feast != "" {
+		massesTop += layoutFeast(&block, day.Feast, massesX, massesWidth, top, m) + 4*px
+	}
+	rightHeight := massesTop - top + layoutMasses(&block, printableMasses(day.Masses), massesX, massesWidth, massesTop, style, m)
 
 	block.Height = top + max(leftHeight, rightHeight) + style.padBottom
 	if !last {
@@ -307,6 +313,21 @@ func layoutDay(date time.Time, day dayView, style pdfStyle, last bool, m textMea
 	}
 
 	return block
+}
+
+func layoutFeast(block *pdfBlock, feast string, x, width, top float64, m textMeasurer) float64 {
+	size := 12.5 * px
+	line := size * 1.3
+
+	measure := func(text string) float64 {
+		return m.width(text, fontItalic, size, 0)
+	}
+	lines := wrapText(feast, width, width, measure)
+	for i, text := range lines {
+		block.Runs = append(block.Runs, pdfRun{X: x, Baseline: top + baseline(size, 1.3) + float64(i)*line, Font: fontItalic, Size: size, Text: text})
+	}
+
+	return float64(len(lines)) * line
 }
 
 type printedIntention struct {

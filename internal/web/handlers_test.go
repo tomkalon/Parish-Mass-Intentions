@@ -1215,3 +1215,135 @@ func TestWeekWithoutSettingsTable(t *testing.T) {
 		t.Error("schedule form is missing")
 	}
 }
+
+func TestWeekShowsClearLink(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	link := `<a class="delete-link" href="/?clear=1&amp;week=2026-11-02">Wyczyść tydzień</a>`
+
+	if body := getWeek(t, h, "/").Body.String(); strings.Contains(body, link) {
+		t.Error("empty week has the clear link")
+	}
+
+	seedPlaceholder(t, h.db, "2026-11-02 06:30")
+
+	if body := getWeek(t, h, "/").Body.String(); !strings.Contains(body, link) {
+		t.Errorf("body does not contain %q", link)
+	}
+}
+
+func TestWeekWithClearDialog(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedPlaceholder(t, h.db, "2026-11-02 06:30")
+	seedIntention(t, h.db, "2026-11-02 18:00", false, "+ Jan Kowalski")
+	seedIntention(t, h.db, "2026-11-08 10:00", true, "+ Anna Nowak")
+	seedIntention(t, h.db, "2026-11-09 10:00", false, "next week")
+
+	body := getWeek(t, h, "/?week=2026-11-02&clear=1").Body.String()
+
+	for _, want := range []string{
+		`<main inert>`,
+		`<h2 class="dialog-title" id="dialog-title">Wyczyścić tydzień?</h2>`,
+		`<p class="dialog-when">2.11.2026 r. – 8.11.2026 r.</p>`,
+		`Do usunięcia: 3 intencje (w tym 1 do uzupełnienia). Tej operacji nie można cofnąć.`,
+		`<form class="dialog-actions" method="post" action="/clear">`,
+		`<input type="hidden" name="week" value="2026-11-02">`,
+		`<a class="button" href="/?week=2026-11-02" data-close autofocus>Anuluj</a>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+	if strings.Contains(body, `type="submit" autofocus`) {
+		t.Error("the destructive button has autofocus, want it on Anuluj")
+	}
+}
+
+func TestWeekClearDialogForEmptyWeek(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	body := getWeek(t, h, "/?week=2026-11-02&clear=1").Body.String()
+
+	if strings.Contains(body, "Wyczyścić tydzień?") || strings.Contains(body, "inert") {
+		t.Error("empty week shows the clear dialog")
+	}
+}
+
+func postClear(t *testing.T, h *handler, form url.Values) *httptest.ResponseRecorder {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodPost, "/clear", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	h.clearWeek(rec, req)
+
+	return rec
+}
+
+func TestClearWeek(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedIntention(t, h.db, "2026-11-01 18:00", false, "previous week")
+	seedPlaceholder(t, h.db, "2026-11-02 06:30")
+	seedIntention(t, h.db, "2026-11-08 18:00", true, "+ Anna Nowak")
+	seedIntention(t, h.db, "2026-11-09 06:30", false, "next week")
+
+	rec := postClear(t, h, url.Values{"week": {"2026-11-05"}})
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if got, want := rec.Header().Get("Location"), "/?week=2026-11-02"; got != want {
+		t.Errorf("Location = %q, want %q", got, want)
+	}
+
+	var left []intentions.Intention
+	err := h.db.Order("mass_at").Find(&left).Error
+	if err != nil {
+		t.Fatalf("loading intentions: %v", err)
+	}
+	var got []string
+	for _, intention := range left {
+		got = append(got, intention.Content)
+	}
+	if want := []string{"previous week", "next week"}; !slices.Equal(got, want) {
+		t.Errorf("left = %q, want %q", got, want)
+	}
+}
+
+func TestClearWeekInvalid(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedIntention(t, h.db, "2026-11-02 18:00", false, "+ Jan Kowalski")
+
+	rec := postClear(t, h, url.Values{"week": {"jutro"}})
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	if got := countIntentions(t, h.db); got != 1 {
+		t.Errorf("intentions = %d, want 1", got)
+	}
+}
+
+func TestClearWeekDatabaseError(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	err := h.db.Migrator().DropTable(&intentions.Intention{})
+	if err != nil {
+		t.Fatalf("dropping intentions table: %v", err)
+	}
+
+	rec := postClear(t, h, url.Values{"week": {"2026-11-02"}})
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestClearWeekRoute(t *testing.T) {
+	db := newTestHandler(t, time.Now()).db
+
+	rec := postToRouter(t, db, "/clear", url.Values{"week": {"2026-11-02"}})
+
+	if rec.Code != http.StatusSeeOther {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+}

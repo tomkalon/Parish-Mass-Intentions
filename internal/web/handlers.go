@@ -51,6 +51,7 @@ func RegisterRoutes(router chi.Router, db *gorm.DB, schedules []masses.Schedule)
 	router.Post("/intentions/{id}", h.update)
 	router.Post("/intentions/{id}/delete", h.delete)
 	router.Post("/slots", h.createSlots)
+	router.Post("/clear", h.clearWeek)
 	router.Get("/pdf", h.pdf)
 	router.Get("/print", h.printPreview)
 	router.Handle("/static/*", http.FileServerFS(staticFS))
@@ -93,6 +94,8 @@ func (h *handler) week(w http.ResponseWriter, r *http.Request) {
 	case query.Get("new") == "1":
 		f := newFormView(start, query.Get("day"), query.Get("time"))
 		state.form = &f
+	case query.Get("clear") == "1":
+		state.clear = true
 	}
 
 	state.saved, _ = strconv.Atoi(query.Get("saved"))
@@ -186,6 +189,38 @@ func (h *handler) delete(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/?week="+week, http.StatusSeeOther)
 }
 
+func (h *handler) clearWeek(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		http.Error(w, "nieprawidłowe dane formularza", http.StatusBadRequest)
+		return
+	}
+
+	start, err := postedWeekStart(r)
+	if err != nil {
+		http.Error(w, "nieprawidłowa data tygodnia, oczekiwano RRRR-MM-DD", http.StatusBadRequest)
+		return
+	}
+
+	err = intentions.DeleteWeek(h.db, start)
+	if err != nil {
+		log.Printf("error clearing week %s: %v", start.Format(intentions.DateLayout), err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, "/?week="+start.Format(intentions.DateLayout), http.StatusSeeOther)
+}
+
+func postedWeekStart(r *http.Request) (time.Time, error) {
+	day, err := time.ParseInLocation(intentions.DateLayout, r.PostForm.Get("week"), intentions.TimeZone)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	return intentions.WeekStart(day), nil
+}
+
 func (h *handler) createSlots(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
 	if err != nil {
@@ -193,12 +228,11 @@ func (h *handler) createSlots(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	week, err := time.ParseInLocation(intentions.DateLayout, r.PostForm.Get("week"), intentions.TimeZone)
+	start, err := postedWeekStart(r)
 	if err != nil {
 		http.Error(w, "nieprawidłowa data tygodnia, oczekiwano RRRR-MM-DD", http.StatusBadRequest)
 		return
 	}
-	start := intentions.WeekStart(week)
 
 	name := r.PostForm.Get("schedule")
 	i := slices.IndexFunc(h.schedules, func(s masses.Schedule) bool {
@@ -336,6 +370,7 @@ func formErrors(day, massTime string, messages map[string]string) map[string]str
 type weekState struct {
 	form   *formView
 	delete *deleteView
+	clear  bool
 	saved  int
 }
 
@@ -363,6 +398,10 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 		markEditing(view.Days, state.form.EditID)
 	}
 	view.Delete = state.delete
+	if state.clear && len(list) > 0 {
+		c := newClearView(list)
+		view.Clear = &c
+	}
 	markSaved(view.Days, state.saved)
 
 	render(w, status, weekTemplate, view)

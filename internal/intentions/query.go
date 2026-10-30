@@ -7,12 +7,8 @@ import (
 )
 
 func ForWeek(db *gorm.DB, start time.Time) ([]Intention, error) {
-	start = start.In(TimeZone)
-	end := start.AddDate(0, 0, 7)
-
 	var list []Intention
-	err := db.
-		Where("mass_at >= ? AND mass_at < ?", start, end).
+	err := inWeek(db, start).
 		Order("mass_at, id").
 		Find(&list).Error
 	if err != nil {
@@ -20,4 +16,15 @@ func ForWeek(db *gorm.DB, start time.Time) ([]Intention, error) {
 	}
 
 	return list, nil
+}
+
+func DeleteWeek(db *gorm.DB, start time.Time) error {
+	return inWeek(db, start).Delete(&Intention{}).Error
+}
+
+func inWeek(db *gorm.DB, start time.Time) *gorm.DB {
+	start = start.In(TimeZone)
+	end := start.AddDate(0, 0, 7)
+
+	return db.Where("mass_at >= ? AND mass_at < ?", start, end)
 }

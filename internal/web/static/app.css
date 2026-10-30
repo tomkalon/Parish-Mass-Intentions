@@ -114,13 +114,19 @@ h1 {
 	text-align: center;
 }
 
+.week-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 12px 24px;
+	margin: 0 0 20px;
+}
+
 .schedule-load {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
-	justify-content: center;
 	gap: 8px 12px;
-	margin: 0 0 20px;
 	color: var(--ink-2);
 	font-size: 15px;
 }

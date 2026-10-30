@@ -7,7 +7,7 @@
 	<script src="/static/app.js" defer></script>
 </head>
 <body{{if .Form}} class="has-panel"{{end}}>
-	<nav class="toolbar" aria-label="Wybór tygodnia"{{if .Delete}} inert{{end}}>
+	<nav class="toolbar" aria-label="Wybór tygodnia"{{if or .Delete .Clear}} inert{{end}}>
 		<a class="button" href="{{.PrevURL}}">← Poprzedni</a>
 		<a class="button" href="{{.NextURL}}">Następny →</a>
 		<a class="upcoming" href="/"{{if .IsUpcoming}} aria-current="true"{{end}}>Nadchodzący tydzień</a>
@@ -15,21 +15,26 @@
 		<a class="button button-primary toolbar-add" href="{{.NewURL}}">+ Dodaj intencję</a>
 	</nav>
 
-	<main{{if .Delete}} inert{{end}}>
+	<main{{if or .Delete .Clear}} inert{{end}}>
 		<h1>INTENCJE MSZY ŚWIĘTYCH – {{.Range}}</h1>
 
-		{{- if .Schedules}}
-		<form class="schedule-load" method="post" action="/slots">
-			<input type="hidden" name="week" value="{{.Week}}">
-			<label for="schedule">Porządek mszy</label>
-			<select class="select" id="schedule" name="schedule">
-				{{- range .Schedules}}
-				<option value="{{.Name}}"{{if eq .Name $.SelectedSchedule}} selected{{end}}>{{.Name}}</option>
-				{{- end}}
-			</select>
-			<button class="button" type="submit">Wczytaj godziny mszy</button>
-		</form>
-		{{- end}}
+		<div class="week-actions">
+			{{- if .Schedules}}
+			<form class="schedule-load" method="post" action="/slots">
+				<input type="hidden" name="week" value="{{.Week}}">
+				<label for="schedule">Porządek mszy</label>
+				<select class="select" id="schedule" name="schedule">
+					{{- range .Schedules}}
+					<option value="{{.Name}}"{{if eq .Name $.SelectedSchedule}} selected{{end}}>{{.Name}}</option>
+					{{- end}}
+				</select>
+				<button class="button" type="submit">Wczytaj godziny mszy</button>
+			</form>
+			{{- end}}
+			{{- if not .IsEmpty}}
+			<a class="delete-link" href="{{.ClearURL}}">Wyczyść tydzień</a>
+			{{- end}}
+		</div>
 
 		{{- if .IsEmpty}}
 		<div class="empty-week">
@@ -122,6 +127,21 @@
 			<form class="dialog-actions" method="post" action="{{.Action}}">
 				<button class="button button-danger" type="submit" autofocus>Usuń</button>
 				<a class="button" href="{{.CloseURL}}" data-close>Anuluj</a>
+			</form>
+		</div>
+	</div>
+	{{- end}}
+
+	{{- with .Clear}}
+	<div class="dialog-backdrop">
+		<div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dialog-title" aria-describedby="dialog-content">
+			<h2 class="dialog-title" id="dialog-title">Wyczyścić tydzień?</h2>
+			<p class="dialog-when">{{$.Range}}</p>
+			<p class="dialog-content" id="dialog-content">Do usunięcia: {{.Count}}{{if .Placeholders}} (w tym {{.Placeholders}} do uzupełnienia){{end}}. Tej operacji nie można cofnąć.</p>
+			<form class="dialog-actions" method="post" action="/clear">
+				<input type="hidden" name="week" value="{{$.Week}}">
+				<button class="button button-danger" type="submit">Wyczyść tydzień</button>
+				<a class="button" href="{{$.WeekURL}}" data-close autofocus>Anuluj</a>
 			</form>
 		</div>
 	</div>

@@ -99,3 +99,28 @@ func TestForWeekAcrossDSTChange(t *testing.T) {
 		t.Errorf("ForWeek = %q, want %q", got, want)
 	}
 }
+
+func TestDeleteWeek(t *testing.T) {
+	db := newTestDB(t)
+	createIntention(t, db, "2026-11-01 23:59", "sunday before")
+	createIntention(t, db, "2026-11-02 00:00", "monday midnight")
+	createIntention(t, db, "2026-11-05 18:00", "thursday")
+	createIntention(t, db, "2026-11-08 23:45", "sunday night")
+	createIntention(t, db, "2026-11-09 00:00", "next monday")
+
+	err := DeleteWeek(db, time.Date(2026, 11, 2, 0, 0, 0, 0, TimeZone).UTC())
+	if err != nil {
+		t.Fatalf("DeleteWeek: %v", err)
+	}
+
+	var left []Intention
+	err = db.Order("mass_at").Find(&left).Error
+	if err != nil {
+		t.Fatalf("loading intentions: %v", err)
+	}
+
+	want := []string{"sunday before", "next monday"}
+	if got := contents(left); !slices.Equal(got, want) {
+		t.Errorf("left after DeleteWeek = %q, want %q", got, want)
+	}
+}

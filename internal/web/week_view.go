@@ -19,6 +19,7 @@ type weekView struct {
 	IsUpcoming bool
 	Form       *formView
 	Delete     *deleteView
+	Clear      *clearView
 }
 
 func newWeekView(start time.Time, intentionsList []intentions.Intention) weekView {
@@ -69,6 +70,10 @@ func (v weekView) PrintURL() string {
 
 func (v weekView) WeekURL() string {
 	return "/?week=" + v.Start.Format(intentions.DateLayout)
+}
+
+func (v weekView) ClearURL() string {
+	return "/?clear=1&week=" + v.Start.Format(intentions.DateLayout)
 }
 
 func (v weekView) urlFor(start time.Time) string {

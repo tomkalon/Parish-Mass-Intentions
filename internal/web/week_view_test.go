@@ -195,3 +195,23 @@ func TestMarkEditing(t *testing.T) {
 		t.Error("intention 2 is marked as edited, want only 1")
 	}
 }
+
+func TestNewWeekViewDoesNotNumberPlaceholders(t *testing.T) {
+	start := time.Date(2026, 11, 2, 0, 0, 0, 0, intentions.TimeZone)
+	slot := newIntention(t, 1, "2026-11-02 18:00", false, "")
+	slot.IsPlaceholder = true
+
+	view := newWeekView(start, []intentions.Intention{
+		slot,
+		newIntention(t, 2, "2026-11-02 18:00", false, "+ Jan Kowalski"),
+		newIntention(t, 3, "2026-11-02 18:00", false, "+ Anna Nowak"),
+	})
+
+	var numbers []int
+	for _, intention := range view.Days[0].Masses[0].Parish {
+		numbers = append(numbers, intention.Number)
+	}
+	if want := []int{0, 1, 2}; !slices.Equal(numbers, want) {
+		t.Errorf("numbers = %v, want %v (placeholder without a number)", numbers, want)
+	}
+}

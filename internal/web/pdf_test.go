@@ -212,3 +212,34 @@ func TestWriteWeekPDF(t *testing.T) {
 		t.Errorf("output does not start with %%PDF-: %q", buf.Bytes()[:min(20, buf.Len())])
 	}
 }
+
+func TestLayoutWeekSkipsPlaceholders(t *testing.T) {
+	start := time.Date(2026, 11, 2, 0, 0, 0, 0, intentions.TimeZone)
+	placeholder := func(massAt string) intentions.Intention {
+		slot := newIntention(t, 0, massAt, false, "")
+		slot.IsPlaceholder = true
+		return slot
+	}
+	view := newWeekView(start, []intentions.Intention{
+		placeholder("2026-11-02 06:30"),
+		placeholder("2026-11-03 18:00"),
+		newIntention(t, 3, "2026-11-03 18:00", false, "+ Jan Kowalski"),
+	})
+
+	texts := pageTexts(layoutWeek(view, fakeMeasurer{})[0])
+
+	if slices.Contains(texts, "6:30") {
+		t.Error("a mass with only a placeholder is printed")
+	}
+	for _, want := range []string{"18:00", "+ Jan Kowalski"} {
+		if !slices.Contains(texts, want) {
+			t.Errorf("page does not contain %q", want)
+		}
+	}
+	if slices.Contains(texts, "1.") {
+		t.Error("the only printed intention is numbered, the placeholder must not count")
+	}
+	if got := strings.Count(strings.Join(texts, "\n"), "— brak intencji —"); got != 6 {
+		t.Errorf(`"— brak intencji —" appears %d times, want 6 (Monday has only a placeholder)`, got)
+	}
+}

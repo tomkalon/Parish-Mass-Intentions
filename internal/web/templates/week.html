@@ -61,20 +61,21 @@
 						<ol class="intentions">
 							{{- range .Parish}}
 							<li class="intention{{if .IsSaved}} is-saved{{end}}{{if .IsEditing}} is-editing{{end}}" id="i-{{.ID}}">
-								<span class="number">{{.Number}}.</span>
 								{{- if .IsPlaceholder}}
+								<span class="number"></span>
 								<span class="placeholder">do uzupełnienia</span>
-								{{- else}}
-								<span>{{.Content}}</span>
-								{{- end}}
 								<span class="intention-actions">
-									{{- if .IsPlaceholder}}
-									<a class="action" href="{{.EditURL}}" aria-label="Uzupełnij intencję {{.Number}}. z godz. {{$time}}">Uzupełnij</a>
-									{{- else}}
+									<a class="action" href="{{.EditURL}}" aria-label="Uzupełnij intencję z godz. {{$time}}">Uzupełnij</a>
+									<a class="action action-delete" href="{{.DeleteURL}}" aria-label="Usuń nieuzupełnioną intencję z godz. {{$time}}">Usuń</a>
+								</span>
+								{{- else}}
+								<span class="number">{{.Number}}.</span>
+								<span>{{.Content}}</span>
+								<span class="intention-actions">
 									<a class="action" href="{{.EditURL}}" aria-label="Edytuj intencję {{.Number}}. z godz. {{$time}}">Edytuj</a>
-									{{- end}}
 									<a class="action action-delete" href="{{.DeleteURL}}" aria-label="Usuń intencję {{.Number}}. z godz. {{$time}}">Usuń</a>
 								</span>
+								{{- end}}
 							</li>
 							{{- end}}
 						</ol>

@@ -299,7 +299,7 @@ func layoutDay(date time.Time, day dayView, style pdfStyle, last bool, m textMea
 	leftHeight := nameLine + dateSize*1.3
 
 	massesX := marginSide + 112*px + 14*px
-	rightHeight := layoutMasses(&block, day.Masses, massesX, marginSide+contentWidth-massesX, top, style, m)
+	rightHeight := layoutMasses(&block, printableMasses(day.Masses), massesX, marginSide+contentWidth-massesX, top, style, m)
 
 	block.Height = top + max(leftHeight, rightHeight) + style.padBottom
 	if !last {
@@ -314,7 +314,35 @@ type printedIntention struct {
 	outside bool
 }
 
-func layoutMasses(block *pdfBlock, masses []massView, x, width, top float64, style pdfStyle, m textMeasurer) float64 {
+type printedMass struct {
+	time       string
+	intentions []printedIntention
+}
+
+func printableMasses(masses []massView) []printedMass {
+	var result []printedMass
+	for _, mass := range masses {
+		var printed []printedIntention
+		for _, intention := range mass.Parish {
+			if !intention.IsPlaceholder {
+				printed = append(printed, printedIntention{content: intention.Content})
+			}
+		}
+		for _, intention := range mass.Outside {
+			if !intention.IsPlaceholder {
+				printed = append(printed, printedIntention{content: intention.Content, outside: true})
+			}
+		}
+
+		if len(printed) > 0 {
+			result = append(result, printedMass{time: mass.Time, intentions: printed})
+		}
+	}
+
+	return result
+}
+
+func layoutMasses(block *pdfBlock, masses []printedMass, x, width, top float64, style pdfStyle, m textMeasurer) float64 {
 	line := style.textSize * style.lineHeight
 	textBaseline := baseline(style.textSize, style.lineHeight)
 
@@ -333,19 +361,11 @@ func layoutMasses(block *pdfBlock, masses []massView, x, width, top float64, sty
 			y += 4 * px
 		}
 
-		w := m.width(mass.Time, fontBold, style.textSize, 0)
-		block.Runs = append(block.Runs, pdfRun{X: x + timeWidth - w, Baseline: y + textBaseline, Font: fontBold, Size: style.textSize, Text: mass.Time})
+		w := m.width(mass.time, fontBold, style.textSize, 0)
+		block.Runs = append(block.Runs, pdfRun{X: x + timeWidth - w, Baseline: y + textBaseline, Font: fontBold, Size: style.textSize, Text: mass.time})
 
-		var printed []printedIntention
-		for _, intention := range mass.Parish {
-			printed = append(printed, printedIntention{content: intention.Content})
-		}
-		for _, intention := range mass.Outside {
-			printed = append(printed, printedIntention{content: intention.Content, outside: true})
-		}
-
-		numbered := len(printed) > 1
-		for n, intention := range printed {
+		numbered := len(mass.intentions) > 1
+		for n, intention := range mass.intentions {
 			contentX, available := textX, textWidth
 			if numbered {
 				block.Runs = append(block.Runs, pdfRun{X: textX, Baseline: y + textBaseline, Font: fontRegular, Size: style.textSize, Text: fmt.Sprintf("%d.", n+1)})

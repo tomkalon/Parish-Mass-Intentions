@@ -83,15 +83,25 @@ func newDayView(day time.Time, list []intentions.Intention) dayView {
 }
 
 func appendIntention(list []intentionView, intention intentions.Intention, week string) []intentionView {
-	return append(list, intentionView{
+	view := intentionView{
 		ID:        intention.ID,
-		Number:    len(list) + 1,
 		Content:   intention.Content,
 		EditURL:   editURL(week, intention.ID),
 		DeleteURL: deleteURL(week, intention.ID),
 
 		IsPlaceholder: intention.IsPlaceholder,
-	})
+	}
+
+	if !intention.IsPlaceholder {
+		view.Number = 1
+		for _, previous := range list {
+			if !previous.IsPlaceholder {
+				view.Number++
+			}
+		}
+	}
+
+	return append(list, view)
 }
 
 func dayLabel(day time.Time) string {

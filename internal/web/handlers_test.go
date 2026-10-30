@@ -1062,15 +1062,32 @@ func TestWeekShowsPlaceholder(t *testing.T) {
 	body := getWeek(t, h, "/").Body.String()
 
 	for _, want := range []string{
+		`<span class="number"></span>`,
 		`<span class="placeholder">do uzupełnienia</span>`,
-		fmt.Sprintf(`<a class="action" href="/?edit=%d&amp;week=2026-11-02" aria-label="Uzupełnij intencję 1. z godz. 6:30">Uzupełnij</a>`, id),
+		fmt.Sprintf(`<a class="action" href="/?edit=%d&amp;week=2026-11-02" aria-label="Uzupełnij intencję z godz. 6:30">Uzupełnij</a>`, id),
+		fmt.Sprintf(`<a class="action action-delete" href="/?delete=%d&amp;week=2026-11-02" aria-label="Usuń nieuzupełnioną intencję z godz. 6:30">Usuń</a>`, id),
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body does not contain %q", want)
 		}
 	}
-	if strings.Contains(body, "Edytuj intencję 1. z godz. 6:30") {
+	if strings.Contains(body, "Edytuj intencję") {
 		t.Error("placeholder has the regular edit link, want Uzupełnij")
+	}
+}
+
+func TestWeekNumbersIntentionsWithoutPlaceholders(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedPlaceholder(t, h.db, "2026-11-02 18:00")
+	seedIntention(t, h.db, "2026-11-02 18:00", false, "+ Jan Kowalski")
+
+	body := getWeek(t, h, "/").Body.String()
+
+	if !strings.Contains(body, `aria-label="Edytuj intencję 1. z godz. 18:00">Edytuj</a>`) {
+		t.Error("the only real intention is not number 1")
+	}
+	if strings.Contains(body, "intencję 2.") {
+		t.Error("the placeholder is counted in the numbering")
 	}
 }
 

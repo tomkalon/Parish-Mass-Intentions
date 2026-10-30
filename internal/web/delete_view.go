@@ -23,6 +23,12 @@ func newDeleteView(start time.Time, intention intentions.Intention) deleteView {
 	if intention.IsOutsideParish {
 		when += " · poza parafią"
 	}
+	if intention.IsDeceased {
+		when += " · za zmarłych"
+	}
+	if intention.IsGregorian {
+		when += " · gregorianka"
+	}
 
 	return deleteView{
 		Action:   "/intentions/" + strconv.Itoa(intention.ID) + "/delete",

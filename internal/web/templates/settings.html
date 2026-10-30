@@ -52,9 +52,11 @@
 			<fieldset class="settings-section">
 				<legend>Pobieranie świąt z GCatholic</legend>
 				<p class="hint">Rodzaje obchodów dopisywane przyciskiem „Pobierz święta z GCatholic”.</p>
+				<div class="checkboxes">
 				{{- range .Kinds}}
 				<label class="checkbox"><input type="checkbox" name="import" value="{{.Value}}"{{if .Checked}} checked{{end}}> <span>{{.Label}}{{with .Hint}}<span class="checkbox-hint">{{.}}</span>{{end}}</span></label>
 				{{- end}}
+				</div>
 			</fieldset>
 
 			<button class="button button-primary" type="submit">Zapisz</button>

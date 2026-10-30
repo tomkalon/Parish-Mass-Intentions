@@ -116,6 +116,8 @@ func (h *handler) week(w http.ResponseWriter, r *http.Request) {
 		f.EditID = intention.ID
 		f.Content = intention.Content
 		f.IsOutsideParish = intention.IsOutsideParish
+		f.IsGregorian = intention.IsGregorian
+		f.IsDeceased = intention.IsDeceased
 		state.form = &f
 	case query.Get("new") == "1":
 		f := newFormView(start, query.Get("day"), query.Get("time"))
@@ -698,11 +700,15 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 	massTime := r.PostForm.Get("time")
 	content := r.PostForm.Get("content")
 	outside := r.PostForm.Get("outside") == "on"
+	gregorian := r.PostForm.Get("gregorian") == "on"
+	deceased := r.PostForm.Get("deceased") == "on"
 
 	input := intentions.Input{
 		MassAt:          day + " " + massTime,
 		Content:         strings.TrimSpace(content),
 		IsOutsideParish: outside,
+		IsGregorian:     gregorian,
+		IsDeceased:      deceased,
 	}
 
 	err = h.validate.Struct(input)
@@ -722,6 +728,8 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 		form := newFormView(start, day, massTime)
 		form.Content = content
 		form.IsOutsideParish = outside
+		form.IsGregorian = gregorian
+		form.IsDeceased = deceased
 		form.Errors = errs
 		form.EditID = intention.ID
 

@@ -2226,3 +2226,73 @@ func TestWeekShowsEmptyMassesNotice(t *testing.T) {
 		t.Errorf("body does not contain %q", want)
 	}
 }
+
+func TestCreateIntentionWithFlags(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	form := validForm()
+	form.Set("deceased", "on")
+	form.Set("gregorian", "on")
+
+	rec := postIntention(t, h, form)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+
+	var saved intentions.Intention
+	err := h.db.First(&saved).Error
+	if err != nil {
+		t.Fatalf("loading intention: %v", err)
+	}
+	if !saved.IsDeceased || !saved.IsGregorian {
+		t.Errorf("flags = deceased %v, gregorian %v; want both true", saved.IsDeceased, saved.IsGregorian)
+	}
+}
+
+func TestWeekShowsIntentionBadges(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	marked := newIntention(t, 0, "2026-11-02 18:00", true, "+ Anna Kutyba")
+	marked.IsDeceased = true
+	marked.IsGregorian = true
+	err := h.db.Create(&marked).Error
+	if err != nil {
+		t.Fatalf("creating intention: %v", err)
+	}
+	seedIntention(t, h.db, "2026-11-02 06:30", false, "W int. Parafian")
+
+	body := getWeek(t, h, "/").Body.String()
+
+	for _, want := range []string{
+		`<span>&#43; Anna Kutyba <span class="badge badge-deceased" title="Intencja za zmarłych">`,
+		`</svg>za zmarłych</span> <span class="badge badge-gregorian" title="Msza gregoriańska">`,
+		`</svg>gregorianka</span></span>`,
+		`<span>W int. Parafian</span>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+	if got := strings.Count(body, `class="badge `); got != 2 {
+		t.Errorf("badges = %d, want 2 (only the marked intention)", got)
+	}
+}
+
+func TestEditPanelShowsFlags(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	marked := newIntention(t, 0, "2026-11-02 18:00", false, "+ Anna Kutyba")
+	marked.IsGregorian = true
+	err := h.db.Create(&marked).Error
+	if err != nil {
+		t.Fatalf("creating intention: %v", err)
+	}
+
+	body := getWeek(t, h, fmt.Sprintf("/?week=2026-11-02&edit=%d", marked.ID)).Body.String()
+
+	for _, want := range []string{
+		`<input type="checkbox" name="deceased"> Za zmarłych`,
+		`<input type="checkbox" name="gregorian" checked> Msza gregoriańska`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("edit panel does not contain %q", want)
+		}
+	}
+}

@@ -120,6 +120,8 @@ func (h *intentionHandler) patch(w http.ResponseWriter, r *http.Request) {
 		MassAt:          intention.MassAt.In(intentions.TimeZone).Format(intentions.MassAtLayout),
 		Content:         intention.Content,
 		IsOutsideParish: intention.IsOutsideParish,
+		IsGregorian:     intention.IsGregorian,
+		IsDeceased:      intention.IsDeceased,
 	}
 
 	err := json.NewDecoder(r.Body).Decode(&input)

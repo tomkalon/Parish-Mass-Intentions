@@ -40,7 +40,7 @@
 				<label for="schedule">Porządek mszy</label>
 				<select class="select" id="schedule" name="schedule">
 					{{- range .Schedules}}
-					<option value="{{.Name}}"{{if eq .Name $.SelectedSchedule}} selected{{end}}>{{.Name}}</option>
+					<option value="{{.ID}}"{{if eq .ID $.SelectedScheduleID}} selected{{end}}>{{.Name}}</option>
 					{{- end}}
 				</select>
 				<button class="button" type="submit">Wczytaj godziny mszy</button>
@@ -54,6 +54,10 @@
 			<a class="delete-link" href="{{.ClearURL}}">Wyczyść tydzień</a>
 			{{- end}}
 		</div>
+
+		{{- with .EmptyMasses}}
+		<p class="week-notice" role="status"><span>{{.Text}}</span> <a href="{{.URL}}">Pokaż</a></p>
+		{{- end}}
 
 		{{- with .ImportError}}
 		<div class="form-alert week-alert" role="alert">

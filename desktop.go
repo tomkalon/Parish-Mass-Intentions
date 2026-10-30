@@ -13,6 +13,7 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -37,7 +38,7 @@ func prepareDataDir() (string, error) {
 	return dir, nil
 }
 
-func run(router http.Handler) error {
+func run(router http.Handler, dataDir string) error {
 	window := &desktopWindow{}
 
 	return wails.Run(&options.App{
@@ -48,6 +49,7 @@ func run(router http.Handler) error {
 		MinHeight:        700,
 		BackgroundColour: &options.RGBA{R: 0xF6, G: 0xF1, B: 0xE9, A: 0xFF},
 		AssetServer:      &assetserver.Options{Handler: router},
+		Windows:          &windows.Options{WebviewUserDataPath: filepath.Join(dataDir, "webview")},
 		OnStartup:        window.startup,
 		SingleInstanceLock: &options.SingleInstanceLock{
 			UniqueId:               "go-parafia-b6a1c0e4-intencje",

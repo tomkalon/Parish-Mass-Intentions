@@ -11,11 +11,11 @@ const (
 )
 
 type Setting struct {
-	ID               int         `json:"id"`
-	ParishName       string      `json:"parish_name"`
-	Address          string      `json:"address"`
-	SelectedSchedule string      `json:"selected_schedule"`
-	FeastImport      FeastImport `json:"feast_import" gorm:"embedded;embeddedPrefix:feast_import_"`
+	ID                 int         `json:"id"`
+	ParishName         string      `json:"parish_name"`
+	Address            string      `json:"address"`
+	SelectedScheduleID int         `json:"selected_schedule_id"`
+	FeastImport        FeastImport `json:"feast_import" gorm:"embedded;embeddedPrefix:feast_import_"`
 }
 
 type FeastImport struct {
@@ -36,8 +36,8 @@ func Load(db *gorm.DB) (Setting, error) {
 	return setting, err
 }
 
-func SaveSchedule(db *gorm.DB, name string) error {
-	return upsert(db, Setting{SelectedSchedule: name}, "selected_schedule")
+func SaveSchedule(db *gorm.DB, id int) error {
+	return upsert(db, Setting{SelectedScheduleID: id}, "selected_schedule_id")
 }
 
 func SaveParish(db *gorm.DB, setting Setting) error {

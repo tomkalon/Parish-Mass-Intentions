@@ -14,9 +14,9 @@ type weekView struct {
 	Days      []dayView
 	Schedules []masses.Schedule
 
-	SelectedSchedule string
-	ParishName       string
-	Address          string
+	SelectedScheduleID int
+	ParishName         string
+	Address            string
 
 	IsUpcoming bool
 	Form       *formView
@@ -138,5 +138,55 @@ func forEachIntention(days []dayView, fn func(intention *intentionView)) {
 				fn(&mass.Outside[k])
 			}
 		}
+	}
+}
+
+type emptyMassesNotice struct {
+	Text string
+	URL  string
+}
+
+func (v weekView) EmptyMasses() *emptyMassesNotice {
+	count := 0
+	first := ""
+	for _, day := range v.Days {
+		for _, mass := range day.Masses {
+			if !withoutIntention(mass) {
+				continue
+			}
+			count++
+			if first == "" {
+				first = day.Date
+			}
+		}
+	}
+	if count == 0 {
+		return nil
+	}
+
+	return &emptyMassesNotice{Text: emptyMassesText(count), URL: "#d-" + first}
+}
+
+func withoutIntention(mass massView) bool {
+	if len(mass.Outside) > 0 {
+		return false
+	}
+	for _, intention := range mass.Parish {
+		if !intention.IsPlaceholder {
+			return false
+		}
+	}
+
+	return len(mass.Parish) > 0
+}
+
+func emptyMassesText(n int) string {
+	switch {
+	case n == 1:
+		return "1 msza nie ma uzupełnionej intencji."
+	case n%10 >= 2 && n%10 <= 4 && (n%100 < 12 || n%100 > 14):
+		return fmt.Sprintf("%d msze nie mają uzupełnionej intencji.", n)
+	default:
+		return fmt.Sprintf("%d mszy nie ma uzupełnionej intencji.", n)
 	}
 }

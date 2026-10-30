@@ -41,22 +41,22 @@ var printTemplate = template.Must(template.ParseFS(templateFS, "templates/print.
 
 var settingsTemplate = template.Must(template.ParseFS(templateFS, "templates/settings.html"))
 
+var scheduleTemplate = template.Must(template.ParseFS(templateFS, "templates/schedule.html"))
+
 type handler struct {
 	now               func() time.Time
 	db                *gorm.DB
 	validate          *validator.Validate
-	schedules         []masses.Schedule
 	slotsMu           sync.Mutex
 	fetchCelebrations func(ctx context.Context, year int) ([]gcatholic.Celebration, error)
 }
 
-func RegisterRoutes(router chi.Router, db *gorm.DB, schedules []masses.Schedule) {
+func RegisterRoutes(router chi.Router, db *gorm.DB) {
 	client := &http.Client{Timeout: 20 * time.Second}
 	h := &handler{
-		now:       time.Now,
-		db:        db,
-		validate:  intentions.NewValidator(),
-		schedules: schedules,
+		now:      time.Now,
+		db:       db,
+		validate: intentions.NewValidator(),
 		fetchCelebrations: func(ctx context.Context, year int) ([]gcatholic.Celebration, error) {
 			return gcatholic.Fetch(ctx, client, gcatholic.BaseURL, year)
 		},
@@ -72,6 +72,12 @@ func RegisterRoutes(router chi.Router, db *gorm.DB, schedules []masses.Schedule)
 	router.Post("/feasts/import", h.importFeasts)
 	router.Get("/settings", h.settingsPage)
 	router.Post("/settings", h.saveSettings)
+	router.Get("/settings/schedules/new", h.scheduleForm)
+	router.Get("/settings/schedules/{id}", h.scheduleForm)
+	router.Post("/settings/schedules", h.saveSchedule)
+	router.Post("/settings/schedules/restore", h.restoreSchedules)
+	router.Post("/settings/schedules/{id}", h.saveSchedule)
+	router.Post("/settings/schedules/{id}/delete", h.deleteSchedule)
 	router.Get("/pdf", h.pdf)
 	router.Get("/print", h.printPreview)
 	router.Handle("/static/*", http.FileServerFS(staticFS))
@@ -252,10 +258,199 @@ func (h *handler) settingsPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := r.URL.Query()
-	view := newSettingsView(setting, query.Get("week"))
+	view, ok := h.settingsView(w, setting, query.Get("week"))
+	if !ok {
+		return
+	}
 	view.Saved = query.Get("saved") == "1"
 
+	closeURL := settingsURL(view.Week, false) + "#porzadki"
+	switch {
+	case query.Get("delete_schedule") != "":
+		id, err := strconv.Atoi(query.Get("delete_schedule"))
+		if err != nil {
+			http.Error(w, "nieprawidłowy identyfikator porządku", http.StatusBadRequest)
+			return
+		}
+
+		schedule, err := masses.Find(h.db, id)
+		if errors.Is(err, masses.ErrScheduleNotFound) {
+			http.Error(w, "nie znaleziono porządku mszy", http.StatusNotFound)
+			return
+		}
+		if err != nil {
+			log.Printf("error loading schedule %d: %v", id, err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		view.Dialog = &settingsDialog{
+			Title:    "Usunąć porządek mszy?",
+			Text:     fmt.Sprintf("„%s” (%s). Intencje i godziny już wczytane do tygodni zostaną bez zmian.", schedule.Name, scheduleSummary(schedule)),
+			Action:   "/settings/schedules/" + strconv.Itoa(id) + "/delete",
+			Button:   "Usuń porządek",
+			Week:     view.Week,
+			CloseURL: closeURL,
+		}
+	case query.Get("restore") == "1":
+		view.Dialog = &settingsDialog{
+			Title:    "Przywrócić domyślne porządki?",
+			Text:     "Wszystkie porządki mszy zostaną zastąpione domyślnymi z programu. Własne zmiany w porządkach przepadną.",
+			Action:   "/settings/schedules/restore",
+			Button:   "Przywróć domyślne",
+			Week:     view.Week,
+			CloseURL: closeURL,
+		}
+	}
+
 	render(w, http.StatusOK, settingsTemplate, view)
+}
+
+func (h *handler) settingsView(w http.ResponseWriter, setting settings.Setting, week string) (settingsView, bool) {
+	schedules, err := masses.Load(h.db)
+	if err != nil {
+		log.Printf("error loading schedules: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return settingsView{}, false
+	}
+
+	return newSettingsView(setting, schedules, week), true
+}
+
+func (h *handler) scheduleForm(w http.ResponseWriter, r *http.Request) {
+	week := r.URL.Query().Get("week")
+
+	idParam := chi.URLParam(r, "id")
+	if idParam == "" {
+		render(w, http.StatusOK, scheduleTemplate, newScheduleFormView(masses.Schedule{}, week))
+		return
+	}
+
+	id, err := strconv.Atoi(idParam)
+	if err != nil {
+		http.Error(w, "nieprawidłowy identyfikator porządku", http.StatusBadRequest)
+		return
+	}
+
+	schedule, err := masses.Find(h.db, id)
+	if errors.Is(err, masses.ErrScheduleNotFound) {
+		http.Error(w, "nie znaleziono porządku mszy", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		log.Printf("error loading schedule %d: %v", id, err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	render(w, http.StatusOK, scheduleTemplate, newScheduleFormView(schedule, week))
+}
+
+const duplicateScheduleMessage = "Porządek o tej nazwie już istnieje."
+
+func (h *handler) saveSchedule(w http.ResponseWriter, r *http.Request) {
+	id := 0
+	if idParam := chi.URLParam(r, "id"); idParam != "" {
+		var err error
+		id, err = strconv.Atoi(idParam)
+		if err != nil {
+			http.Error(w, "nieprawidłowy identyfikator porządku", http.StatusBadRequest)
+			return
+		}
+	}
+
+	err := r.ParseForm()
+	if err != nil {
+		http.Error(w, "nieprawidłowe dane formularza", http.StatusBadRequest)
+		return
+	}
+	week := r.PostForm.Get("week")
+
+	schedule, errs := scheduleFromForm(r.PostForm)
+	schedule.ID = id
+	if errs["name"] == "" {
+		taken, err := masses.NameTaken(h.db, schedule.Name, id)
+		if err != nil {
+			log.Printf("error checking schedule name: %v", err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if taken {
+			errs["name"] = duplicateScheduleMessage
+		}
+	}
+	if len(errs) == 0 {
+		_, err = masses.Save(h.db, schedule)
+		switch {
+		case errors.Is(err, masses.ErrDuplicateName):
+			errs["name"] = duplicateScheduleMessage
+		case errors.Is(err, masses.ErrScheduleNotFound):
+			http.Error(w, "nie znaleziono porządku mszy", http.StatusNotFound)
+			return
+		case err != nil:
+			log.Printf("error saving schedule %d: %v", id, err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if len(errs) > 0 {
+		view := newScheduleFormView(schedule, week)
+		view.Name = r.PostForm.Get("name")
+		for i := range view.Days {
+			view.Days[i].Value = r.PostForm.Get(view.Days[i].Field)
+			view.Days[i].Error = errs[view.Days[i].Field]
+		}
+		view.Errors = errs
+		render(w, http.StatusUnprocessableEntity, scheduleTemplate, view)
+		return
+	}
+
+	http.Redirect(w, r, settingsURL(week, true)+"#porzadki", http.StatusSeeOther)
+}
+
+func (h *handler) deleteSchedule(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "nieprawidłowy identyfikator porządku", http.StatusBadRequest)
+		return
+	}
+
+	err = r.ParseForm()
+	if err != nil {
+		http.Error(w, "nieprawidłowe dane formularza", http.StatusBadRequest)
+		return
+	}
+
+	err = masses.Delete(h.db, id)
+	if errors.Is(err, masses.ErrScheduleNotFound) {
+		http.Error(w, "nie znaleziono porządku mszy", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		log.Printf("error deleting schedule %d: %v", id, err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, settingsURL(r.PostForm.Get("week"), false)+"#porzadki", http.StatusSeeOther)
+}
+
+func (h *handler) restoreSchedules(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		http.Error(w, "nieprawidłowe dane formularza", http.StatusBadRequest)
+		return
+	}
+
+	err = masses.RestoreDefaults(h.db)
+	if err != nil {
+		log.Printf("error restoring default schedules: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, settingsURL(r.PostForm.Get("week"), false)+"#porzadki", http.StatusSeeOther)
 }
 
 func (h *handler) saveSettings(w http.ResponseWriter, r *http.Request) {
@@ -266,7 +461,10 @@ func (h *handler) saveSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	setting := settingsFromForm(r.PostForm)
-	view := newSettingsView(setting, r.PostForm.Get("week"))
+	view, ok := h.settingsView(w, setting, r.PostForm.Get("week"))
+	if !ok {
+		return
+	}
 
 	if errs := settingsErrors(setting); len(errs) > 0 {
 		view.Errors = errs
@@ -422,12 +620,20 @@ func (h *handler) createSlots(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	name := r.PostForm.Get("schedule")
-	i := slices.IndexFunc(h.schedules, func(s masses.Schedule) bool {
-		return s.Name == name
-	})
-	if i < 0 {
+	id, err := strconv.Atoi(r.PostForm.Get("schedule"))
+	if err != nil {
 		http.Error(w, "nieznany porządek mszy", http.StatusBadRequest)
+		return
+	}
+
+	schedule, err := masses.Find(h.db, id)
+	if errors.Is(err, masses.ErrScheduleNotFound) {
+		http.Error(w, "nieznany porządek mszy", http.StatusBadRequest)
+		return
+	}
+	if err != nil {
+		log.Printf("error loading schedule %d: %v", id, err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
@@ -441,7 +647,7 @@ func (h *handler) createSlots(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slots := h.schedules[i].Slots(start, existing)
+	slots := schedule.Slots(start, existing)
 	if len(slots) > 0 {
 		err = h.db.Create(&slots).Error
 		if err != nil {
@@ -451,9 +657,9 @@ func (h *handler) createSlots(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	err = settings.SaveSchedule(h.db, name)
+	err = settings.SaveSchedule(h.db, schedule.ID)
 	if err != nil {
-		log.Printf("error saving selected schedule %q: %v", name, err)
+		log.Printf("error saving selected schedule %d: %v", schedule.ID, err)
 	}
 
 	http.Redirect(w, r, "/?week="+start.Format(intentions.DateLayout), http.StatusSeeOther)
@@ -579,16 +785,23 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 		return
 	}
 
+	schedules, err := masses.Load(h.db)
+	if err != nil {
+		log.Printf("error loading schedules: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
 	view := newWeekView(start, list)
 	setFeasts(view.Days, feasts)
 	view.IsUpcoming = start.Equal(intentions.NextWeekStart(h.now()))
-	view.Schedules = h.schedules
+	view.Schedules = schedules
 
 	setting, err := settings.Load(h.db)
 	if err != nil {
 		log.Printf("error loading settings: %v", err)
 	}
-	view.SelectedSchedule = setting.SelectedSchedule
+	view.SelectedScheduleID = setting.SelectedScheduleID
 
 	if state.form != nil {
 		view.Form = state.form

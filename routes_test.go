@@ -5,8 +5,6 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
-
-	"go-parafia/internal/masses"
 )
 
 func TestRouter(t *testing.T) {
@@ -15,12 +13,7 @@ func TestRouter(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	schedules, err := masses.Default()
-	if err != nil {
-		t.Fatalf("loading schedules: %v", err)
-	}
-
-	router := newRouter(db, schedules)
+	router := newRouter(db)
 
 	tests := []struct {
 		path            string

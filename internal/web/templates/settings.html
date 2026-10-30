@@ -7,11 +7,11 @@
 	<script src="/static/app.js" defer></script>
 </head>
 <body>
-	<nav class="toolbar" aria-label="Ustawienia">
+	<nav class="toolbar" aria-label="Ustawienia"{{if .Dialog}} inert{{end}}>
 		<a class="button" href="{{.BackURL}}" data-close>← Wróć do tygodnia</a>
 	</nav>
 
-	<main class="settings">
+	<main class="settings"{{if .Dialog}} inert{{end}}>
 		<h1>Ustawienia</h1>
 
 		{{- if .Saved}}
@@ -59,6 +59,45 @@
 
 			<button class="button button-primary" type="submit">Zapisz</button>
 		</form>
+
+		<section class="settings-section schedules" id="porzadki" aria-labelledby="schedules-title">
+			<h2 class="settings-heading" id="schedules-title">Porządki mszy</h2>
+			<p class="hint">Godziny mszy wczytywane przyciskiem „Wczytaj godziny mszy” w widoku tygodnia.</p>
+			{{- range .Schedules}}
+			<div class="schedule-row">
+				<div>
+					<p class="schedule-name">{{.Name}}</p>
+					<p class="schedule-summary">{{.Summary}}</p>
+				</div>
+				<span class="intention-actions">
+					<a class="action" href="{{.EditURL}}" aria-label="Zmień porządek {{.Name}}">Zmień</a>
+					<a class="action action-delete" href="{{.DeleteURL}}" aria-label="Usuń porządek {{.Name}}">Usuń</a>
+				</span>
+			</div>
+			{{- else}}
+			<p class="empty">Brak porządków mszy.</p>
+			{{- end}}
+			<div class="schedule-actions">
+				<a class="button" href="{{.NewScheduleURL}}">+ Dodaj porządek</a>
+				<a class="delete-link" href="{{.RestoreURL}}">Przywróć domyślne</a>
+			</div>
+		</section>
+
+		<p class="app-credit">Go Parafia · autor: Tomasz Kaliński, Gemma It Solutions</p>
 	</main>
+
+	{{- with .Dialog}}
+	<div class="dialog-backdrop">
+		<div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dialog-title" aria-describedby="dialog-content">
+			<h2 class="dialog-title" id="dialog-title">{{.Title}}</h2>
+			<p class="dialog-content" id="dialog-content">{{.Text}}</p>
+			<form class="dialog-actions" method="post" action="{{.Action}}">
+				<input type="hidden" name="week" value="{{.Week}}">
+				<button class="button button-danger" type="submit">{{.Button}}</button>
+				<a class="button" href="{{.CloseURL}}" data-close autofocus>Anuluj</a>
+			</form>
+		</div>
+	</div>
+	{{- end}}
 </body>
 </html>

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="pl">
+<head>
+	<meta charset="utf-8">
+	<title>{{.Title}} – Go Parafia</title>
+	<link rel="stylesheet" href="/static/app.css">
+	<script src="/static/app.js" defer></script>
+</head>
+<body>
+	<nav class="toolbar" aria-label="Porządek mszy">
+		<a class="button" href="{{.BackURL}}" data-close>← Wróć do ustawień</a>
+	</nav>
+
+	<main class="settings">
+		<h1>{{.Title}}</h1>
+
+		{{- if .Errors}}
+		<div class="form-alert" role="alert">
+			<span class="form-alert-icon" aria-hidden="true">!</span>
+			<p>Nie zapisano. Popraw zaznaczone pola — pozostałe dane zostały zachowane.</p>
+		</div>
+		{{- end}}
+
+		<form class="settings-form" method="post" action="{{.Action}}">
+			<input type="hidden" name="week" value="{{.Week}}">
+
+			<fieldset class="settings-section">
+				<legend>Porządek</legend>
+
+				<div class="field">
+					<label class="label" for="name">Nazwa</label>
+					<input class="input{{if .Errors.name}} is-invalid{{end}}" type="text" id="name" name="name" value="{{.Name}}" maxlength="{{.MaxLength}}" required{{if .Errors.name}} aria-invalid="true" aria-describedby="name-error"{{end}}>
+					{{- with .Errors.name}}
+					<p class="field-error" id="name-error">{{.}}</p>
+					{{- end}}
+				</div>
+			</fieldset>
+
+			<fieldset class="settings-section">
+				<legend>Godziny mszy</legend>
+				<p class="hint" id="times-hint">Godziny oddzielone przecinkami, pełne kwadranse, np. „6:30, 18:00”. Puste pole – w ten dzień nie ma mszy.</p>
+				{{- range .Days}}
+				{{- $field := .Field}}
+				<div class="field day-times">
+					<label class="label" for="{{.Field}}">{{.Label}}</label>
+					<input class="input{{if .Error}} is-invalid{{end}}" type="text" id="{{.Field}}" name="{{.Field}}" value="{{.Value}}" aria-describedby="{{if .Error}}{{.Field}}-error {{end}}times-hint"{{if .Error}} aria-invalid="true"{{end}}>
+					{{- with .Error}}
+					<p class="field-error" id="{{$field}}-error">{{.}}</p>
+					{{- end}}
+				</div>
+				{{- end}}
+			</fieldset>
+
+			<div class="schedule-actions">
+				<button class="button button-primary" type="submit">Zapisz</button>
+				<a class="button" href="{{.BackURL}}">Anuluj</a>
+			</div>
+		</form>
+	</main>
+</body>
+</html>

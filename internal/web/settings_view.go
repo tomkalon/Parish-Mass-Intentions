@@ -10,6 +10,7 @@ import (
 
 	"go-parafia/internal/gcatholic"
 	"go-parafia/internal/intentions"
+	"go-parafia/internal/masses"
 	"go-parafia/internal/settings"
 )
 
@@ -53,6 +54,11 @@ type settingsView struct {
 	Kinds      []kindOption
 	Errors     map[string]string
 	Saved      bool
+
+	Schedules      []scheduleItem
+	NewScheduleURL string
+	RestoreURL     string
+	Dialog         *settingsDialog
 }
 
 type kindOption struct {
@@ -66,14 +72,14 @@ func (v settingsView) MaxLength() int {
 	return maxSettingLength
 }
 
-func newSettingsView(setting settings.Setting, week string) settingsView {
+func newSettingsView(setting settings.Setting, schedules []masses.Schedule, week string) settingsView {
 	view := settingsView{
+		Week:       normalizeWeek(week),
 		BackURL:    "/",
 		ParishName: setting.ParishName,
 		Address:    setting.Address,
 	}
-	if day, err := time.ParseInLocation(intentions.DateLayout, week, intentions.TimeZone); err == nil {
-		view.Week = intentions.WeekStart(day).Format(intentions.DateLayout)
+	if view.Week != "" {
 		view.BackURL = "/?week=" + view.Week
 	}
 
@@ -86,7 +92,20 @@ func newSettingsView(setting settings.Setting, week string) settingsView {
 		})
 	}
 
+	view.Schedules = scheduleItems(schedules, view.Week)
+	view.NewScheduleURL = withWeek("/settings/schedules/new", view.Week)
+	view.RestoreURL = withWeek("/settings?restore=1", view.Week)
+
 	return view
+}
+
+func normalizeWeek(week string) string {
+	day, err := time.ParseInLocation(intentions.DateLayout, week, intentions.TimeZone)
+	if err != nil {
+		return ""
+	}
+
+	return intentions.WeekStart(day).Format(intentions.DateLayout)
 }
 
 func settingsFromForm(form url.Values) settings.Setting {

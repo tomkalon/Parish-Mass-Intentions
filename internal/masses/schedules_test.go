@@ -67,7 +67,7 @@ func TestParseSchedulesErrors(t *testing.T) {
 		{name: "invalid time", data: "[" + scheduleJSON("A", `["6:5"]`) + "]", want: `schedule "A": niedziela: invalid time "6:5"`},
 		{name: "hour out of range", data: "[" + scheduleJSON("A", `["25:00"]`) + "]", want: `invalid time "25:00"`},
 		{name: "not a time", data: "[" + scheduleJSON("A", `["osiemnasta"]`) + "]", want: `invalid time "osiemnasta"`},
-		{name: "not a quarter hour", data: "[" + scheduleJSON("A", `["6:10"]`) + "]", want: `time "6:10" is not a full quarter hour`},
+		{name: "not a quarter hour", data: "[" + scheduleJSON("A", `["6:10"]`) + "]", want: `not a full quarter hour "6:10"`},
 		{name: "duplicate time", data: "[" + scheduleJSON("A", `["18:00", "18:00"]`) + "]", want: `duplicate time "18:00"`},
 		{name: "duplicate after normalization", data: "[" + scheduleJSON("A", `["6:30", "06:30"]`) + "]", want: `duplicate time "06:30"`},
 	}

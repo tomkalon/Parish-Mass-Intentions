@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 	"time"
+	"unicode"
 )
 
 var weekdays = map[string]time.Weekday{
@@ -30,6 +32,7 @@ type scheduleFile struct {
 }
 
 type Schedule struct {
+	ID     int
 	Name   string
 	Masses [7][]string
 }
@@ -97,20 +100,47 @@ func parseSchedule(file scheduleFile) (Schedule, error) {
 	return schedule, nil
 }
 
+var (
+	ErrInvalidTime    = errors.New("invalid time")
+	ErrNotQuarterHour = errors.New("not a full quarter hour")
+	ErrDuplicateTime  = errors.New("duplicate time")
+)
+
+type TimeError struct {
+	Value  string
+	Reason error
+}
+
+func (e *TimeError) Error() string {
+	return fmt.Sprintf("%v %q", e.Reason, e.Value)
+}
+
+func (e *TimeError) Unwrap() error {
+	return e.Reason
+}
+
+func ParseDay(text string) ([]string, error) {
+	values := strings.FieldsFunc(text, func(r rune) bool {
+		return r == ',' || r == ';' || unicode.IsSpace(r)
+	})
+
+	return parseTimes(values)
+}
+
 func parseTimes(values []string) ([]string, error) {
 	times := make([]string, 0, len(values))
 	for _, value := range values {
 		t, err := time.Parse("15:04", value)
 		if err != nil {
-			return nil, fmt.Errorf("invalid time %q", value)
+			return nil, &TimeError{Value: value, Reason: ErrInvalidTime}
 		}
 		if t.Minute()%15 != 0 {
-			return nil, fmt.Errorf("time %q is not a full quarter hour", value)
+			return nil, &TimeError{Value: value, Reason: ErrNotQuarterHour}
 		}
 
 		normalized := t.Format("15:04")
 		if slices.Contains(times, normalized) {
-			return nil, fmt.Errorf("duplicate time %q", value)
+			return nil, &TimeError{Value: value, Reason: ErrDuplicateTime}
 		}
 		times = append(times, normalized)
 	}

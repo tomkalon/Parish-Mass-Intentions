@@ -8,11 +8,10 @@ import (
 	"gorm.io/gorm"
 
 	"go-parafia/internal/api"
-	"go-parafia/internal/masses"
 	"go-parafia/internal/web"
 )
 
-func newRouter(db *gorm.DB, schedules []masses.Schedule) http.Handler {
+func newRouter(db *gorm.DB) http.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.RedirectSlashes)
 
@@ -20,7 +19,7 @@ func newRouter(db *gorm.DB, schedules []masses.Schedule) http.Handler {
 		api.RegisterRoutes(r, db)
 	})
 
-	web.RegisterRoutes(router, db, schedules)
+	web.RegisterRoutes(router, db)
 
 	return router
 }

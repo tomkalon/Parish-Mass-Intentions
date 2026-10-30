@@ -30,15 +30,15 @@ func TestLoadFromEmptyDatabase(t *testing.T) {
 		t.Fatalf("Load: %v", err)
 	}
 
-	if setting.SelectedSchedule != "" {
-		t.Errorf("SelectedSchedule = %q, want empty", setting.SelectedSchedule)
+	if setting.SelectedScheduleID != 0 {
+		t.Errorf("SelectedScheduleID = %d, want 0", setting.SelectedScheduleID)
 	}
 }
 
 func TestSaveScheduleAndLoad(t *testing.T) {
 	db := newTestDB(t)
 
-	err := SaveSchedule(db, "Wakacje")
+	err := SaveSchedule(db, 2)
 	if err != nil {
 		t.Fatalf("SaveSchedule: %v", err)
 	}
@@ -47,18 +47,18 @@ func TestSaveScheduleAndLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if setting.SelectedSchedule != "Wakacje" {
-		t.Errorf("SelectedSchedule = %q, want %q", setting.SelectedSchedule, "Wakacje")
+	if setting.SelectedScheduleID != 2 {
+		t.Errorf("SelectedScheduleID = %d, want 2", setting.SelectedScheduleID)
 	}
 }
 
 func TestSaveScheduleTwiceKeepsOneRow(t *testing.T) {
 	db := newTestDB(t)
 
-	for _, name := range []string{"Wakacje", "Porządek zwykły"} {
-		err := SaveSchedule(db, name)
+	for _, id := range []int{2, 1} {
+		err := SaveSchedule(db, id)
 		if err != nil {
-			t.Fatalf("SaveSchedule(%q): %v", name, err)
+			t.Fatalf("SaveSchedule(%d): %v", id, err)
 		}
 	}
 
@@ -75,8 +75,8 @@ func TestSaveScheduleTwiceKeepsOneRow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if setting.SelectedSchedule != "Porządek zwykły" {
-		t.Errorf("SelectedSchedule = %q, want the last saved %q", setting.SelectedSchedule, "Porządek zwykły")
+	if setting.SelectedScheduleID != 1 {
+		t.Errorf("SelectedScheduleID = %d, want the last saved 1", setting.SelectedScheduleID)
 	}
 }
 
@@ -117,7 +117,7 @@ func TestSaveScheduleKeepsParish(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SaveParish: %v", err)
 	}
-	err = SaveSchedule(db, "Wakacje")
+	err = SaveSchedule(db, 2)
 	if err != nil {
 		t.Fatalf("SaveSchedule: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestSaveScheduleKeepsParish(t *testing.T) {
 	}
 	want := parish
 	want.ID = settingID
-	want.SelectedSchedule = "Wakacje"
+	want.SelectedScheduleID = 2
 	if got != want {
 		t.Errorf("Load = %+v, want %+v", got, want)
 	}
@@ -137,7 +137,7 @@ func TestSaveScheduleKeepsParish(t *testing.T) {
 func TestSaveParishKeepsSchedule(t *testing.T) {
 	db := newTestDB(t)
 
-	err := SaveSchedule(db, "Wakacje")
+	err := SaveSchedule(db, 2)
 	if err != nil {
 		t.Fatalf("SaveSchedule: %v", err)
 	}
@@ -154,8 +154,8 @@ func TestSaveParishKeepsSchedule(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if got.SelectedSchedule != "Wakacje" {
-		t.Errorf("SelectedSchedule = %q, want %q (SaveParish must not touch it)", got.SelectedSchedule, "Wakacje")
+	if got.SelectedScheduleID != 2 {
+		t.Errorf("SelectedScheduleID = %d, want 2 (SaveParish must not touch it)", got.SelectedScheduleID)
 	}
 	if want := (FeastImport{SkipMemorials: true}); got.FeastImport != want {
 		t.Errorf("FeastImport = %+v, want %+v (unchecked again → false saved)", got.FeastImport, want)

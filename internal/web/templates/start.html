@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="pl">
+<head>
+	<meta charset="utf-8">
+	<title>Intencje mszalne – Go Parafia</title>
+	<link rel="icon" href="/static/logo.svg" type="image/svg+xml">
+	<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+	<main class="start">
+		<img class="start-logo" src="/static/logo.svg" width="88" height="88" alt="">
+		<h1>Intencje mszalne</h1>
+		<p class="start-parish">{{.ParishName}}</p>
+		{{- with .Address}}
+		<p class="start-address">{{.}}</p>
+		{{- end}}
+		<nav class="start-actions" aria-label="Start">
+			<a class="button button-primary" href="{{.WeekURL}}">Przejdź do intencji →</a>
+			<a class="button" href="/settings">Ustawienia</a>
+		</nav>
+	</main>
+</body>
+</html>

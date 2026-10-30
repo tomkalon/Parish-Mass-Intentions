@@ -35,13 +35,15 @@ var templateFS embed.FS
 //go:embed static
 var staticFS embed.FS
 
-var weekTemplate = template.Must(template.ParseFS(templateFS, "templates/week.html", "templates/panel.html"))
+var weekTemplate = template.Must(template.ParseFS(templateFS, "templates/week.html", "templates/panel.html", "templates/topbar.html"))
 
 var printTemplate = template.Must(template.ParseFS(templateFS, "templates/print.html"))
 
-var settingsTemplate = template.Must(template.ParseFS(templateFS, "templates/settings.html"))
+var settingsTemplate = template.Must(template.ParseFS(templateFS, "templates/settings.html", "templates/topbar.html"))
 
-var scheduleTemplate = template.Must(template.ParseFS(templateFS, "templates/schedule.html"))
+var scheduleTemplate = template.Must(template.ParseFS(templateFS, "templates/schedule.html", "templates/topbar.html"))
+
+var startTemplate = template.Must(template.ParseFS(templateFS, "templates/start.html"))
 
 type handler struct {
 	now               func() time.Time
@@ -62,7 +64,7 @@ func RegisterRoutes(router chi.Router, db *gorm.DB) {
 		},
 	}
 
-	router.Get("/", h.week)
+	router.Get("/", h.home)
 	router.Post("/intentions", h.create)
 	router.Post("/intentions/{id}", h.update)
 	router.Post("/intentions/{id}/delete", h.delete)
@@ -81,6 +83,28 @@ func RegisterRoutes(router chi.Router, db *gorm.DB) {
 	router.Get("/pdf", h.pdf)
 	router.Get("/print", h.printPreview)
 	router.Handle("/static/*", http.FileServerFS(staticFS))
+}
+
+func (h *handler) home(w http.ResponseWriter, r *http.Request) {
+	if r.URL.RawQuery != "" {
+		h.week(w, r)
+		return
+	}
+
+	h.start(w, r)
+}
+
+func (h *handler) start(w http.ResponseWriter, r *http.Request) {
+	setting, err := settings.Load(h.db)
+	if err != nil {
+		log.Printf("error loading settings: %v", err)
+	}
+
+	render(w, http.StatusOK, startTemplate, startView{
+		ParishName: setting.ParishName,
+		Address:    setting.Address,
+		WeekURL:    weekURL(intentions.NextWeekStart(h.now())),
+	})
 }
 
 func (h *handler) week(w http.ResponseWriter, r *http.Request) {
@@ -316,7 +340,19 @@ func (h *handler) settingsView(w http.ResponseWriter, setting settings.Setting, 
 		return settingsView{}, false
 	}
 
-	return newSettingsView(setting, schedules, week), true
+	view := newSettingsView(setting, schedules, week)
+	view.Topbar = h.topbar()
+
+	return view, true
+}
+
+func (h *handler) topbar() topbarView {
+	setting, err := settings.Load(h.db)
+	if err != nil {
+		log.Printf("error loading settings: %v", err)
+	}
+
+	return newTopbarView(setting)
 }
 
 func (h *handler) scheduleForm(w http.ResponseWriter, r *http.Request) {
@@ -324,7 +360,7 @@ func (h *handler) scheduleForm(w http.ResponseWriter, r *http.Request) {
 
 	idParam := chi.URLParam(r, "id")
 	if idParam == "" {
-		render(w, http.StatusOK, scheduleTemplate, newScheduleFormView(masses.Schedule{}, week))
+		h.renderSchedule(w, http.StatusOK, newScheduleFormView(masses.Schedule{}, week))
 		return
 	}
 
@@ -345,7 +381,12 @@ func (h *handler) scheduleForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	render(w, http.StatusOK, scheduleTemplate, newScheduleFormView(schedule, week))
+	h.renderSchedule(w, http.StatusOK, newScheduleFormView(schedule, week))
+}
+
+func (h *handler) renderSchedule(w http.ResponseWriter, status int, view scheduleFormView) {
+	view.Topbar = h.topbar()
+	render(w, status, scheduleTemplate, view)
 }
 
 const duplicateScheduleMessage = "Porządek o tej nazwie już istnieje."
@@ -404,7 +445,7 @@ func (h *handler) saveSchedule(w http.ResponseWriter, r *http.Request) {
 			view.Days[i].Error = errs[view.Days[i].Field]
 		}
 		view.Errors = errs
-		render(w, http.StatusUnprocessableEntity, scheduleTemplate, view)
+		h.renderSchedule(w, http.StatusUnprocessableEntity, view)
 		return
 	}
 
@@ -811,7 +852,9 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 
 	view := newWeekView(start, list)
 	setFeasts(view.Days, feasts)
-	view.IsUpcoming = start.Equal(intentions.NextWeekStart(h.now()))
+	upcoming := intentions.NextWeekStart(h.now())
+	view.IsUpcoming = start.Equal(upcoming)
+	view.UpcomingURL = weekURL(upcoming)
 	view.Schedules = schedules
 
 	setting, err := settings.Load(h.db)
@@ -819,6 +862,7 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 		log.Printf("error loading settings: %v", err)
 	}
 	view.SelectedScheduleID = setting.SelectedScheduleID
+	view.Topbar = newTopbarView(setting)
 
 	if state.form != nil {
 		view.Form = state.form

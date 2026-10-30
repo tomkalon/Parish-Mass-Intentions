@@ -59,6 +59,7 @@ type settingsView struct {
 	NewScheduleURL string
 	RestoreURL     string
 	Dialog         *settingsDialog
+	Topbar         topbarView
 }
 
 type kindOption struct {

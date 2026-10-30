@@ -13,16 +13,18 @@ type weekView struct {
 	Range     string
 	Days      []dayView
 	Schedules []masses.Schedule
+	Topbar    topbarView
 
 	SelectedScheduleID int
 	ParishName         string
 	Address            string
 
-	IsUpcoming bool
-	Form       *formView
-	Delete     *deleteView
-	Clear      *clearView
-	Feast      *feastView
+	IsUpcoming  bool
+	UpcomingURL string
+	Form        *formView
+	Delete      *deleteView
+	Clear       *clearView
+	Feast       *feastView
 
 	ImportError string
 }
@@ -74,7 +76,11 @@ func (v weekView) PrintURL() string {
 }
 
 func (v weekView) WeekURL() string {
-	return "/?week=" + v.Start.Format(intentions.DateLayout)
+	return weekURL(v.Start)
+}
+
+func weekURL(start time.Time) string {
+	return "/?week=" + start.Format(intentions.DateLayout)
 }
 
 func (v weekView) SettingsURL() string {

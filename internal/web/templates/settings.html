@@ -3,12 +3,16 @@
 <head>
 	<meta charset="utf-8">
 	<title>Ustawienia – Go Parafia</title>
+	<link rel="icon" href="/static/logo.svg" type="image/svg+xml">
 	<link rel="stylesheet" href="/static/app.css">
 	<script src="/static/app.js" defer></script>
 </head>
 <body>
+	<header class="topbar"{{if .Dialog}} inert{{end}}>
+		{{template "topbar" .Topbar}}
+	</header>
 	<nav class="toolbar" aria-label="Ustawienia"{{if .Dialog}} inert{{end}}>
-		<a class="button" href="{{.BackURL}}" data-close>← Wróć do tygodnia</a>
+		<a class="button" href="{{.BackURL}}" data-close>{{if .Week}}← Wróć do tygodnia{{else}}← Wróć{{end}}</a>
 	</nav>
 
 	<main class="settings"{{if .Dialog}} inert{{end}}>

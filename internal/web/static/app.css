@@ -49,6 +49,48 @@ body {
 	outline-offset: 2px;
 }
 
+/* Top bar */
+
+.topbar {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 16px;
+	min-height: 48px;
+	padding: 8px 24px;
+	background: var(--surface);
+	border-bottom: 1px solid var(--line);
+	font-size: 14px;
+}
+
+.topbar-brand {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	gap: 10px;
+	color: var(--ink);
+	font: 700 17px/1 var(--font-serif);
+	text-decoration: none;
+}
+
+.topbar-brand:hover {
+	color: var(--accent);
+}
+
+.topbar-brand img {
+	display: block;
+}
+
+.topbar-parish {
+	min-width: 0;
+	overflow: hidden;
+	padding-left: 16px;
+	border-left: 1px solid var(--line-strong);
+	color: var(--muted);
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
 /* Toolbar */
 
 .toolbar {
@@ -172,6 +214,10 @@ h1 {
 	padding: 18px 24px;
 	/* Keeps the day heading visible below the sticky toolbar when jumping to #d-…. */
 	scroll-margin-top: 88px;
+}
+
+.has-panel .day {
+	scroll-margin-top: 140px;
 }
 
 .day + .day {
@@ -987,4 +1033,64 @@ h1 {
 	margin: 32px 0 0;
 	color: var(--muted);
 	font-size: 13px;
+}
+
+/* Start page */
+
+.start {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	min-height: 100vh;
+	padding: 48px var(--gutter);
+	text-align: center;
+}
+
+.start-logo {
+	display: block;
+	margin: 0 0 28px;
+}
+
+.start h1 {
+	margin: 0;
+	font-size: 46px;
+	letter-spacing: .02em;
+}
+
+.start h1::after {
+	content: "";
+	display: block;
+	width: 72px;
+	height: 2px;
+	margin: 28px auto 0;
+	background: var(--accent);
+}
+
+.start-parish {
+	max-width: 640px;
+	margin: 28px 0 0;
+	color: var(--ink-2);
+	font: 400 23px/1.4 var(--font-serif);
+	text-wrap: balance;
+}
+
+.start-address {
+	margin: 10px 0 0;
+	color: var(--muted);
+	font-size: 17px;
+}
+
+.start-actions {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 12px;
+	margin-top: 44px;
+}
+
+.start-actions .button {
+	min-height: 52px;
+	padding: 0 24px;
+	font-size: 17px;
 }

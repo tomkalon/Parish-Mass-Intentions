@@ -93,3 +93,71 @@ func TestLoadDatabaseError(t *testing.T) {
 		t.Error("Load error = nil, want an error without the settings table")
 	}
 }
+
+func TestLoadDefaultParishName(t *testing.T) {
+	setting, err := Load(newTestDB(t))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if setting.ParishName != DefaultParishName {
+		t.Errorf("ParishName = %q, want the default %q", setting.ParishName, DefaultParishName)
+	}
+}
+
+func TestSaveScheduleKeepsParish(t *testing.T) {
+	db := newTestDB(t)
+	parish := Setting{
+		ParishName:  "Parafia św. Jana",
+		Address:     "ul. Kościelna 1, 32-765 Rzezawa",
+		FeastImport: FeastImport{SkipOtherDays: true},
+	}
+
+	err := SaveParish(db, parish)
+	if err != nil {
+		t.Fatalf("SaveParish: %v", err)
+	}
+	err = SaveSchedule(db, "Wakacje")
+	if err != nil {
+		t.Fatalf("SaveSchedule: %v", err)
+	}
+
+	got, err := Load(db)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	want := parish
+	want.ID = settingID
+	want.SelectedSchedule = "Wakacje"
+	if got != want {
+		t.Errorf("Load = %+v, want %+v", got, want)
+	}
+}
+
+func TestSaveParishKeepsSchedule(t *testing.T) {
+	db := newTestDB(t)
+
+	err := SaveSchedule(db, "Wakacje")
+	if err != nil {
+		t.Fatalf("SaveSchedule: %v", err)
+	}
+	err = SaveParish(db, Setting{ParishName: "Parafia św. Jana", FeastImport: FeastImport{SkipFeasts: true, SkipMemorials: true}})
+	if err != nil {
+		t.Fatalf("SaveParish: %v", err)
+	}
+	err = SaveParish(db, Setting{ParishName: "Parafia św. Jana", FeastImport: FeastImport{SkipMemorials: true}})
+	if err != nil {
+		t.Fatalf("SaveParish: %v", err)
+	}
+
+	got, err := Load(db)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got.SelectedSchedule != "Wakacje" {
+		t.Errorf("SelectedSchedule = %q, want %q (SaveParish must not touch it)", got.SelectedSchedule, "Wakacje")
+	}
+	if want := (FeastImport{SkipMemorials: true}); got.FeastImport != want {
+		t.Errorf("FeastImport = %+v, want %+v (unchecked again → false saved)", got.FeastImport, want)
+	}
+}

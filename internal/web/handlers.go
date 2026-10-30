@@ -39,6 +39,8 @@ var weekTemplate = template.Must(template.ParseFS(templateFS, "templates/week.ht
 
 var printTemplate = template.Must(template.ParseFS(templateFS, "templates/print.html"))
 
+var settingsTemplate = template.Must(template.ParseFS(templateFS, "templates/settings.html"))
+
 type handler struct {
 	now               func() time.Time
 	db                *gorm.DB
@@ -68,6 +70,8 @@ func RegisterRoutes(router chi.Router, db *gorm.DB, schedules []masses.Schedule)
 	router.Post("/clear", h.clearWeek)
 	router.Post("/days/{date}", h.saveFeast)
 	router.Post("/feasts/import", h.importFeasts)
+	router.Get("/settings", h.settingsPage)
+	router.Post("/settings", h.saveSettings)
 	router.Get("/pdf", h.pdf)
 	router.Get("/print", h.printPreview)
 	router.Handle("/static/*", http.FileServerFS(staticFS))
@@ -179,8 +183,17 @@ func (h *handler) pdf(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	setting, err := settings.Load(h.db)
+	if err != nil {
+		log.Printf("error loading settings: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
 	view := newWeekView(start, list)
 	setFeasts(view.Days, feasts)
+	view.ParishName = setting.ParishName
+	view.Address = setting.Address
 
 	var buf bytes.Buffer
 	err = writeWeekPDF(&buf, view)
@@ -230,6 +243,47 @@ func (h *handler) delete(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/?week="+week, http.StatusSeeOther)
 }
 
+func (h *handler) settingsPage(w http.ResponseWriter, r *http.Request) {
+	setting, err := settings.Load(h.db)
+	if err != nil {
+		log.Printf("error loading settings: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	query := r.URL.Query()
+	view := newSettingsView(setting, query.Get("week"))
+	view.Saved = query.Get("saved") == "1"
+
+	render(w, http.StatusOK, settingsTemplate, view)
+}
+
+func (h *handler) saveSettings(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		http.Error(w, "nieprawidłowe dane formularza", http.StatusBadRequest)
+		return
+	}
+
+	setting := settingsFromForm(r.PostForm)
+	view := newSettingsView(setting, r.PostForm.Get("week"))
+
+	if errs := settingsErrors(setting); len(errs) > 0 {
+		view.Errors = errs
+		render(w, http.StatusUnprocessableEntity, settingsTemplate, view)
+		return
+	}
+
+	err = settings.SaveParish(h.db, setting)
+	if err != nil {
+		log.Printf("error saving settings: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, settingsURL(view.Week, true), http.StatusSeeOther)
+}
+
 const importErrorMessage = "Nie udało się pobrać kalendarza z GCatholic. Sprawdź połączenie z internetem i spróbuj ponownie."
 
 func (h *handler) importFeasts(w http.ResponseWriter, r *http.Request) {
@@ -250,6 +304,13 @@ func (h *handler) importFeasts(w http.ResponseWriter, r *http.Request) {
 		years = append(years, end.Year())
 	}
 
+	setting, err := settings.Load(h.db)
+	if err != nil {
+		log.Printf("error loading settings: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
 	feasts := make(map[string]string)
 	for _, year := range years {
 		celebrations, err := h.fetchCelebrations(r.Context(), year)
@@ -259,6 +320,9 @@ func (h *handler) importFeasts(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		celebrations = slices.DeleteFunc(celebrations, func(c gcatholic.Celebration) bool {
+			return skipped(setting.FeastImport, c.Kind())
+		})
 		texts := gcatholic.Texts(celebrations)
 		for i := range 7 {
 			date := start.AddDate(0, 0, i).Format(intentions.DateLayout)

@@ -23,6 +23,28 @@ type Celebration struct {
 	Name string
 }
 
+type Kind int
+
+const (
+	Other Kind = iota
+	Solemnity
+	Feast
+	Memorial
+	OptionalMemorial
+)
+
+var rankKinds = map[string]Kind{
+	"U":  Solemnity,
+	"Ś":  Feast,
+	"W":  Memorial,
+	"w":  OptionalMemorial,
+	"w*": OptionalMemorial,
+}
+
+func (c Celebration) Kind() Kind {
+	return rankKinds[c.Rank]
+}
+
 var rankWords = map[string]string{
 	"U":  "uroczystość",
 	"Ś":  "święto",

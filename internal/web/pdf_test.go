@@ -54,6 +54,7 @@ func TestLayoutWeek(t *testing.T) {
 		newIntention(t, 2, "2026-11-02 18:00", false, "+ Anna Nowak"),
 		newIntention(t, 3, "2026-11-02 18:00", true, "+ Piotr Wiśniewski"),
 	})
+	view.ParishName = "Parafia pw. Trójcy Przenajświętszej i św. Leopolda w Rzezawie"
 
 	pages := layoutWeek(view, fakeMeasurer{})
 
@@ -145,7 +146,7 @@ func intentionsPerMass(t *testing.T, count int) []intentions.Intention {
 func TestLayoutWeekShrinksBeforeAddingAPage(t *testing.T) {
 	start := time.Date(2026, 11, 2, 0, 0, 0, 0, intentions.TimeZone)
 	m := fakeMeasurer{}
-	header := layoutHeader(start, m)
+	header := layoutHeader(newWeekView(start, nil), m)
 	smallest := pdfStyles[len(pdfStyles)-1]
 
 	for count := 1; count < 300; count++ {
@@ -282,5 +283,50 @@ func TestLayoutWeekPrintsFeast(t *testing.T) {
 	}
 	if len(empty) != 1 {
 		t.Errorf("day with a feast and no masses: %d „— brak intencji —” lines right below the feast, want 1", len(empty))
+	}
+}
+
+func TestLayoutHeader(t *testing.T) {
+	start := time.Date(2026, 11, 2, 0, 0, 0, 0, intentions.TimeZone)
+
+	tests := []struct {
+		name       string
+		parishName string
+		address    string
+		want       []string
+	}{
+		{
+			name:       "name and address",
+			parishName: "Parafia św. Jana",
+			address:    "ul. Kościelna 1, 32-765 Rzezawa",
+			want:       []string{"Parafia św. Jana", "ul. Kościelna 1, 32-765 Rzezawa", "INTENCJE MSZY ŚWIĘTYCH", "2 – 8 listopada 2026"},
+		},
+		{
+			name:       "name without address",
+			parishName: "Parafia św. Jana",
+			want:       []string{"Parafia św. Jana", "INTENCJE MSZY ŚWIĘTYCH", "2 – 8 listopada 2026"},
+		},
+		{
+			name: "nothing configured",
+			want: []string{"INTENCJE MSZY ŚWIĘTYCH", "2 – 8 listopada 2026"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			view := newWeekView(start, nil)
+			view.ParishName = tt.parishName
+			view.Address = tt.address
+
+			header := layoutHeader(view, fakeMeasurer{})
+
+			var got []string
+			for _, run := range header.Runs {
+				got = append(got, run.Text)
+			}
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("header = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }

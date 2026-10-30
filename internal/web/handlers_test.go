@@ -1735,3 +1735,235 @@ func TestWeekShowsImportButton(t *testing.T) {
 		t.Error("week view shows the import error without an import")
 	}
 }
+
+func getSettings(t *testing.T, h *handler, target string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, target, nil)
+	rec := httptest.NewRecorder()
+	h.settingsPage(rec, req)
+
+	return rec
+}
+
+func postSettings(t *testing.T, h *handler, form url.Values) *httptest.ResponseRecorder {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	h.saveSettings(rec, req)
+
+	return rec
+}
+
+func TestWeekShowsSettingsLink(t *testing.T) {
+	body := getWeek(t, newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone)), "/").Body.String()
+
+	want := `<a class="button button-icon" href="/settings?week=2026-11-02" aria-label="Ustawienia" title="Ustawienia">`
+	if !strings.Contains(body, want) {
+		t.Errorf("body does not contain %q", want)
+	}
+}
+
+func TestSettingsPageDefaults(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	rec := getSettings(t, h, "/settings?week=2026-11-04")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`<a class="button" href="/?week=2026-11-02" data-close>← Wróć do tygodnia</a>`,
+		`<input type="hidden" name="week" value="2026-11-02">`,
+		`name="parish_name" value="Parafia pw. Trójcy Przenajświętszej i św. Leopolda w Rzezawie" maxlength="200" required`,
+		`name="address" value="" maxlength="200"`,
+		`<input type="checkbox" name="import" value="solemnities" checked> Uroczystości`,
+		`<input type="checkbox" name="import" value="other-days" checked> Niedziele i dni powszednie`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+	if got := strings.Count(body, `name="import"`); got != 5 {
+		t.Errorf("checkboxes = %d, want 5", got)
+	}
+	if strings.Contains(body, "Zapisano.") {
+		t.Error("page says Zapisano. before saving")
+	}
+}
+
+func TestSettingsPageWithoutWeek(t *testing.T) {
+	body := getSettings(t, newTestHandler(t, time.Now()), "/settings").Body.String()
+
+	if !strings.Contains(body, `<a class="button" href="/" data-close>← Wróć do tygodnia</a>`) {
+		t.Error("back link without a week does not go to /")
+	}
+}
+
+func TestSaveSettings(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	err := settings.SaveSchedule(h.db, "Wakacje")
+	if err != nil {
+		t.Fatalf("saving schedule: %v", err)
+	}
+
+	rec := postSettings(t, h, url.Values{
+		"week":        {"2026-11-02"},
+		"parish_name": {"  Parafia św. Jana  "},
+		"address":     {"ul. Kościelna 1, 32-765 Rzezawa"},
+		"import":      {"solemnities", "feasts", "memorials"},
+	})
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if got, want := rec.Header().Get("Location"), "/settings?saved=1&week=2026-11-02"; got != want {
+		t.Errorf("Location = %q, want %q", got, want)
+	}
+
+	got, err := settings.Load(h.db)
+	if err != nil {
+		t.Fatalf("loading settings: %v", err)
+	}
+	want := settings.Setting{
+		ID:               1,
+		ParishName:       "Parafia św. Jana",
+		Address:          "ul. Kościelna 1, 32-765 Rzezawa",
+		SelectedSchedule: "Wakacje",
+		FeastImport:      settings.FeastImport{SkipOptionalMemorials: true, SkipOtherDays: true},
+	}
+	if got != want {
+		t.Errorf("settings = %+v, want %+v", got, want)
+	}
+
+	body := getSettings(t, h, "/settings?saved=1&week=2026-11-02").Body.String()
+	for _, want := range []string{
+		`<p class="notice" role="status">Zapisano.</p>`,
+		`<input type="checkbox" name="import" value="memorials" checked>`,
+		`<input type="checkbox" name="import" value="optional-memorials"> Wspomnienia dowolne`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("page after saving does not contain %q", want)
+		}
+	}
+}
+
+func TestSaveSettingsInvalid(t *testing.T) {
+	tests := []struct {
+		name string
+		form url.Values
+		want string
+	}{
+		{
+			name: "empty parish name",
+			form: url.Values{"parish_name": {"   "}, "address": {"ul. Kościelna 1"}, "import": {"feasts"}},
+			want: `<p class="field-error" id="parish_name-error">Pole jest wymagane.</p>`,
+		},
+		{
+			name: "address too long",
+			form: url.Values{"parish_name": {"Parafia"}, "address": {strings.Repeat("ś", maxSettingLength+1)}},
+			want: `<p class="field-error" id="address-error">Maksymalnie 200 znaków.</p>`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newTestHandler(t, time.Now())
+
+			rec := postSettings(t, h, tt.form)
+
+			if rec.Code != http.StatusUnprocessableEntity {
+				t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
+			}
+			body := rec.Body.String()
+			if !strings.Contains(body, tt.want) {
+				t.Errorf("body does not contain %q", tt.want)
+			}
+			if !strings.Contains(body, `aria-invalid="true"`) {
+				t.Error("invalid field is not marked aria-invalid")
+			}
+
+			got, err := settings.Load(h.db)
+			if err != nil {
+				t.Fatalf("loading settings: %v", err)
+			}
+			if got.ParishName != settings.DefaultParishName || got.Address != "" {
+				t.Errorf("settings changed despite errors: %+v", got)
+			}
+		})
+	}
+}
+
+func TestSaveSettingsKeepsTypedValuesOnError(t *testing.T) {
+	rec := postSettings(t, newTestHandler(t, time.Now()), url.Values{
+		"parish_name": {""},
+		"address":     {"ul. Kościelna 1"},
+		"import":      {"feasts"},
+	})
+
+	body := rec.Body.String()
+	for _, want := range []string{
+		`name="address" value="ul. Kościelna 1"`,
+		`<input type="checkbox" name="import" value="feasts" checked>`,
+		`<input type="checkbox" name="import" value="solemnities"> Uroczystości`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+}
+
+func TestSettingsRoutes(t *testing.T) {
+	db := newTestHandler(t, time.Now()).db
+
+	rec := postToRouter(t, db, "/settings", url.Values{"parish_name": {"Parafia św. Jana"}})
+
+	if rec.Code != http.StatusSeeOther {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+}
+
+func TestImportFeastsSkipsUncheckedKinds(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	err := settings.SaveParish(h.db, settings.Setting{
+		ParishName:  settings.DefaultParishName,
+		FeastImport: settings.FeastImport{SkipOptionalMemorials: true, SkipOtherDays: true},
+	})
+	if err != nil {
+		t.Fatalf("saving settings: %v", err)
+	}
+	h.fetchCelebrations = fakeCelebrations(map[int][]gcatholic.Celebration{2026: {
+		{Date: "2026-11-03", Name: "Wtorek XXXI tygodnia zwykłego"},
+		{Date: "2026-11-03", Rank: "w", Name: "Św. Marcina de Porres, zakonnika"},
+		{Date: "2026-11-04", Rank: "W", Name: "Św. Karola Boromeusza, biskupa"},
+		{Date: "2026-11-07", Name: "Sobota XXXI tygodnia zwykłego"},
+		{Date: "2026-11-07", Rank: "w", Name: "Najświętszej Maryi Panny"},
+	}}, nil)
+
+	postImport(t, h, "2026-11-02")
+
+	got, err := calendar.FeastsForWeek(h.db, time.Date(2026, 11, 2, 0, 0, 0, 0, intentions.TimeZone))
+	if err != nil {
+		t.Fatalf("loading feasts: %v", err)
+	}
+	want := map[string]string{"2026-11-04": "wspomnienie św. Karola Boromeusza, biskupa"}
+	if !maps.Equal(got, want) {
+		t.Errorf("feasts = %q, want %q", got, want)
+	}
+}
+
+func TestWeekPDFUsesParishSettings(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	err := h.db.Migrator().DropTable(&settings.Setting{})
+	if err != nil {
+		t.Fatalf("dropping settings table: %v", err)
+	}
+
+	if rec := getPDF(t, h, "/pdf"); rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d (the parish name is part of the sheet)", rec.Code, http.StatusInternalServerError)
+	}
+}

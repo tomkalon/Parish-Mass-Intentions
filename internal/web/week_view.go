@@ -15,6 +15,8 @@ type weekView struct {
 	Schedules []masses.Schedule
 
 	SelectedSchedule string
+	ParishName       string
+	Address          string
 
 	IsUpcoming bool
 	Form       *formView
@@ -73,6 +75,10 @@ func (v weekView) PrintURL() string {
 
 func (v weekView) WeekURL() string {
 	return "/?week=" + v.Start.Format(intentions.DateLayout)
+}
+
+func (v weekView) SettingsURL() string {
+	return settingsURL(v.Week(), false)
 }
 
 func (v weekView) ClearURL() string {

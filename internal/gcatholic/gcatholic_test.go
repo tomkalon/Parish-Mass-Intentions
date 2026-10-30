@@ -153,3 +153,26 @@ func TestFetchServerDown(t *testing.T) {
 		t.Error("Fetch error = nil, want an error when the server is unreachable")
 	}
 }
+
+func TestCelebrationKind(t *testing.T) {
+	tests := []struct {
+		rank string
+		want Kind
+	}{
+		{rank: "U", want: Solemnity},
+		{rank: "Ś", want: Feast},
+		{rank: "W", want: Memorial},
+		{rank: "w", want: OptionalMemorial},
+		{rank: "w*", want: OptionalMemorial},
+		{rank: "", want: Other},
+		{rank: "nieznana", want: Other},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.rank, func(t *testing.T) {
+			if got := (Celebration{Rank: tt.rank}).Kind(); got != tt.want {
+				t.Errorf("Kind() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}

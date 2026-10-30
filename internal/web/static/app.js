@@ -14,7 +14,7 @@ if (selectedDay) {
 	selectedDay.scrollIntoView({ block: "start" });
 }
 
-const field = document.querySelector('.panel [aria-invalid="true"]') ?? document.getElementById("content") ?? document.getElementById("feast");
+const field = document.querySelector('[aria-invalid="true"]') ?? document.getElementById("content") ?? document.getElementById("feast");
 if (field && document.activeElement !== field) {
 	field.focus({ preventScroll: true });
 }

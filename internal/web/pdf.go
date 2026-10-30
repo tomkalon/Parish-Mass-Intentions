@@ -42,8 +42,6 @@ const (
 	smallCapsScale = 0.78
 
 	pdfFamily = "serif"
-
-	parishName = "Parafia pw. Trójcy Przenajświętszej i św. Leopolda w Rzezawie"
 )
 
 type pdfFont int
@@ -207,7 +205,7 @@ func (m *gopdfMeasurer) width(text string, font pdfFont, size, spacing float64) 
 }
 
 func layoutWeek(view weekView, m textMeasurer) []pdfPage {
-	header := layoutHeader(view.Start, m)
+	header := layoutHeader(view, m)
 
 	var days []pdfBlock
 	for _, style := range pdfStyles {
@@ -256,19 +254,30 @@ func paginate(header pdfBlock, days []pdfBlock) []pdfPage {
 	return pages
 }
 
-func layoutHeader(start time.Time, m textMeasurer) pdfBlock {
+func layoutHeader(view weekView, m textMeasurer) pdfBlock {
 	var block pdfBlock
+	y := 0.0
 
-	parishSize := 13 * px
-	block.Runs = append(block.Runs, centered(parishName, fontItalic, parishSize, 0, baseline(parishSize, 1.3), m))
-	y := parishSize*1.3 + 6*px
+	if view.ParishName != "" {
+		parishSize := 13 * px
+		block.Runs = append(block.Runs, centered(view.ParishName, fontItalic, parishSize, 0, y+baseline(parishSize, 1.3), m))
+		y += parishSize * 1.3
+	}
+	if view.Address != "" {
+		addressSize := 11 * px
+		block.Runs = append(block.Runs, centered(view.Address, fontRegular, addressSize, 0, y+baseline(addressSize, 1.3), m))
+		y += addressSize * 1.3
+	}
+	if y > 0 {
+		y += 6 * px
+	}
 
 	titleSize := 11 * px
 	block.Runs = append(block.Runs, centered("INTENCJE MSZY ŚWIĘTYCH", fontBold, titleSize, 0.32*titleSize, y+baseline(titleSize, 1.3), m))
 	y += titleSize * 1.3
 
 	rangeSize := 26 * px
-	block.Runs = append(block.Runs, centered(weekInWords(start), fontRegular, rangeSize, 0, y+baseline(rangeSize, 1.2), m))
+	block.Runs = append(block.Runs, centered(weekInWords(view.Start), fontRegular, rangeSize, 0, y+baseline(rangeSize, 1.2), m))
 	y += rangeSize*1.2 + 12*px
 
 	block.Rules = append(block.Rules,

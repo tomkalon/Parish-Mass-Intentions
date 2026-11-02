@@ -19,6 +19,8 @@
 	--selected-day: #FFF8EE;
 	--selected-mass: #F8EFE2;
 	--saved: #FCEFC2;
+	--deceased-row: #F1EEEA;
+	--gregorian-row: #FBEEEB;
 
 	--font-serif: Georgia, "Times New Roman", serif;
 	--font-ui: "Segoe UI", system-ui, sans-serif;
@@ -385,6 +387,15 @@ h1 {
 	font-size: 17px;
 	line-height: 1.55;
 	scroll-margin-top: 160px;
+	background: var(--row-bg, transparent);
+}
+
+.intention.is-deceased {
+	--row-bg: var(--deceased-row);
+}
+
+.intention.is-gregorian {
+	--row-bg: var(--gregorian-row);
 }
 
 .intention.is-saved {
@@ -398,7 +409,7 @@ h1 {
 	}
 
 	100% {
-		background-color: transparent;
+		background-color: var(--row-bg, transparent);
 	}
 }
 

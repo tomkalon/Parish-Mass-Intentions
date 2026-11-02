@@ -105,7 +105,7 @@
 						{{- if .Parish}}
 						<ol class="intentions">
 							{{- range .Parish}}
-							<li class="intention{{if .IsSaved}} is-saved{{end}}{{if .IsEditing}} is-editing{{end}}" id="i-{{.ID}}">
+							<li class="intention{{if .IsGregorian}} is-gregorian{{else if .IsDeceased}} is-deceased{{end}}{{if .IsSaved}} is-saved{{end}}{{if .IsEditing}} is-editing{{end}}" id="i-{{.ID}}">
 								{{- if .IsPlaceholder}}
 								<span class="number"></span>
 								<span class="placeholder">do uzupełnienia</span>
@@ -129,7 +129,7 @@
 						<p class="outside-label">Poza Parafią:</p>
 						<ol class="intentions outside">
 							{{- range .Outside}}
-							<li class="intention{{if .IsSaved}} is-saved{{end}}{{if .IsEditing}} is-editing{{end}}" id="i-{{.ID}}">
+							<li class="intention{{if .IsGregorian}} is-gregorian{{else if .IsDeceased}} is-deceased{{end}}{{if .IsSaved}} is-saved{{end}}{{if .IsEditing}} is-editing{{end}}" id="i-{{.ID}}">
 								<span class="number">{{.Number}}.</span>
 								<span>{{.Content}}{{template "badges" .}}</span>
 								<span class="intention-actions">

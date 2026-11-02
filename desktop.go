@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -38,9 +39,13 @@ func prepareDataDir() (string, error) {
 	return dir, nil
 }
 
-func run(router http.Handler, dataDir string) error {
-	window := &desktopWindow{}
+var window = &desktopWindow{}
 
+func saveFileDialog() func(string) (string, error) {
+	return window.saveFile
+}
+
+func run(router http.Handler, dataDir string) error {
 	return wails.Run(&options.App{
 		Title:            "Go Parafia – intencje mszalne",
 		Width:            1280,
@@ -77,4 +82,20 @@ func (w *desktopWindow) bringToFront(options.SecondInstanceData) {
 	if w.ctx != nil {
 		runtime.WindowShow(w.ctx)
 	}
+}
+
+func (w *desktopWindow) saveFile(name string) (string, error) {
+	w.mu.Lock()
+	ctx := w.ctx
+	w.mu.Unlock()
+
+	if ctx == nil {
+		return "", errors.New("window is not ready")
+	}
+
+	return runtime.SaveFileDialog(ctx, runtime.SaveDialogOptions{
+		Title:           "Eksport danych",
+		DefaultFilename: name,
+		Filters:         []runtime.FileFilter{{DisplayName: "Kopia danych Go Parafia (*.db)", Pattern: "*.db"}},
+	})
 }

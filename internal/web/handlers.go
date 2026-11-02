@@ -51,9 +51,16 @@ type handler struct {
 	validate          *validator.Validate
 	slotsMu           sync.Mutex
 	fetchCelebrations func(ctx context.Context, year int) ([]gcatholic.Celebration, error)
+	dataDir           string
+	saveFile          func(defaultName string) (string, error)
 }
 
-func RegisterRoutes(router chi.Router, db *gorm.DB) {
+type Options struct {
+	DataDir  string
+	SaveFile func(defaultName string) (string, error)
+}
+
+func RegisterRoutes(router chi.Router, db *gorm.DB, opts Options) {
 	client := &http.Client{Timeout: 20 * time.Second}
 	h := &handler{
 		now:      time.Now,
@@ -62,6 +69,8 @@ func RegisterRoutes(router chi.Router, db *gorm.DB) {
 		fetchCelebrations: func(ctx context.Context, year int) ([]gcatholic.Celebration, error) {
 			return gcatholic.Fetch(ctx, client, gcatholic.BaseURL, year)
 		},
+		dataDir:  opts.DataDir,
+		saveFile: opts.SaveFile,
 	}
 
 	router.Get("/", h.home)
@@ -80,6 +89,9 @@ func RegisterRoutes(router chi.Router, db *gorm.DB) {
 	router.Post("/settings/schedules/restore", h.restoreSchedules)
 	router.Post("/settings/schedules/{id}", h.saveSchedule)
 	router.Post("/settings/schedules/{id}/delete", h.deleteSchedule)
+	router.Post("/settings/export", h.exportData)
+	router.Post("/settings/import", h.importData)
+	router.Post("/settings/import/confirm", h.confirmImport)
 	router.Get("/pdf", h.pdf)
 	router.Get("/print", h.printPreview)
 	router.Handle("/static/*", http.FileServerFS(staticFS))
@@ -306,6 +318,12 @@ func (h *handler) settingsPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	view.Saved = query.Get("saved") == "1"
+	if path := query.Get("exported"); path != "" {
+		view.Notice = exportedNotice(path)
+	}
+	if backup := query.Get("imported"); backup != "" {
+		view.Notice = importedNotice(backup, h.dataDir)
+	}
 
 	closeURL := settingsURL(view.Week, false) + "#porzadki"
 	switch {
@@ -344,6 +362,8 @@ func (h *handler) settingsPage(w http.ResponseWriter, r *http.Request) {
 			Week:     view.Week,
 			CloseURL: closeURL,
 		}
+	case query.Get("import") == "1":
+		h.importDialog(&view, settingsURL(view.Week, false))
 	}
 
 	render(w, http.StatusOK, settingsTemplate, view)
@@ -359,6 +379,7 @@ func (h *handler) settingsView(w http.ResponseWriter, setting settings.Setting, 
 
 	view := newSettingsView(setting, schedules, week)
 	view.Topbar = h.topbar()
+	view.DataDir = h.dataDir
 
 	return view, true
 }

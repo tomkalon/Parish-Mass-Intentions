@@ -21,6 +21,15 @@
 		{{- if .Saved}}
 		<p class="notice" role="status">Zapisano.</p>
 		{{- end}}
+		{{- with .Notice}}
+		<p class="notice" role="status">{{.}}</p>
+		{{- end}}
+		{{- with .ImportError}}
+		<div class="form-alert" role="alert">
+			<span class="form-alert-icon" aria-hidden="true">!</span>
+			<p>Nie zaimportowano. {{.}}</p>
+		</div>
+		{{- end}}
 		{{- if .Errors}}
 		<div class="form-alert" role="alert">
 			<span class="form-alert-icon" aria-hidden="true">!</span>
@@ -87,6 +96,25 @@
 				<a class="button" href="{{.NewScheduleURL}}">+ Dodaj porządek</a>
 				<a class="delete-link" href="{{.RestoreURL}}">Przywróć domyślne</a>
 			</div>
+		</section>
+
+		<section class="settings-section backup" id="kopia" aria-labelledby="backup-title">
+			<h2 class="settings-heading" id="backup-title">Kopia danych</h2>
+			<p class="hint">Eksport zapisuje w jednym pliku wszystkie dane programu: intencje, święta, ustawienia i porządki mszy. Import zastępuje nimi obecne dane. Przed zamianą program zapyta o potwierdzenie i zachowa kopię obecnych danych (plik .bak).</p>
+			<div class="backup-actions">
+				<form method="post" action="/settings/export">
+					<input type="hidden" name="week" value="{{.Week}}">
+					<button class="button" type="submit">Eksportuj dane…</button>
+				</form>
+				<form method="post" action="/settings/import" enctype="multipart/form-data">
+					<input type="hidden" name="week" value="{{.Week}}">
+					<label class="button file-button">Importuj dane…<input class="visually-hidden" type="file" name="file" accept=".db,.bak" required data-autosubmit></label>
+					<noscript><button class="button" type="submit">Wczytaj plik</button></noscript>
+				</form>
+			</div>
+			{{- with .DataDir}}
+			<p class="hint">Folder danych (tu są kopie .bak sprzed importu): <code class="path">{{.}}</code></p>
+			{{- end}}
 		</section>
 
 		<p class="app-credit">Go Parafia · autor: Tomasz Kaliński, Gemma It Solutions</p>

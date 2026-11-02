@@ -5,11 +5,12 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 	"time"
 )
 
 func prepareDataDir() (string, error) {
-	return ".", nil
+	return os.Getwd()
 }
 
 func run(router http.Handler, _ string) error {
@@ -22,4 +23,8 @@ func run(router http.Handler, _ string) error {
 	log.Println("Go Parafia: http://localhost:8080")
 
 	return server.ListenAndServe()
+}
+
+func saveFileDialog() func(string) (string, error) {
+	return nil
 }

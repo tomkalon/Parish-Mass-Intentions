@@ -14,6 +14,7 @@ Działa jako zwykły program dla Windows (`Intencje Mszalne.exe`), z jednym okne
 - **Wydruk PDF** całego tygodnia: nagłówek z nazwą i adresem parafii, osobna numeracja intencji parafialnych i „poza parafią”. Tydzień zwykle mieści się na jednej stronie A4 (lekko zmniejszony tekst), a gdy intencji jest więcej, przechodzi na kolejną; dzień, który nie zmieściłby się nawet na całej stronie, dzieli się na dwie z dopiskiem „ciąg dalszy”.
 - **Ukrywanie na wydruku**: checkbox „Ukryj na wydruku” w formularzu. Ukryta intencja zostaje w widoku tygodnia (wyszarzona, z oznaczeniem), a w podglądzie wydruku można ją dołączyć checkboxem „Pokaż ukryte intencje”.
 - **Wyczyść tydzień** (z potwierdzeniem).
+- **Eksport i import danych** (Ustawienia → Kopia danych): eksport zapisuje całą bazę (intencje, święta, ustawienia, porządki mszy) do jednego pliku `.db` przez okno „Zapisz jako”. Import pokazuje, co jest w pliku, i po potwierdzeniu zastępuje nim obecne dane; wcześniej zapisuje kopię `data-RRRR-MM-DD-GGMMSS.db.bak` w folderze danych (`%AppData%\Go Parafia`). Import takiego pliku `.bak` cofa zamianę.
 - **Ustawienia** (ikona koła zębatego): nazwa i adres parafii, pobieranie świąt, porządki mszy.
 
 ## Uruchomienie u użytkownika (Windows)
@@ -52,13 +53,14 @@ make clean
 ### Struktura
 
 ```
-main.go, routes.go          start programu, baza, router
+main.go, routes.go          start programu, router
 server.go / desktop.go      serwer HTTP (dev) albo okno Wails (.exe)
 internal/intentions         intencje: model, walidacja, zapytania tygodnia
 internal/masses             porządki mszy: domyślne (schedules.json), baza, sloty
 internal/calendar           opisy dni (święta, wspomnienia)
 internal/gcatholic          pobieranie i odczyt kalendarza GCatholic (iCal)
 internal/settings           ustawienia parafii
+internal/database           otwarcie bazy, migracje, eksport, import z kopią .bak
 internal/web                strony HTML, formularze, wydruk PDF
 internal/api                JSON API (/api/intentions)
 ```

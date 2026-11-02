@@ -5,15 +5,19 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+
+	"go-parafia/internal/database"
+	"go-parafia/internal/web"
 )
 
 func TestRouter(t *testing.T) {
-	db, err := openDatabase(filepath.Join(t.TempDir(), "test.db"))
+	dir := t.TempDir()
+	db, err := database.Open(filepath.Join(dir, "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	router := newRouter(db)
+	router := newRouter(db, web.Options{DataDir: dir})
 
 	tests := []struct {
 		path            string

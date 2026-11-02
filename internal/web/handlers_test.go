@@ -1838,7 +1838,7 @@ func TestWeekShowsImportButton(t *testing.T) {
 
 	want := `<form method="post" action="/feasts/import">
 				<input type="hidden" name="week" value="2026-11-02">
-				<button class="button" type="submit">Pobierz święta z GCatholic</button>`
+				<button class="button" type="submit" title="Pobierz wspomnienia i święta z GCatholic.org (wymaga internetu)">Pobierz święta</button>`
 	if !strings.Contains(body, want) {
 		t.Errorf("body does not contain %q", want)
 	}

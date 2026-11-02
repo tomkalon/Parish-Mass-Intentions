@@ -3,6 +3,7 @@ package intentions
 import (
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -188,5 +189,31 @@ func TestSaveReplacesPlaceholderAtSameMass(t *testing.T) {
 				t.Errorf("after Save = %q, want %q", got, want)
 			}
 		})
+	}
+}
+
+func TestWeekQueryUsesMassAtIndex(t *testing.T) {
+	db := newTestDB(t)
+	start := time.Date(2026, 11, 2, 0, 0, 0, 0, TimeZone)
+	query := db.ToSQL(func(tx *gorm.DB) *gorm.DB {
+		return inWeek(tx, start).Order("mass_at, id").Find(&[]Intention{})
+	})
+
+	var plan []struct{ Detail string }
+	err := db.Raw("EXPLAIN QUERY PLAN " + query).Scan(&plan).Error
+	if err != nil {
+		t.Fatalf("explaining %q: %v", query, err)
+	}
+
+	var details []string
+	for _, step := range plan {
+		details = append(details, step.Detail)
+	}
+	got := strings.Join(details, "; ")
+	if !strings.Contains(got, "USING INDEX idx_intentions_mass_at") {
+		t.Errorf("week query plan = %q, want a search using idx_intentions_mass_at (otherwise every week reads the whole table)", got)
+	}
+	if strings.Contains(got, "TEMP B-TREE") {
+		t.Errorf("week query plan = %q, want the order taken from the index, not a temporary sort", got)
 	}
 }

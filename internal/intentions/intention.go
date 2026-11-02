@@ -4,7 +4,7 @@ import "time"
 
 type Intention struct {
 	ID              int       `json:"id"`
-	MassAt          time.Time `json:"mass_at"`
+	MassAt          time.Time `json:"mass_at" gorm:"index"`
 	Content         string    `json:"content"`
 	IsOutsideParish bool      `json:"is_outside_parish"`
 	IsPlaceholder   bool      `json:"is_placeholder" gorm:"not null;default:false"`

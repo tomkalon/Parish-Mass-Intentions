@@ -472,6 +472,16 @@ h1 {
 	color: var(--accent);
 }
 
+.badge-hidden {
+	border: 1px dashed var(--line-strong);
+	background: transparent;
+	color: var(--muted);
+}
+
+.intention.is-hidden {
+	color: var(--muted);
+}
+
 .intention-actions {
 	display: flex;
 	align-items: flex-start;
@@ -766,6 +776,10 @@ h1 {
 	accent-color: var(--accent);
 }
 
+.checkbox-print {
+	margin-top: 8px;
+}
+
 /* Week behind the panel */
 
 .day.is-selected {
@@ -919,6 +933,27 @@ h1 {
 .print-note {
 	color: var(--muted);
 	font-size: 15px;
+}
+
+.print-page .toolbar {
+	padding-inline: var(--gutter);
+}
+
+.print-options {
+	margin-left: auto;
+}
+
+.print-options .checkbox {
+	margin: 0;
+}
+
+.checkbox:has(input:disabled) {
+	color: var(--muted);
+	cursor: default;
+}
+
+.checkbox:has(input:disabled):hover {
+	background: none;
 }
 
 .print-preview {

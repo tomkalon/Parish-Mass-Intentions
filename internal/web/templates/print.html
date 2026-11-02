@@ -11,6 +11,11 @@
 	<nav class="toolbar" aria-label="Wydruk">
 		<a class="button" href="{{.WeekURL}}" data-close>← Wróć do tygodnia</a>
 		<span class="print-note">INTENCJE MSZY ŚWIĘTYCH – {{.Range}} · A4 pionowo · czarno-biały</span>
+		<form class="print-options" method="get" action="/print">
+			<input type="hidden" name="week" value="{{.Week}}">
+			<label class="checkbox"><input type="checkbox" name="hidden" value="1"{{if .ShowHidden}} checked{{end}}{{if not .HiddenCount}} disabled{{end}} data-autosubmit> Pokaż ukryte intencje ({{.HiddenCount}})</label>
+			<noscript><button class="button" type="submit">Odśwież</button></noscript>
+		</form>
 	</nav>
 	<iframe class="print-preview" src="{{.PDFURL}}" title="Podgląd PDF: intencje {{.Range}}"></iframe>
 </body>

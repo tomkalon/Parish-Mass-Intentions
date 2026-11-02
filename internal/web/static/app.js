@@ -58,3 +58,7 @@ if (deceased && gregorian) {
 		}
 	});
 }
+
+for (const input of document.querySelectorAll("[data-autosubmit]")) {
+	input.addEventListener("change", () => input.form.submit());
+}

@@ -142,6 +142,7 @@ func (h *handler) week(w http.ResponseWriter, r *http.Request) {
 		f.IsOutsideParish = intention.IsOutsideParish
 		f.IsGregorian = intention.IsGregorian
 		f.IsDeceased = intention.IsDeceased
+		f.IsHidden = intention.IsHidden
 		state.form = &f
 	case query.Get("new") == "1":
 		f := newFormView(start, query.Get("day"), query.Get("time"))
@@ -185,17 +186,9 @@ func (h *handler) weekStart(query url.Values) (time.Time, error) {
 }
 
 func (h *handler) printPreview(w http.ResponseWriter, r *http.Request) {
-	start, err := h.weekStart(r.URL.Query())
-	if err != nil {
-		http.Error(w, "nieprawidłowa data tygodnia, oczekiwano RRRR-MM-DD", http.StatusBadRequest)
-		return
-	}
+	query := r.URL.Query()
 
-	render(w, http.StatusOK, printTemplate, newWeekView(start, nil))
-}
-
-func (h *handler) pdf(w http.ResponseWriter, r *http.Request) {
-	start, err := h.weekStart(r.URL.Query())
+	start, err := h.weekStart(query)
 	if err != nil {
 		http.Error(w, "nieprawidłowa data tygodnia, oczekiwano RRRR-MM-DD", http.StatusBadRequest)
 		return
@@ -206,6 +199,30 @@ func (h *handler) pdf(w http.ResponseWriter, r *http.Request) {
 		log.Printf("error loading week intention: %v", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
+	}
+
+	render(w, http.StatusOK, printTemplate, newPrintView(start, list, query.Get("hidden") == "1"))
+}
+
+func (h *handler) pdf(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+
+	start, err := h.weekStart(query)
+	if err != nil {
+		http.Error(w, "nieprawidłowa data tygodnia, oczekiwano RRRR-MM-DD", http.StatusBadRequest)
+		return
+	}
+
+	list, err := intentions.ForWeek(h.db, start)
+	if err != nil {
+		log.Printf("error loading week intention: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	if query.Get("hidden") != "1" {
+		list = slices.DeleteFunc(list, func(intention intentions.Intention) bool {
+			return intention.IsHidden
+		})
 	}
 
 	feasts, err := calendar.FeastsForWeek(h.db, start)
@@ -743,6 +760,7 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 	outside := r.PostForm.Get("outside") == "on"
 	gregorian := r.PostForm.Get("gregorian") == "on"
 	deceased := r.PostForm.Get("deceased") == "on"
+	hidden := r.PostForm.Get("hidden") == "on"
 
 	input := intentions.Input{
 		MassAt:          day + " " + massTime,
@@ -750,6 +768,7 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 		IsOutsideParish: outside,
 		IsGregorian:     gregorian,
 		IsDeceased:      deceased,
+		IsHidden:        hidden,
 	}
 
 	err = h.validate.Struct(input)
@@ -771,6 +790,7 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 		form.IsOutsideParish = outside
 		form.IsGregorian = gregorian
 		form.IsDeceased = deceased
+		form.IsHidden = hidden
 		form.Errors = errs
 		form.EditID = intention.ID
 

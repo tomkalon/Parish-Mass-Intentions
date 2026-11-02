@@ -1,6 +1,6 @@
 # Go Parafia — intencje mszalne
 
-Program do prowadzenia intencji mszalnych w parafii: tydzień po tygodniu, z gotowym wydrukiem na jedną kartkę A4.
+Program do prowadzenia intencji mszalnych w parafii: tydzień po tygodniu, z gotowym wydrukiem A4.
 
 Działa jako zwykły program dla Windows (`Intencje Mszalne.exe`), z jednym oknem, bez przeglądarki i bez instalacji. Dane trzyma lokalnie na komputerze.
 
@@ -11,7 +11,8 @@ Działa jako zwykły program dla Windows (`Intencje Mszalne.exe`), z jednym okne
 - **Przypomnienie o mszach bez intencji** nad widokiem tygodnia.
 - **Gregorianki i intencje za zmarłych**: checkboxy w formularzu, ozdobniki w widoku, a na wydruku „+” i „(greg.)”.
 - **Święta i wspomnienia dnia**: wpisywane ręcznie albo pobierane przyciskiem „Pobierz święta z GCatholic” (wymaga internetu; rodzaje obchodów do wyboru w ustawieniach).
-- **Wydruk PDF** całego tygodnia: nagłówek z nazwą i adresem parafii, cały tydzień dopasowany do jednej strony A4.
+- **Wydruk PDF** całego tygodnia: nagłówek z nazwą i adresem parafii, osobna numeracja intencji parafialnych i „poza parafią”. Tydzień zwykle mieści się na jednej stronie A4 (lekko zmniejszony tekst), a gdy intencji jest więcej, przechodzi na kolejną; dzień, który nie zmieściłby się nawet na całej stronie, dzieli się na dwie z dopiskiem „ciąg dalszy”.
+- **Ukrywanie na wydruku**: checkbox „Ukryj na wydruku” w formularzu. Ukryta intencja zostaje w widoku tygodnia (wyszarzona, z oznaczeniem), a w podglądzie wydruku można ją dołączyć checkboxem „Pokaż ukryte intencje”.
 - **Wyczyść tydzień** (z potwierdzeniem).
 - **Ustawienia** (ikona koła zębatego): nazwa i adres parafii, pobieranie świąt, porządki mszy.
 

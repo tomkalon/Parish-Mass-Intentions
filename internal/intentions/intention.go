@@ -10,6 +10,7 @@ type Intention struct {
 	IsPlaceholder   bool      `json:"is_placeholder" gorm:"not null;default:false"`
 	IsGregorian     bool      `json:"is_gregorian" gorm:"not null;default:false"`
 	IsDeceased      bool      `json:"is_deceased" gorm:"not null;default:false"`
+	IsHidden        bool      `json:"is_hidden" gorm:"not null;default:false"`
 }
 
 type Input struct {
@@ -18,6 +19,7 @@ type Input struct {
 	IsOutsideParish bool   `json:"is_outside_parish"`
 	IsGregorian     bool   `json:"is_gregorian"`
 	IsDeceased      bool   `json:"is_deceased"`
+	IsHidden        bool   `json:"is_hidden"`
 }
 
 func (i *Intention) Apply(input Input) {
@@ -26,5 +28,6 @@ func (i *Intention) Apply(input Input) {
 	i.IsOutsideParish = input.IsOutsideParish
 	i.IsGregorian = input.IsGregorian
 	i.IsDeceased = input.IsDeceased || input.IsGregorian
+	i.IsHidden = input.IsHidden
 	i.IsPlaceholder = false
 }

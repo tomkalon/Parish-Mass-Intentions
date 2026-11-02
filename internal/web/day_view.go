@@ -48,6 +48,8 @@ type intentionView struct {
 	IsSaved       bool
 	IsEditing     bool
 	IsPlaceholder bool
+	IsGregorian   bool
+	IsDeceased    bool
 }
 
 func newDayView(day time.Time, list []intentions.Intention) dayView {
@@ -93,6 +95,8 @@ func appendIntention(list []intentionView, intention intentions.Intention, week 
 		DeleteURL: deleteURL(week, intention.ID),
 
 		IsPlaceholder: intention.IsPlaceholder,
+		IsGregorian:   intention.IsGregorian,
+		IsDeceased:    intention.IsDeceased,
 	}
 
 	if !intention.IsPlaceholder {

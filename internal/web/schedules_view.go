@@ -91,6 +91,7 @@ type scheduleFormView struct {
 	Name    string
 	Days    []scheduleDay
 	Errors  map[string]string
+	Topbar  topbarView
 }
 
 type scheduleDay struct {

@@ -124,3 +124,69 @@ func TestDeleteWeek(t *testing.T) {
 		t.Errorf("left after DeleteWeek = %q, want %q", got, want)
 	}
 }
+
+func createPlaceholder(t *testing.T, db *gorm.DB, massAt string) {
+	t.Helper()
+
+	at, err := time.ParseInLocation(MassAtLayout, massAt, TimeZone)
+	if err != nil {
+		t.Fatalf("parsing mass time %q: %v", massAt, err)
+	}
+
+	err = db.Create(&Intention{MassAt: at, IsPlaceholder: true}).Error
+	if err != nil {
+		t.Fatalf("creating placeholder: %v", err)
+	}
+}
+
+func TestSaveReplacesPlaceholderAtSameMass(t *testing.T) {
+	sunday := time.Date(2026, 11, 8, 7, 0, 0, 0, TimeZone)
+
+	tests := []struct {
+		name   string
+		massAt time.Time
+	}{
+		{name: "mass time in Polish time", massAt: sunday},
+		{name: "mass time in UTC", massAt: sunday.UTC()},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := newTestDB(t)
+			createPlaceholder(t, db, "2026-11-08 07:00")
+			createIntention(t, db, "2026-11-08 07:00", "already there")
+			createPlaceholder(t, db, "2026-11-08 08:30")
+			createPlaceholder(t, db, "2026-11-09 07:00")
+
+			err := Save(db, &Intention{MassAt: tt.massAt, Content: "Jan Nowak"})
+			if err != nil {
+				t.Fatalf("Save: %v", err)
+			}
+
+			var left []Intention
+			err = db.Order("mass_at, id").Find(&left).Error
+			if err != nil {
+				t.Fatalf("loading intentions: %v", err)
+			}
+
+			var got []string
+			for _, intention := range left {
+				label := intention.Content
+				if intention.IsPlaceholder {
+					label = "placeholder"
+				}
+				got = append(got, intention.MassAt.In(TimeZone).Format(MassAtLayout)+" "+label)
+			}
+
+			want := []string{
+				"2026-11-08 07:00 already there",
+				"2026-11-08 07:00 Jan Nowak",
+				"2026-11-08 08:30 placeholder",
+				"2026-11-09 07:00 placeholder",
+			}
+			if !slices.Equal(got, want) {
+				t.Errorf("after Save = %q, want %q", got, want)
+			}
+		})
+	}
+}

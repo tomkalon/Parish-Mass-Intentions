@@ -330,3 +330,39 @@ func TestLayoutHeader(t *testing.T) {
 		})
 	}
 }
+
+func TestPrintedContent(t *testing.T) {
+	tests := []struct {
+		name      string
+		intention intentionView
+		want      string
+	}{
+		{name: "plain", intention: intentionView{Content: "W int. Parafian"}, want: "W int. Parafian"},
+		{name: "deceased", intention: intentionView{Content: "Anna Kutyba", IsDeceased: true}, want: "+ Anna Kutyba"},
+		{name: "deceased with plus already", intention: intentionView{Content: "++ Jan i Maria", IsDeceased: true}, want: "++ Jan i Maria"},
+		{name: "gregorian", intention: intentionView{Content: "+ Anna Kutyba", IsGregorian: true}, want: "+ Anna Kutyba (greg.)"},
+		{name: "gregorian already marked", intention: intentionView{Content: "+ Anna Kutyba (Greg.)", IsGregorian: true}, want: "+ Anna Kutyba (Greg.)"},
+		{name: "both", intention: intentionView{Content: "Stanisław Grocholski", IsDeceased: true, IsGregorian: true}, want: "+ Stanisław Grocholski (greg.)"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := printedContent(tt.intention); got != tt.want {
+				t.Errorf("printedContent = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLayoutWeekPrintsGregorianMark(t *testing.T) {
+	start := time.Date(2026, 11, 2, 0, 0, 0, 0, intentions.TimeZone)
+	gregorian := newIntention(t, 1, "2026-11-02 18:00", true, "Stanisław Grocholski")
+	gregorian.IsDeceased = true
+	gregorian.IsGregorian = true
+
+	texts := pageTexts(layoutWeek(newWeekView(start, []intentions.Intention{gregorian}), fakeMeasurer{})[0])
+
+	if !slices.Contains(texts, "+ Stanisław Grocholski (greg.)") {
+		t.Errorf("page does not contain the marked gregorian intention: %q", texts)
+	}
+}

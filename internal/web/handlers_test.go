@@ -553,7 +553,7 @@ func TestWeekWithEditPanel(t *testing.T) {
 		`<option value="18:00" selected>18:00</option>`,
 		`>&#43; Anna Kutyba (greg.)</textarea>`,
 		`name="outside" checked`,
-		`<a class="delete-link" href="/?delete=1&amp;week=2026-11-02">Usuń intencję</a>`,
+		`<a class="delete-link" href="/?delete=1&amp;week=2026-11-02" aria-label="Usuń intencję">Usuń</a>`,
 		`<li class="intention is-editing" id="i-1">`,
 		`href="/?day=2026-10-27&amp;edit=1&amp;time=18%3A00&amp;week=2026-10-26"`,
 	} {
@@ -1815,8 +1815,8 @@ func TestSettingsPageDefaults(t *testing.T) {
 func TestSettingsPageWithoutWeek(t *testing.T) {
 	body := getSettings(t, newTestHandler(t, time.Now()), "/settings").Body.String()
 
-	if !strings.Contains(body, `<a class="button" href="/" data-close>← Wróć do tygodnia</a>`) {
-		t.Error("back link without a week does not go to /")
+	if !strings.Contains(body, `<a class="button" href="/" data-close>← Wróć</a>`) {
+		t.Error("back link without a week does not go to the start page")
 	}
 }
 
@@ -1883,6 +1883,11 @@ func TestSaveSettingsInvalid(t *testing.T) {
 			name: "address too long",
 			form: url.Values{"parish_name": {"Parafia"}, "address": {strings.Repeat("ś", maxSettingLength+1)}},
 			want: `<p class="field-error" id="address-error">Maksymalnie 200 znaków.</p>`,
+		},
+		{
+			name: "parish name too long",
+			form: url.Values{"parish_name": {strings.Repeat("ś", maxSettingLength+1)}},
+			want: `<p class="field-error" id="parish_name-error">Maksymalnie 200 znaków.</p>`,
 		},
 	}
 
@@ -2224,5 +2229,446 @@ func TestWeekShowsEmptyMassesNotice(t *testing.T) {
 	want := `<p class="week-notice" role="status"><span>1 msza nie ma uzupełnionej intencji.</span> <a href="#d-2026-11-03">Pokaż</a></p>`
 	if !strings.Contains(body, want) {
 		t.Errorf("body does not contain %q", want)
+	}
+}
+
+func TestCreateIntentionWithFlags(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	form := validForm()
+	form.Set("deceased", "on")
+	form.Set("gregorian", "on")
+
+	rec := postIntention(t, h, form)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+
+	var saved intentions.Intention
+	err := h.db.First(&saved).Error
+	if err != nil {
+		t.Fatalf("loading intention: %v", err)
+	}
+	if !saved.IsDeceased || !saved.IsGregorian {
+		t.Errorf("flags = deceased %v, gregorian %v; want both true", saved.IsDeceased, saved.IsGregorian)
+	}
+}
+
+func TestWeekShowsIntentionBadges(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	marked := newIntention(t, 0, "2026-11-02 18:00", true, "+ Anna Kutyba")
+	marked.IsDeceased = true
+	marked.IsGregorian = true
+	err := h.db.Create(&marked).Error
+	if err != nil {
+		t.Fatalf("creating intention: %v", err)
+	}
+	seedIntention(t, h.db, "2026-11-02 06:30", false, "W int. Parafian")
+	deceased := newIntention(t, 0, "2026-11-03 18:00", false, "+ Jan Kowalski")
+	deceased.IsDeceased = true
+	err = h.db.Create(&deceased).Error
+	if err != nil {
+		t.Fatalf("creating intention: %v", err)
+	}
+
+	body := getWeek(t, h, "/").Body.String()
+
+	for _, want := range []string{
+		`<span>&#43; Anna Kutyba <span class="badge badge-gregorian" title="Msza gregoriańska">`,
+		`</svg>gregoriańska</span></span>`,
+		`<span>&#43; Jan Kowalski <span class="badge badge-deceased" title="Intencja za zmarłych">`,
+		`<span>W int. Parafian</span>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+	if got := strings.Count(body, `class="badge `); got != 2 {
+		t.Errorf("badges = %d, want 2 (gregorian alone, without a repeated ZA ZMARŁYCH, and one for Jan)", got)
+	}
+}
+
+func TestEditPanelShowsFlags(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	marked := newIntention(t, 0, "2026-11-02 18:00", false, "+ Anna Kutyba")
+	marked.IsGregorian = true
+	err := h.db.Create(&marked).Error
+	if err != nil {
+		t.Fatalf("creating intention: %v", err)
+	}
+
+	body := getWeek(t, h, fmt.Sprintf("/?week=2026-11-02&edit=%d", marked.ID)).Body.String()
+
+	for _, want := range []string{
+		`<input type="checkbox" name="deceased"> Za zmarłych`,
+		`<input type="checkbox" name="gregorian" checked> Msza gregoriańska`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("edit panel does not contain %q", want)
+		}
+	}
+}
+
+func TestEditPanelHasCopyButton(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedIntention(t, h.db, "2026-11-03 18:00", false, "+ Jan Kowalski")
+	copyButton := `<button class="button" type="submit" formaction="/intentions" name="copy" value="1"`
+
+	edit := getWeek(t, h, "/?week=2026-11-02&edit=1").Body.String()
+	if !strings.Contains(edit, copyButton) {
+		t.Errorf("edit panel does not contain %q", copyButton)
+	}
+	if !strings.Contains(edit, "Zmień dzień lub godzinę i kliknij „Kopiuj”.") {
+		t.Error("edit panel does not explain the copy button")
+	}
+
+	if body := getWeek(t, h, "/?week=2026-11-02&new=1").Body.String(); strings.Contains(body, copyButton) {
+		t.Error("new intention panel has the copy button")
+	}
+}
+
+func TestCopyIntention(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	original := newIntention(t, 0, "2026-11-03 18:00", true, "+ Anna Kutyba")
+	original.IsGregorian = true
+	original.IsDeceased = true
+	err := h.db.Create(&original).Error
+	if err != nil {
+		t.Fatalf("creating intention: %v", err)
+	}
+
+	form := url.Values{
+		"week":      {"2026-11-02"},
+		"day":       {"2026-11-04"},
+		"time":      {"18:00"},
+		"content":   {"+ Anna Kutyba"},
+		"outside":   {"on"},
+		"deceased":  {"on"},
+		"gregorian": {"on"},
+		"copy":      {"1"},
+	}
+	rec := postToRouter(t, h.db, "/intentions", form)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if got, want := rec.Header().Get("Location"), "/?edit=2&saved=2&week=2026-11-02"; got != want {
+		t.Errorf("Location = %q, want %q (the panel stays open on the copy)", got, want)
+	}
+
+	var all []intentions.Intention
+	err = h.db.Order("id").Find(&all).Error
+	if err != nil {
+		t.Fatalf("loading intentions: %v", err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("intentions = %d, want 2 (original + copy)", len(all))
+	}
+	if day := all[0].MassAt.In(intentions.TimeZone).Format(intentions.DateLayout); day != "2026-11-03" {
+		t.Errorf("original moved to %s, want it unchanged on 2026-11-03", day)
+	}
+	copied := all[1]
+	if day := copied.MassAt.In(intentions.TimeZone).Format(intentions.MassAtLayout); day != "2026-11-04 18:00" {
+		t.Errorf("copy at %s, want 2026-11-04 18:00", day)
+	}
+	if copied.Content != "+ Anna Kutyba" || !copied.IsOutsideParish || !copied.IsGregorian || !copied.IsDeceased {
+		t.Errorf("copy = %+v, want the same content and flags", copied)
+	}
+}
+
+func TestCopyIntoPlaceholderSlot(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedIntention(t, h.db, "2026-11-02 18:00", false, "Jan Nowak")
+	slot := newIntention(t, 0, "2026-11-08 07:00", false, "")
+	slot.IsPlaceholder = true
+	err := h.db.Create(&slot).Error
+	if err != nil {
+		t.Fatalf("creating placeholder: %v", err)
+	}
+
+	form := url.Values{
+		"week":    {"2026-11-02"},
+		"day":     {"2026-11-08"},
+		"time":    {"07:00"},
+		"content": {"Jan Nowak"},
+		"copy":    {"1"},
+	}
+	rec := postToRouter(t, h.db, "/intentions", form)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+
+	var placeholders int64
+	err = h.db.Model(&intentions.Intention{}).Where("is_placeholder = ?", true).Count(&placeholders).Error
+	if err != nil {
+		t.Fatalf("counting placeholders: %v", err)
+	}
+	if placeholders != 0 {
+		t.Errorf("placeholders = %d, want 0 (the copy fills the 7:00 slot)", placeholders)
+	}
+
+	body := getWeek(t, h, "/?week=2026-11-02").Body.String()
+	if strings.Contains(body, "do uzupełnienia") {
+		t.Error("week view still shows an empty slot")
+	}
+}
+
+func TestMoveIntentionIntoPlaceholderSlot(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedIntention(t, h.db, "2026-11-02 18:00", false, "Jan Nowak")
+	slot := newIntention(t, 0, "2026-11-08 07:00", false, "")
+	slot.IsPlaceholder = true
+	err := h.db.Create(&slot).Error
+	if err != nil {
+		t.Fatalf("creating placeholder: %v", err)
+	}
+
+	form := url.Values{
+		"week":    {"2026-11-02"},
+		"day":     {"2026-11-08"},
+		"time":    {"07:00"},
+		"content": {"Jan Nowak"},
+	}
+	rec := postToRouter(t, h.db, "/intentions/1", form)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+
+	var all []intentions.Intention
+	err = h.db.Find(&all).Error
+	if err != nil {
+		t.Fatalf("loading intentions: %v", err)
+	}
+	if len(all) != 1 || all[0].ID != 1 || all[0].IsPlaceholder {
+		t.Errorf("intentions = %+v, want only the moved intention 1", all)
+	}
+}
+
+func TestScheduleNotFoundOrInvalidID(t *testing.T) {
+	valid := url.Values{"name": {"Rekolekcje"}, "day-0": {"7:00"}}
+
+	tests := []struct {
+		name   string
+		method string
+		target string
+		form   url.Values
+		want   int
+	}{
+		{name: "edit form, missing", method: http.MethodGet, target: "/settings/schedules/99", want: http.StatusNotFound},
+		{name: "edit form, invalid id", method: http.MethodGet, target: "/settings/schedules/abc", want: http.StatusBadRequest},
+		{name: "save, missing", method: http.MethodPost, target: "/settings/schedules/99", form: valid, want: http.StatusNotFound},
+		{name: "save, invalid id", method: http.MethodPost, target: "/settings/schedules/abc", form: valid, want: http.StatusBadRequest},
+		{name: "delete, missing", method: http.MethodPost, target: "/settings/schedules/99/delete", form: url.Values{}, want: http.StatusNotFound},
+		{name: "delete, invalid id", method: http.MethodPost, target: "/settings/schedules/abc/delete", form: url.Values{}, want: http.StatusBadRequest},
+		{name: "delete dialog, missing", method: http.MethodGet, target: "/settings?delete_schedule=99", want: http.StatusNotFound},
+		{name: "delete dialog, invalid id", method: http.MethodGet, target: "/settings?delete_schedule=abc", want: http.StatusBadRequest},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := newTestHandler(t, time.Now()).db
+
+			rec := serveRouter(t, db, tt.method, tt.target, tt.form)
+
+			if rec.Code != tt.want {
+				t.Errorf("status = %d, want %d", rec.Code, tt.want)
+			}
+		})
+	}
+}
+
+func getHome(t *testing.T, h *handler, target string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, target, nil)
+	rec := httptest.NewRecorder()
+	h.home(rec, req)
+
+	return rec
+}
+
+func TestStartPage(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	err := settings.SaveParish(h.db, settings.Setting{ParishName: "Parafia św. Jana & Pawła", Address: "ul. Kościelna 1, 32-765 Rzezawa"})
+	if err != nil {
+		t.Fatalf("saving parish: %v", err)
+	}
+
+	rec := getHome(t, h, "/")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`<h1>Intencje mszalne</h1>`,
+		`<p class="start-parish">Parafia św. Jana &amp; Pawła</p>`,
+		`<p class="start-address">ul. Kościelna 1, 32-765 Rzezawa</p>`,
+		`<a class="button button-primary" href="/?week=2026-11-02">Przejdź do intencji →</a>`,
+		`<a class="button" href="/settings">Ustawienia</a>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("start page does not contain %q", want)
+		}
+	}
+	if strings.Contains(body, "INTENCJE MSZY ŚWIĘTYCH") {
+		t.Error("start page shows the week")
+	}
+}
+
+func TestStartPageDefaults(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 11, 1, 20, 0, 0, 0, intentions.TimeZone))
+
+	body := getHome(t, h, "/").Body.String()
+
+	if want := `<p class="start-parish">` + settings.DefaultParishName + `</p>`; !strings.Contains(body, want) {
+		t.Errorf("start page does not contain %q", want)
+	}
+	if strings.Contains(body, `class="start-address"`) {
+		t.Error("start page shows an empty address")
+	}
+	if want := `href="/?week=2026-11-02"`; !strings.Contains(body, want) {
+		t.Errorf("start page does not link to the upcoming week (%q)", want)
+	}
+}
+
+func TestStartPageWithoutSettingsTable(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	err := h.db.Migrator().DropTable(&settings.Setting{})
+	if err != nil {
+		t.Fatalf("dropping settings table: %v", err)
+	}
+
+	rec := getHome(t, h, "/")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (settings are only a convenience)", rec.Code, http.StatusOK)
+	}
+	if !strings.Contains(rec.Body.String(), settings.DefaultParishName) {
+		t.Error("start page without settings does not show the default parish name")
+	}
+}
+
+func TestHomeWithQueryShowsWeek(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	for _, target := range []string{"/?week=2026-11-09", "/?week=2026-11-09&new=1"} {
+		body := getHome(t, h, target).Body.String()
+		if !strings.Contains(body, "INTENCJE MSZY ŚWIĘTYCH – 9.11.2026 r. – 15.11.2026 r.") {
+			t.Errorf("%s does not show the week", target)
+		}
+	}
+}
+
+func TestWeekUpcomingLink(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	body := getWeek(t, h, "/?week=2026-11-16").Body.String()
+
+	if want := `<a class="upcoming" href="/?week=2026-11-02">Nadchodzący tydzień</a>`; !strings.Contains(body, want) {
+		t.Errorf("week view does not contain %q", want)
+	}
+}
+
+func TestStartRoute(t *testing.T) {
+	body := serveRouter(t, newTestHandler(t, time.Now()).db, http.MethodGet, "/", nil).Body.String()
+
+	if !strings.Contains(body, `<h1>Intencje mszalne</h1>`) {
+		t.Error("GET / does not show the start page")
+	}
+}
+
+func TestTopbar(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	err := settings.SaveParish(h.db, settings.Setting{ParishName: "Parafia św. Jana", Address: "ul. Kościelna 1"})
+	if err != nil {
+		t.Fatalf("saving parish: %v", err)
+	}
+
+	pages := map[string]string{
+		"week":     getWeek(t, h, "/?week=2026-11-02").Body.String(),
+		"settings": getSettings(t, h, "/settings?week=2026-11-02").Body.String(),
+		"schedule": serveRouter(t, h.db, http.MethodGet, "/settings/schedules/new?week=2026-11-02", nil).Body.String(),
+	}
+	for name, body := range pages {
+		for _, want := range []string{
+			`<header class="topbar">`,
+			`<a class="topbar-brand" href="/">`,
+			`<img src="/static/logo.svg" width="28" height="28" alt="">`,
+			`<span class="topbar-parish">Parafia św. Jana · ul. Kościelna 1</span>`,
+			`<link rel="icon" href="/static/logo.svg" type="image/svg+xml">`,
+		} {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s page does not contain %q", name, want)
+			}
+		}
+	}
+}
+
+func TestTopbarWithoutAddress(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	body := getWeek(t, h, "/?week=2026-11-02").Body.String()
+
+	if want := `<span class="topbar-parish">` + settings.DefaultParishName + `</span>`; !strings.Contains(body, want) {
+		t.Errorf("week page does not contain %q", want)
+	}
+}
+
+func TestTopbarInertBehindDialog(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedIntention(t, h.db, "2026-11-03 18:00", false, "+ Jan Kowalski")
+
+	for _, target := range []string{
+		"/?week=2026-11-02&delete=1",
+		"/?week=2026-11-02&clear=1",
+		"/?week=2026-11-02&feast=2026-11-03",
+	} {
+		if body := getWeek(t, h, target).Body.String(); !strings.Contains(body, `<header class="topbar" inert>`) {
+			t.Errorf("%s: top bar is not inert behind the dialog", target)
+		}
+	}
+
+	if body := getSettings(t, h, "/settings?restore=1").Body.String(); !strings.Contains(body, `<header class="topbar" inert>`) {
+		t.Error("settings: top bar is not inert behind the dialog")
+	}
+}
+
+func TestTopbarShowsSavedParishOnSettingsError(t *testing.T) {
+	h := newTestHandler(t, time.Now())
+
+	body := postSettings(t, h, url.Values{
+		"parish_name": {"Nowa nazwa"},
+		"address":     {strings.Repeat("ś", maxSettingLength+1)},
+	}).Body.String()
+
+	if want := `<span class="topbar-parish">` + settings.DefaultParishName + `</span>`; !strings.Contains(body, want) {
+		t.Errorf("top bar does not show the saved parish (%q)", want)
+	}
+}
+
+func TestStartPageShowsLogo(t *testing.T) {
+	body := getHome(t, newTestHandler(t, time.Now()), "/").Body.String()
+
+	if want := `<img class="start-logo" src="/static/logo.svg" width="88" height="88" alt="">`; !strings.Contains(body, want) {
+		t.Errorf("start page does not contain %q", want)
+	}
+}
+
+func TestLogo(t *testing.T) {
+	router := chi.NewRouter()
+	RegisterRoutes(router, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/static/logo.svg", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got, want := rec.Header().Get("Content-Type"), "image/svg+xml"; got != want {
+		t.Errorf("Content-Type = %q, want %q", got, want)
+	}
+	if !strings.Contains(rec.Body.String(), `fill="#7A1F2B"`) {
+		t.Error("logo does not use the accent colour of the app icon")
 	}
 }

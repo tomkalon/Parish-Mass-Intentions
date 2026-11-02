@@ -23,6 +23,8 @@ type formView struct {
 	Time            string
 	Content         string
 	IsOutsideParish bool
+	IsGregorian     bool
+	IsDeceased      bool
 	Errors          map[string]string
 	EditID          int
 

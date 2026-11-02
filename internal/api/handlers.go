@@ -100,7 +100,7 @@ func (h *intentionHandler) put(w http.ResponseWriter, r *http.Request) {
 
 	intention.Apply(input)
 
-	err = h.db.Save(&intention).Error
+	err = intentions.Save(h.db, &intention)
 	if err != nil {
 		log.Printf("error saving intention: %d, %v", intention.ID, err)
 		http.Error(w, "error saving intention", http.StatusInternalServerError)
@@ -120,6 +120,8 @@ func (h *intentionHandler) patch(w http.ResponseWriter, r *http.Request) {
 		MassAt:          intention.MassAt.In(intentions.TimeZone).Format(intentions.MassAtLayout),
 		Content:         intention.Content,
 		IsOutsideParish: intention.IsOutsideParish,
+		IsGregorian:     intention.IsGregorian,
+		IsDeceased:      intention.IsDeceased,
 	}
 
 	err := json.NewDecoder(r.Body).Decode(&input)
@@ -137,7 +139,7 @@ func (h *intentionHandler) patch(w http.ResponseWriter, r *http.Request) {
 
 	intention.Apply(input)
 
-	err = h.db.Save(&intention).Error
+	err = intentions.Save(h.db, &intention)
 	if err != nil {
 		log.Printf("error saving intention: %d, %v", intention.ID, err)
 		http.Error(w, "error saving intention", http.StatusInternalServerError)
@@ -181,7 +183,7 @@ func (h *intentionHandler) create(w http.ResponseWriter, r *http.Request) {
 	var intention intentions.Intention
 	intention.Apply(input)
 
-	err = h.db.Create(&intention).Error
+	err = intentions.Save(h.db, &intention)
 	if err != nil {
 		log.Printf("error creating intention: %v", err)
 		http.Error(w, "error creating intention", http.StatusInternalServerError)

@@ -355,12 +355,12 @@ func printableMasses(masses []massView) []printedMass {
 		var printed []printedIntention
 		for _, intention := range mass.Parish {
 			if !intention.IsPlaceholder {
-				printed = append(printed, printedIntention{content: intention.Content})
+				printed = append(printed, printedIntention{content: printedContent(intention)})
 			}
 		}
 		for _, intention := range mass.Outside {
 			if !intention.IsPlaceholder {
-				printed = append(printed, printedIntention{content: intention.Content, outside: true})
+				printed = append(printed, printedIntention{content: printedContent(intention), outside: true})
 			}
 		}
 
@@ -370,6 +370,18 @@ func printableMasses(masses []massView) []printedMass {
 	}
 
 	return result
+}
+
+func printedContent(intention intentionView) string {
+	content := intention.Content
+	if intention.IsDeceased && !strings.HasPrefix(content, "+") {
+		content = "+ " + content
+	}
+	if intention.IsGregorian && !strings.Contains(strings.ToLower(content), "(greg.)") {
+		content += " (greg.)"
+	}
+
+	return content
 }
 
 func layoutMasses(block *pdfBlock, masses []printedMass, x, width, top float64, style pdfStyle, m textMeasurer) float64 {

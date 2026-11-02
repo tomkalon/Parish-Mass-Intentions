@@ -1,0 +1,7 @@
+{{define "topbar" -}}
+<a class="topbar-brand" href="/">
+			<img src="/static/logo.svg" width="28" height="28" alt="">
+			<span>Intencje mszalne</span>
+		</a>
+		<span class="topbar-parish">{{.ParishName}}{{with .Address}} · {{.}}{{end}}</span>
+{{- end}}

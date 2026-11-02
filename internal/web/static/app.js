@@ -43,3 +43,18 @@ if (form) {
 		}
 	});
 }
+
+const deceased = document.querySelector('.panel input[name="deceased"]');
+const gregorian = document.querySelector('.panel input[name="gregorian"]');
+if (deceased && gregorian) {
+	gregorian.addEventListener("change", () => {
+		if (gregorian.checked) {
+			deceased.checked = true;
+		}
+	});
+	deceased.addEventListener("change", () => {
+		if (!deceased.checked) {
+			gregorian.checked = false;
+		}
+	});
+}

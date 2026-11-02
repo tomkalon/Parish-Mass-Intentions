@@ -4,6 +4,7 @@ import (
 	"log"
 	"path/filepath"
 
+	"go-parafia/internal/backup"
 	"go-parafia/internal/database"
 	"go-parafia/internal/web"
 )
@@ -19,7 +20,19 @@ func main() {
 		log.Fatal(err)
 	}
 
-	err = run(newRouter(db, web.Options{DataDir: dir, SaveFile: saveFileDialog()}), dir)
+	backups, err := backup.Load(db, filepath.Join(dir, "kopia.json"))
+	if err != nil {
+		log.Fatalf("error loading backup settings: %v", err)
+	}
+
+	opts := web.Options{
+		DataDir:   dir,
+		SaveFile:  saveFileDialog(),
+		Backups:   backups,
+		ChooseDir: chooseDirDialog(),
+	}
+
+	err = run(newRouter(db, opts), dir, backups)
 	if err != nil {
 		log.Fatalf("error running application: %v", err)
 	}

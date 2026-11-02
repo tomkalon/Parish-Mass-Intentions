@@ -22,6 +22,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"gorm.io/gorm"
 
+	"go-parafia/internal/backup"
 	"go-parafia/internal/calendar"
 	"go-parafia/internal/gcatholic"
 	"go-parafia/internal/intentions"
@@ -53,11 +54,15 @@ type handler struct {
 	fetchCelebrations func(ctx context.Context, year int) ([]gcatholic.Celebration, error)
 	dataDir           string
 	saveFile          func(defaultName string) (string, error)
+	backups           *backup.Backups
+	chooseDir         func(current string) (string, error)
 }
 
 type Options struct {
-	DataDir  string
-	SaveFile func(defaultName string) (string, error)
+	DataDir   string
+	SaveFile  func(defaultName string) (string, error)
+	Backups   *backup.Backups
+	ChooseDir func(current string) (string, error)
 }
 
 func RegisterRoutes(router chi.Router, db *gorm.DB, opts Options) {
@@ -69,29 +74,41 @@ func RegisterRoutes(router chi.Router, db *gorm.DB, opts Options) {
 		fetchCelebrations: func(ctx context.Context, year int) ([]gcatholic.Celebration, error) {
 			return gcatholic.Fetch(ctx, client, gcatholic.BaseURL, year)
 		},
-		dataDir:  opts.DataDir,
-		saveFile: opts.SaveFile,
+		dataDir:   opts.DataDir,
+		saveFile:  opts.SaveFile,
+		backups:   opts.Backups,
+		chooseDir: opts.ChooseDir,
+	}
+	if h.backups == nil {
+		h.backups, _ = backup.Load(db, "")
 	}
 
+	router.Group(func(r chi.Router) {
+		r.Use(h.backups.TrackChanges)
+
+		r.Post("/intentions", h.create)
+		r.Post("/intentions/{id}", h.update)
+		r.Post("/intentions/{id}/delete", h.delete)
+		r.Post("/slots", h.createSlots)
+		r.Post("/clear", h.clearWeek)
+		r.Post("/days/{date}", h.saveFeast)
+		r.Post("/feasts/import", h.importFeasts)
+		r.Post("/settings", h.saveSettings)
+		r.Post("/settings/schedules", h.saveSchedule)
+		r.Post("/settings/schedules/restore", h.restoreSchedules)
+		r.Post("/settings/schedules/{id}", h.saveSchedule)
+		r.Post("/settings/schedules/{id}/delete", h.deleteSchedule)
+		r.Post("/settings/import/confirm", h.confirmImport)
+	})
+
 	router.Get("/", h.home)
-	router.Post("/intentions", h.create)
-	router.Post("/intentions/{id}", h.update)
-	router.Post("/intentions/{id}/delete", h.delete)
-	router.Post("/slots", h.createSlots)
-	router.Post("/clear", h.clearWeek)
-	router.Post("/days/{date}", h.saveFeast)
-	router.Post("/feasts/import", h.importFeasts)
 	router.Get("/settings", h.settingsPage)
-	router.Post("/settings", h.saveSettings)
 	router.Get("/settings/schedules/new", h.scheduleForm)
 	router.Get("/settings/schedules/{id}", h.scheduleForm)
-	router.Post("/settings/schedules", h.saveSchedule)
-	router.Post("/settings/schedules/restore", h.restoreSchedules)
-	router.Post("/settings/schedules/{id}", h.saveSchedule)
-	router.Post("/settings/schedules/{id}/delete", h.deleteSchedule)
 	router.Post("/settings/export", h.exportData)
 	router.Post("/settings/import", h.importData)
-	router.Post("/settings/import/confirm", h.confirmImport)
+	router.Post("/settings/backup/dir", h.setBackupDir)
+	router.Post("/backup", h.runBackup)
 	router.Get("/pdf", h.pdf)
 	router.Get("/print", h.printPreview)
 	router.Handle("/static/*", http.FileServerFS(staticFS))
@@ -321,9 +338,13 @@ func (h *handler) settingsPage(w http.ResponseWriter, r *http.Request) {
 	if path := query.Get("exported"); path != "" {
 		view.Notice = exportedNotice(path)
 	}
-	if backup := query.Get("imported"); backup != "" {
-		view.Notice = importedNotice(backup, h.dataDir)
+	if backupName := query.Get("imported"); backupName != "" {
+		view.Notice = importedNotice(backupName, h.dataDir)
 	}
+	if notice := backupDirNotice(query.Get("backup_dir")); notice != "" {
+		view.Notice = notice
+	}
+	view.BackupError = backupErrorMessage(query.Get("backup_error"), view.BackupDir)
 
 	closeURL := settingsURL(view.Week, false) + "#porzadki"
 	switch {
@@ -381,6 +402,11 @@ func (h *handler) settingsView(w http.ResponseWriter, setting settings.Setting, 
 	view.Topbar = h.topbar()
 	view.DataDir = h.dataDir
 
+	state := h.backups.State()
+	view.BackupDir = state.Dir
+	view.BackupLabel = backupLabel(state, h.now())
+	view.CanChooseDir = h.chooseDir != nil
+
 	return view, true
 }
 
@@ -390,7 +416,7 @@ func (h *handler) topbar() topbarView {
 		log.Printf("error loading settings: %v", err)
 	}
 
-	return newTopbarView(setting)
+	return newTopbarView(setting, h.backups.State(), h.now())
 }
 
 func (h *handler) scheduleForm(w http.ResponseWriter, r *http.Request) {
@@ -903,7 +929,7 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 		log.Printf("error loading settings: %v", err)
 	}
 	view.SelectedScheduleID = setting.SelectedScheduleID
-	view.Topbar = newTopbarView(setting)
+	view.Topbar = newTopbarView(setting, h.backups.State(), h.now())
 
 	if state.form != nil {
 		view.Form = state.form

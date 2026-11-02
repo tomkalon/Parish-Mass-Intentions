@@ -21,6 +21,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"gorm.io/gorm"
 
+	"go-parafia/internal/backup"
 	"go-parafia/internal/calendar"
 	"go-parafia/internal/gcatholic"
 	"go-parafia/internal/intentions"
@@ -56,6 +57,11 @@ func newTestHandler(t *testing.T, now time.Time) *handler {
 		}
 	}
 
+	backups, err := backup.Load(db, filepath.Join(t.TempDir(), "kopia.json"))
+	if err != nil {
+		t.Fatalf("loading backups: %v", err)
+	}
+
 	return &handler{
 		db:       db,
 		now:      func() time.Time { return now },
@@ -64,6 +70,7 @@ func newTestHandler(t *testing.T, now time.Time) *handler {
 			return nil, errors.New("no network in tests")
 		},
 		dataDir: t.TempDir(),
+		backups: backups,
 	}
 }
 

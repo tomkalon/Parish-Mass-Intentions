@@ -59,6 +59,11 @@ type settingsView struct {
 
 	ImportError string
 
+	BackupDir    string
+	BackupLabel  string
+	BackupError  string
+	CanChooseDir bool
+
 	Schedules      []scheduleItem
 	NewScheduleURL string
 	RestoreURL     string

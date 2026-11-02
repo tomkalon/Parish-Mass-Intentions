@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -16,6 +17,8 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+
+	"go-parafia/internal/backup"
 )
 
 func prepareDataDir() (string, error) {
@@ -45,7 +48,13 @@ func saveFileDialog() func(string) (string, error) {
 	return window.saveFile
 }
 
-func run(router http.Handler, dataDir string) error {
+func chooseDirDialog() func(string) (string, error) {
+	return window.chooseDir
+}
+
+func run(router http.Handler, dataDir string, backups *backup.Backups) error {
+	window.backups = backups
+
 	return wails.Run(&options.App{
 		Title:            "Go Parafia – intencje mszalne",
 		Width:            1280,
@@ -56,6 +65,7 @@ func run(router http.Handler, dataDir string) error {
 		AssetServer:      &assetserver.Options{Handler: router},
 		Windows:          &windows.Options{WebviewUserDataPath: filepath.Join(dataDir, "webview")},
 		OnStartup:        window.startup,
+		OnBeforeClose:    window.beforeClose,
 		SingleInstanceLock: &options.SingleInstanceLock{
 			UniqueId:               "go-parafia-b6a1c0e4-intencje",
 			OnSecondInstanceLaunch: window.bringToFront,
@@ -64,8 +74,9 @@ func run(router http.Handler, dataDir string) error {
 }
 
 type desktopWindow struct {
-	mu  sync.Mutex
-	ctx context.Context
+	mu      sync.Mutex
+	ctx     context.Context
+	backups *backup.Backups
 }
 
 func (w *desktopWindow) startup(ctx context.Context) {
@@ -85,12 +96,9 @@ func (w *desktopWindow) bringToFront(options.SecondInstanceData) {
 }
 
 func (w *desktopWindow) saveFile(name string) (string, error) {
-	w.mu.Lock()
-	ctx := w.ctx
-	w.mu.Unlock()
-
-	if ctx == nil {
-		return "", errors.New("window is not ready")
+	ctx, err := w.context()
+	if err != nil {
+		return "", err
 	}
 
 	return runtime.SaveFileDialog(ctx, runtime.SaveDialogOptions{
@@ -98,4 +106,52 @@ func (w *desktopWindow) saveFile(name string) (string, error) {
 		DefaultFilename: name,
 		Filters:         []runtime.FileFilter{{DisplayName: "Kopia danych Go Parafia (*.db)", Pattern: "*.db"}},
 	})
+}
+
+func (w *desktopWindow) context() (context.Context, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if w.ctx == nil {
+		return nil, errors.New("window is not ready")
+	}
+
+	return w.ctx, nil
+}
+
+func (w *desktopWindow) chooseDir(current string) (string, error) {
+	ctx, err := w.context()
+	if err != nil {
+		return "", err
+	}
+
+	if info, err := os.Stat(current); err != nil || !info.IsDir() {
+		current = ""
+	}
+
+	return runtime.OpenDirectoryDialog(ctx, runtime.OpenDialogOptions{
+		Title:            "Folder kopii danych",
+		DefaultDirectory: current,
+	})
+}
+
+func (w *desktopWindow) beforeClose(ctx context.Context) bool {
+	err := w.backups.RunIfPending()
+	if err == nil {
+		return false
+	}
+	log.Printf("error making backup before closing: %v", err)
+
+	answer, dialogErr := runtime.MessageDialog(ctx, runtime.MessageDialogOptions{
+		Type:          runtime.QuestionDialog,
+		Title:         "Kopia danych",
+		Message:       fmt.Sprintf("Nie udało się zapisać kopii danych w folderze:\n%s\n\n%v\n\nZamknąć program mimo to?", w.backups.State().Dir, err),
+		DefaultButton: "No",
+	})
+	if dialogErr != nil {
+		log.Printf("error showing close dialog: %v", dialogErr)
+		return false
+	}
+
+	return answer != "Yes"
 }

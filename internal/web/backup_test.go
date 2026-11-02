@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"go-parafia/internal/backup"
 	"go-parafia/internal/database"
 	"go-parafia/internal/intentions"
 	"go-parafia/internal/settings"
@@ -421,5 +422,325 @@ func TestBackupRoutes(t *testing.T) {
 	backups, _ := filepath.Glob(filepath.Join(dir, "data-*.db.bak"))
 	if len(backups) != 1 {
 		t.Errorf("backups in the data folder = %v, want 1", backups)
+	}
+}
+
+func TestBackupLabel(t *testing.T) {
+	now := time.Date(2026, 11, 2, 23, 0, 0, 0, intentions.TimeZone)
+	at := func(month time.Month, day, hour, minute int, year int) time.Time {
+		return time.Date(year, month, day, hour, minute, 0, 0, intentions.TimeZone)
+	}
+
+	tests := []struct {
+		name  string
+		state backup.State
+		want  string
+	}{
+		{name: "no folder", state: backup.State{}, want: "folder kopii nie jest wybrany"},
+		{name: "never backed up", state: backup.State{Dir: "/kopie"}, want: "brak kopii"},
+		{name: "changed since", state: backup.State{Dir: "/kopie", LastBackup: at(11, 2, 9, 0, 2026), LastChange: at(11, 2, 10, 0, 2026)}, want: "zmiany bez kopii"},
+		{name: "today", state: backup.State{Dir: "/kopie", LastBackup: at(11, 2, 22, 50, 2026)}, want: "kopia: dziś, 22:50"},
+		{name: "this year", state: backup.State{Dir: "/kopie", LastBackup: at(10, 30, 8, 5, 2026)}, want: "kopia: 30.10, 8:05"},
+		{name: "last year", state: backup.State{Dir: "/kopie", LastBackup: at(12, 31, 18, 0, 2025)}, want: "kopia: 31.12.2025, 18:00"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := backupLabel(tt.state, now); got != tt.want {
+				t.Errorf("backupLabel = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTopbarShowsBackupButton(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	for _, body := range []string{
+		getWeek(t, h, "/?week=2026-11-02").Body.String(),
+		getSettings(t, h, "/settings").Body.String(),
+	} {
+		for _, want := range []string{
+			`<form class="topbar-backup" method="post" action="/backup">`,
+			`<span class="backup-status">folder kopii nie jest wybrany</span>`,
+			`<button class="button-small" type="submit">Wykonaj kopię danych</button>`,
+		} {
+			if !strings.Contains(body, want) {
+				t.Errorf("page does not contain %q", want)
+			}
+		}
+	}
+
+	err := h.backups.SetDir(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `<span class="backup-status is-pending">brak kopii</span>`; !strings.Contains(getWeek(t, h, "/?week=2026-11-02").Body.String(), want) {
+		t.Errorf("week page does not contain %q", want)
+	}
+}
+
+func postBackup(t *testing.T, h *handler, referer string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodPost, "/backup", nil)
+	req.Header.Set("Referer", referer)
+	rec := httptest.NewRecorder()
+	h.runBackup(rec, req)
+
+	return rec
+}
+
+func TestRunBackupWithoutFolder(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	rec := postBackup(t, h, "http://example.com/?week=2026-11-04")
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	location := rec.Header().Get("Location")
+	if want := "/settings?backup_error=nodir&week=2026-11-02"; location != want {
+		t.Fatalf("Location = %q, want %q", location, want)
+	}
+	if want := "<p>Kopia danych: Najpierw wybierz folder kopii w sekcji „Kopia danych”.</p>"; !strings.Contains(getSettings(t, h, location).Body.String(), want) {
+		t.Errorf("settings page does not contain %q", want)
+	}
+}
+
+func TestRunBackup(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedIntention(t, h.db, "2026-11-02 18:00", false, "+ Jan Kowalski")
+	folder := t.TempDir()
+	err := h.backups.SetDir(folder)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		referer string
+		want    string
+	}{
+		{referer: "http://example.com/?week=2026-11-09&edit=3", want: "/?week=2026-11-09&edit=3"},
+		{referer: "http://example.com/settings/schedules/2?week=2026-11-09", want: "/settings/schedules/2?week=2026-11-09"},
+		{referer: "http://inna-strona.pl/oszustwo", want: "/"},
+		{referer: "", want: "/"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.referer, func(t *testing.T) {
+			rec := postBackup(t, h, tt.referer)
+
+			if rec.Code != http.StatusSeeOther {
+				t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+			}
+			if got := rec.Header().Get("Location"); got != tt.want {
+				t.Errorf("Location = %q, want %q", got, tt.want)
+			}
+		})
+	}
+
+	summary, err := database.PrepareImport(filepath.Join(folder, backup.FileName))
+	if err != nil || summary.Intentions != 1 {
+		t.Errorf("backup file: %+v, %v; want 1 intention", summary, err)
+	}
+	if h.backups.Pending() {
+		t.Error("still pending after the backup")
+	}
+}
+
+func TestRunBackupFolderGone(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	folder := filepath.Join(t.TempDir(), "Google Drive")
+	err := os.Mkdir(folder, 0o755)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = h.backups.SetDir(folder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = os.Remove(folder)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec := postBackup(t, h, "http://example.com/settings")
+
+	location := rec.Header().Get("Location")
+	if want := "/settings?backup_error=failed"; location != want {
+		t.Fatalf("Location = %q, want %q", location, want)
+	}
+	if want := "Nie udało się zapisać kopii w folderze " + folder + "."; !strings.Contains(getSettings(t, h, location).Body.String(), want) {
+		t.Errorf("settings page does not contain %q", want)
+	}
+}
+
+func TestSetBackupDirByTyping(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	folder := t.TempDir()
+
+	page := getSettings(t, h, "/settings").Body.String()
+	if want := `<input class="input" type="text" id="backup-dir" name="dir" value=""`; !strings.Contains(page, want) {
+		t.Errorf("settings page without a dialog does not contain %q", want)
+	}
+
+	rec := postForm(t, h.setBackupDir, "/settings/backup/dir", url.Values{"week": {"2026-11-02"}, "dir": {"  " + folder + " "}})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	location := rec.Header().Get("Location")
+	if want := "/settings?backup_dir=set&week=2026-11-02"; location != want {
+		t.Errorf("Location = %q, want %q", location, want)
+	}
+	if got := h.backups.State().Dir; got != folder {
+		t.Errorf("dir = %q, want %q", got, folder)
+	}
+	page = getSettings(t, h, location).Body.String()
+	for _, want := range []string{
+		`<p class="notice" role="status">Zapisano folder kopii.</p>`,
+		`Folder: <code class="path">` + folder + `</code> · brak kopii`,
+		`<button class="link-button" type="submit">Wyłącz</button>`,
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("settings page does not contain %q", want)
+		}
+	}
+
+	missing := filepath.Join(folder, "brak")
+	for _, tt := range []struct {
+		dir     string
+		message string
+	}{
+		{dir: missing, message: "Nie ma takiego folderu: " + missing},
+		{dir: "", message: "Wpisz ścieżkę folderu."},
+	} {
+		rec = postForm(t, h.setBackupDir, "/settings/backup/dir", url.Values{"dir": {tt.dir}})
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Errorf("dir %q: status = %d, want %d", tt.dir, rec.Code, http.StatusUnprocessableEntity)
+		}
+		body := rec.Body.String()
+		if want := "<p>Kopia danych: " + tt.message + "</p>"; !strings.Contains(body, want) {
+			t.Errorf("dir %q: body does not contain %q", tt.dir, want)
+		}
+		if want := `name="dir" value="` + tt.dir + `"`; !strings.Contains(body, want) {
+			t.Errorf("dir %q: typed value not kept, want %q", tt.dir, want)
+		}
+	}
+	if got := h.backups.State().Dir; got != folder {
+		t.Errorf("dir = %q after rejected input, want %q", got, folder)
+	}
+
+	rec = postForm(t, h.setBackupDir, "/settings/backup/dir", url.Values{"off": {"1"}})
+	if got, want := rec.Header().Get("Location"), "/settings?backup_dir=off"; got != want {
+		t.Errorf("turning off: Location = %q, want %q", got, want)
+	}
+	if got := h.backups.State().Dir; got != "" {
+		t.Errorf("dir = %q after turning off, want empty", got)
+	}
+}
+
+func TestSetBackupDirWithDialog(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	first, second := t.TempDir(), t.TempDir()
+	err := h.backups.SetDir(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var current string
+	answer := second
+	h.chooseDir = func(dir string) (string, error) {
+		current = dir
+		return answer, nil
+	}
+
+	page := getSettings(t, h, "/settings").Body.String()
+	if !strings.Contains(page, `<button class="button" type="submit">Wybierz folder…</button>`) || strings.Contains(page, `name="dir"`) {
+		t.Error("settings page with a dialog should show „Wybierz folder…” instead of a text field")
+	}
+
+	rec := postForm(t, h.setBackupDir, "/settings/backup/dir", url.Values{"week": {"2026-11-02"}})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if current != first {
+		t.Errorf("dialog opened at %q, want the current folder %q", current, first)
+	}
+	if got := h.backups.State().Dir; got != second {
+		t.Errorf("dir = %q, want %q", got, second)
+	}
+
+	answer = ""
+	rec = postForm(t, h.setBackupDir, "/settings/backup/dir", url.Values{"week": {"2026-11-02"}})
+	if got, want := rec.Header().Get("Location"), "/settings?week=2026-11-02"; got != want {
+		t.Errorf("cancelled: Location = %q, want %q", got, want)
+	}
+	if got := h.backups.State().Dir; got != second {
+		t.Errorf("dir = %q after cancelling, want %q", got, second)
+	}
+
+	h.chooseDir = func(string) (string, error) { return "", errors.New("window is not ready") }
+	if rec := postForm(t, h.setBackupDir, "/settings/backup/dir", url.Values{}); rec.Code != http.StatusInternalServerError {
+		t.Errorf("dialog error: status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestRoutesTrackChanges(t *testing.T) {
+	db := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone)).db
+	backups, err := backup.Load(db, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = backups.SetDir(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	router := chi.NewRouter()
+	RegisterRoutes(router, db, Options{DataDir: t.TempDir(), Backups: backups})
+	serve := func(method, target string, form url.Values) int {
+		var body *strings.Reader
+		if form != nil {
+			body = strings.NewReader(form.Encode())
+		} else {
+			body = strings.NewReader("")
+		}
+		req := httptest.NewRequest(method, target, body)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	if serve(http.MethodPost, "/backup", nil) != http.StatusSeeOther || backups.Pending() {
+		t.Fatal("first backup failed")
+	}
+
+	for _, request := range []struct{ method, target string }{
+		{http.MethodGet, "/?week=2026-11-02"},
+		{http.MethodGet, "/settings"},
+		{http.MethodGet, "/pdf?week=2026-11-02"},
+		{http.MethodPost, "/settings/export"},
+		{http.MethodPost, "/backup"},
+	} {
+		serve(request.method, request.target, url.Values{})
+		if backups.Pending() {
+			t.Errorf("%s %s marked the data as changed", request.method, request.target)
+		}
+	}
+
+	if code := serve(http.MethodPost, "/intentions", url.Values{"week": {"2026-11-02"}, "day": {"2026-11-03"}, "time": {"18:00"}, "content": {""}}); code != http.StatusUnprocessableEntity {
+		t.Fatalf("invalid intention: status = %d, want %d", code, http.StatusUnprocessableEntity)
+	}
+	if backups.Pending() {
+		t.Error("a rejected form marked the data as changed")
+	}
+
+	if code := serve(http.MethodPost, "/intentions", url.Values{"week": {"2026-11-02"}, "day": {"2026-11-03"}, "time": {"18:00"}, "content": {"+ Jan Kowalski"}}); code != http.StatusSeeOther {
+		t.Fatalf("saving intention: status = %d, want %d", code, http.StatusSeeOther)
+	}
+	if !backups.Pending() {
+		t.Error("saving an intention did not mark the data as changed")
 	}
 }

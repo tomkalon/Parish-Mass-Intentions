@@ -16,6 +16,7 @@ func newRouter(db *gorm.DB, opts web.Options) http.Handler {
 	router.Use(middleware.RedirectSlashes)
 
 	router.Route("/api", func(r chi.Router) {
+		r.Use(opts.Backups.TrackChanges)
 		api.RegisterRoutes(r, db)
 	})
 

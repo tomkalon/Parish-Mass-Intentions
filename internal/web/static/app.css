@@ -54,15 +54,64 @@ body {
 /* Top bar */
 
 .topbar {
-	display: flex;
+	display: grid;
+	grid-template-columns: 1fr minmax(0, auto) 1fr;
 	align-items: center;
-	justify-content: center;
 	gap: 16px;
 	min-height: 48px;
 	padding: 8px 24px;
 	background: var(--surface);
 	border-bottom: 1px solid var(--line);
 	font-size: 14px;
+}
+
+.topbar-main {
+	display: flex;
+	grid-column: 2;
+	align-items: center;
+	justify-content: center;
+	gap: 16px;
+	min-width: 0;
+}
+
+.topbar-backup {
+	display: flex;
+	grid-column: 3;
+	justify-self: end;
+	align-items: center;
+	gap: 10px;
+	margin: 0;
+}
+
+.topbar-backup .button-small {
+	min-height: 32px;
+	margin-left: 0;
+	background: var(--surface);
+	font-family: inherit;
+	font-size: 14px;
+	cursor: pointer;
+}
+
+.backup-status {
+	color: var(--muted);
+	font-size: 13px;
+	white-space: nowrap;
+}
+
+.backup-status.is-pending {
+	color: var(--accent);
+	font-weight: 600;
+}
+
+.backup-status.is-pending::before {
+	content: "";
+	display: inline-block;
+	width: 8px;
+	height: 8px;
+	margin-right: 6px;
+	border-radius: 50%;
+	background: var(--accent);
+	vertical-align: 1px;
 }
 
 .topbar-brand {
@@ -1073,6 +1122,95 @@ h1 {
 
 .schedule-actions .delete-link {
 	margin-left: auto;
+}
+
+.backup {
+	margin-top: 18px;
+}
+
+.backup .hint {
+	margin: 0;
+}
+
+.backup-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.backup-actions form {
+	margin: 0;
+}
+
+.settings-subheading {
+	margin: 8px 0 0;
+	font-size: 15px;
+	font-weight: 700;
+}
+
+.backup-dir {
+	margin: 0;
+	font-size: 15px;
+}
+
+.backup-dir-form {
+	display: flex;
+	flex: 1;
+	gap: 8px;
+}
+
+.backup-dir-form .input {
+	flex: 1;
+	min-width: 0;
+}
+
+.link-button {
+	padding: 0 8px;
+	border: 0;
+	background: none;
+	color: var(--danger);
+	font: 600 15px/36px var(--font-ui);
+	text-decoration: underline;
+	text-underline-offset: 3px;
+	cursor: pointer;
+}
+
+.link-button:hover {
+	color: var(--danger-hover);
+}
+
+.backup-actions {
+	align-items: center;
+}
+
+.file-button {
+	cursor: pointer;
+}
+
+.file-button:has(input:focus-visible) {
+	outline: 3px solid var(--accent);
+	outline-offset: 2px;
+}
+
+.path {
+	font-family: Consolas, "Courier New", monospace;
+	font-size: 13px;
+	overflow-wrap: anywhere;
+}
+
+.filename {
+	font-family: Consolas, "Courier New", monospace;
+	font-size: 13px;
+	white-space: nowrap;
+}
+
+.visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
 }
 
 .app-credit {

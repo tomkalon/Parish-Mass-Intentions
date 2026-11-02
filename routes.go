@@ -11,15 +11,16 @@ import (
 	"go-parafia/internal/web"
 )
 
-func newRouter(db *gorm.DB) http.Handler {
+func newRouter(db *gorm.DB, opts web.Options) http.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.RedirectSlashes)
 
 	router.Route("/api", func(r chi.Router) {
+		r.Use(opts.Backups.TrackChanges)
 		api.RegisterRoutes(r, db)
 	})
 
-	web.RegisterRoutes(router, db)
+	web.RegisterRoutes(router, db, opts)
 
 	return router
 }

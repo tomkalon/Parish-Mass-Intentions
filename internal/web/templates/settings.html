@@ -21,6 +21,21 @@
 		{{- if .Saved}}
 		<p class="notice" role="status">Zapisano.</p>
 		{{- end}}
+		{{- with .Notice}}
+		<p class="notice" role="status">{{.}}</p>
+		{{- end}}
+		{{- with .ImportError}}
+		<div class="form-alert" role="alert">
+			<span class="form-alert-icon" aria-hidden="true">!</span>
+			<p>Nie zaimportowano. {{.}}</p>
+		</div>
+		{{- end}}
+		{{- with .BackupError}}
+		<div class="form-alert" role="alert">
+			<span class="form-alert-icon" aria-hidden="true">!</span>
+			<p>Kopia danych: {{.}}</p>
+		</div>
+		{{- end}}
 		{{- if .Errors}}
 		<div class="form-alert" role="alert">
 			<span class="form-alert-icon" aria-hidden="true">!</span>
@@ -87,6 +102,53 @@
 				<a class="button" href="{{.NewScheduleURL}}">+ Dodaj porządek</a>
 				<a class="delete-link" href="{{.RestoreURL}}">Przywróć domyślne</a>
 			</div>
+		</section>
+
+		<section class="settings-section backup" id="kopia" aria-labelledby="backup-title">
+			<h2 class="settings-heading" id="backup-title">Kopia danych</h2>
+
+			<h3 class="settings-subheading">Automatyczna kopia (np. Google Drive, OneDrive)</h3>
+			<p class="hint">Przycisk „Wykonaj kopię danych” na górnym pasku i zamknięcie programu zapisują plik <code class="filename">intencje-kopia.db</code> w wybranym folderze (za każdym razem nadpisywany). Wybierz folder synchronizowany z chmurą, a kopia trafi też do chmury.</p>
+			<p class="backup-dir">Folder: {{if .BackupDir}}<code class="path">{{.BackupDir}}</code> · {{.BackupLabel}}{{else}}nie wybrano{{end}}</p>
+			<div class="backup-actions">
+				{{- if .CanChooseDir}}
+				<form method="post" action="/settings/backup/dir">
+					<input type="hidden" name="week" value="{{.Week}}">
+					<button class="button" type="submit">Wybierz folder…</button>
+				</form>
+				{{- else}}
+				<form class="backup-dir-form" method="post" action="/settings/backup/dir">
+					<input type="hidden" name="week" value="{{.Week}}">
+					<label class="visually-hidden" for="backup-dir">Folder kopii</label>
+					<input class="input" type="text" id="backup-dir" name="dir" value="{{.BackupDir}}" placeholder="np. C:\Users\…\Google Drive\Parafia">
+					<button class="button" type="submit">Zapisz folder</button>
+				</form>
+				{{- end}}
+				{{- if .BackupDir}}
+				<form method="post" action="/settings/backup/dir">
+					<input type="hidden" name="week" value="{{.Week}}">
+					<input type="hidden" name="off" value="1">
+					<button class="link-button" type="submit">Wyłącz</button>
+				</form>
+				{{- end}}
+			</div>
+
+			<h3 class="settings-subheading">Eksport i import</h3>
+			<p class="hint">Eksport zapisuje w jednym pliku wszystkie dane programu: intencje, święta, ustawienia i porządki mszy. Import zastępuje nimi obecne dane. Przed zamianą program zapyta o potwierdzenie i zachowa kopię obecnych danych (plik .bak).</p>
+			<div class="backup-actions">
+				<form method="post" action="/settings/export">
+					<input type="hidden" name="week" value="{{.Week}}">
+					<button class="button" type="submit">Eksportuj dane…</button>
+				</form>
+				<form method="post" action="/settings/import" enctype="multipart/form-data">
+					<input type="hidden" name="week" value="{{.Week}}">
+					<label class="button file-button">Importuj dane…<input class="visually-hidden" type="file" name="file" accept=".db,.bak" required data-autosubmit></label>
+					<noscript><button class="button" type="submit">Wczytaj plik</button></noscript>
+				</form>
+			</div>
+			{{- with .DataDir}}
+			<p class="hint">Folder danych (tu są kopie .bak sprzed importu): <code class="path">{{.}}</code></p>
+			{{- end}}
 		</section>
 
 		<p class="app-credit">Go Parafia · autor: Tomasz Kaliński, Gemma It Solutions</p>

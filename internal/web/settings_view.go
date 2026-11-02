@@ -54,6 +54,15 @@ type settingsView struct {
 	Kinds      []kindOption
 	Errors     map[string]string
 	Saved      bool
+	Notice     string
+	DataDir    string
+
+	ImportError string
+
+	BackupDir    string
+	BackupLabel  string
+	BackupError  string
+	CanChooseDir bool
 
 	Schedules      []scheduleItem
 	NewScheduleURL string

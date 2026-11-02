@@ -21,6 +21,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"gorm.io/gorm"
 
+	"go-parafia/internal/backup"
 	"go-parafia/internal/calendar"
 	"go-parafia/internal/gcatholic"
 	"go-parafia/internal/intentions"
@@ -56,6 +57,11 @@ func newTestHandler(t *testing.T, now time.Time) *handler {
 		}
 	}
 
+	backups, err := backup.Load(db, filepath.Join(t.TempDir(), "kopia.json"))
+	if err != nil {
+		t.Fatalf("loading backups: %v", err)
+	}
+
 	return &handler{
 		db:       db,
 		now:      func() time.Time { return now },
@@ -63,6 +69,8 @@ func newTestHandler(t *testing.T, now time.Time) *handler {
 		fetchCelebrations: func(context.Context, int) ([]gcatholic.Celebration, error) {
 			return nil, errors.New("no network in tests")
 		},
+		dataDir: t.TempDir(),
+		backups: backups,
 	}
 }
 
@@ -292,7 +300,7 @@ func TestWeekDatabaseError(t *testing.T) {
 
 func TestStaticFiles(t *testing.T) {
 	router := chi.NewRouter()
-	RegisterRoutes(router, nil)
+	RegisterRoutes(router, nil, Options{})
 
 	req := httptest.NewRequest(http.MethodGet, "/static/app.css", nil)
 	rec := httptest.NewRecorder()
@@ -497,7 +505,7 @@ func postToRouter(t *testing.T, db *gorm.DB, path string, form url.Values) *http
 	t.Helper()
 
 	router := chi.NewRouter()
-	RegisterRoutes(router, db)
+	RegisterRoutes(router, db, Options{DataDir: t.TempDir()})
 
 	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -2020,7 +2028,7 @@ func serveRouter(t *testing.T, db *gorm.DB, method, target string, form url.Valu
 	t.Helper()
 
 	router := chi.NewRouter()
-	RegisterRoutes(router, db)
+	RegisterRoutes(router, db, Options{DataDir: t.TempDir()})
 
 	var body io.Reader
 	if form != nil {
@@ -2661,7 +2669,7 @@ func TestStartPageShowsLogo(t *testing.T) {
 
 func TestLogo(t *testing.T) {
 	router := chi.NewRouter()
-	RegisterRoutes(router, nil)
+	RegisterRoutes(router, nil, Options{})
 
 	req := httptest.NewRequest(http.MethodGet, "/static/logo.svg", nil)
 	rec := httptest.NewRecorder()

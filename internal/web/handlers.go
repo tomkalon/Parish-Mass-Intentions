@@ -193,6 +193,14 @@ func (h *handler) week(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		state.feast = &f
+	case query.Get("calendar") != "":
+		year, err := strconv.Atoi(query.Get("calendar"))
+		if err != nil || year < 1000 || year > 9999 {
+			http.Error(w, "nieprawidłowy rok kalendarza, oczekiwano RRRR", http.StatusBadRequest)
+			return
+		}
+
+		state.calendarYear = year
 	}
 
 	state.saved, _ = strconv.Atoi(query.Get("saved"))
@@ -887,12 +895,13 @@ func formErrors(day, massTime string, messages map[string]string) map[string]str
 }
 
 type weekState struct {
-	form        *formView
-	delete      *deleteView
-	feast       *feastView
-	clear       bool
-	saved       int
-	importError string
+	form         *formView
+	delete       *deleteView
+	feast        *feastView
+	clear        bool
+	calendarYear int
+	saved        int
+	importError  string
 }
 
 func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time, state weekState) {
@@ -942,6 +951,18 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 		view.Clear = &c
 	}
 	view.Feast = state.feast
+	if state.calendarYear != 0 {
+		from, to := calendarRange(state.calendarYear)
+		counts, err := intentions.CountByDay(h.db, from, to)
+		if err != nil {
+			log.Printf("error counting intentions for %d: %v", state.calendarYear, err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		c := newCalendarView(state.calendarYear, start, h.now(), counts)
+		view.Calendar = &c
+	}
 	view.ImportError = state.importError
 	markSaved(view.Days, state.saved)
 

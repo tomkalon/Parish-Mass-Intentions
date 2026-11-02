@@ -8,15 +8,28 @@
 	<script src="/static/app.js" defer></script>
 </head>
 <body{{if .Form}} class="has-panel"{{end}}>
-	<header class="topbar"{{if or .Delete .Clear .Feast}} inert{{end}}>
+	<header class="topbar"{{if .HasDialog}} inert{{end}}>
 		{{template "topbar" .Topbar}}
 	</header>
-	<nav class="toolbar" aria-label="Wybór tygodnia"{{if or .Delete .Clear .Feast}} inert{{end}}>
-		<a class="button" href="{{.PrevURL}}">← Poprzedni</a>
-		<a class="button" href="{{.NextURL}}">Następny →</a>
-		<a class="upcoming" href="{{.UpcomingURL}}"{{if .IsUpcoming}} aria-current="true"{{end}}>Nadchodzący tydzień</a>
+	<nav class="toolbar" aria-label="Wybór tygodnia"{{if .HasDialog}} inert{{end}}>
+		<div class="week-pager">
+			<a class="button button-icon" href="{{.PrevURL}}" aria-label="Poprzedni tydzień" title="Poprzedni tydzień">
+				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
+			</a>
+			<a class="button upcoming" href="{{.UpcomingURL}}"{{if .IsUpcoming}} aria-current="true"{{end}}>Nadchodzący tydzień</a>
+			<a class="button button-icon" href="{{.NextURL}}" aria-label="Następny tydzień" title="Następny tydzień">
+				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+			</a>
+		</div>
+		<a class="button toolbar-calendar{{if .Calendar}} is-open{{end}}" href="{{.CalendarURL}}">
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false">
+				<rect x="3.5" y="5" width="17" height="15.5" rx="2"/>
+				<path d="M3.5 10h17M8 3v4M16 3v4M8 14h2M14 14h2M8 17.5h2"/>
+			</svg>
+			Kalendarz
+		</a>
 		<a class="button toolbar-print" href="{{.PrintURL}}">Drukuj / PDF</a>
-		<a class="button button-primary toolbar-add" href="{{.NewURL}}">+ Dodaj intencję</a>
+		<a class="button button-primary toolbar-add" href="{{.NewURL}}" title="Dodaj intencję">+ Intencja</a>
 		<a class="button button-icon" href="{{.SettingsURL}}" aria-label="Ustawienia" title="Ustawienia">
 			<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
 				<g fill="currentColor">
@@ -34,7 +47,7 @@
 		</a>
 	</nav>
 
-	<main{{if or .Delete .Clear .Feast}} inert{{end}}>
+	<main{{if .HasDialog}} inert{{end}}>
 		<h1>INTENCJE MSZY ŚWIĘTYCH – {{.Range}}</h1>
 
 		<div class="week-actions">
@@ -204,6 +217,54 @@
 				<button class="button button-danger" type="submit">Wyczyść tydzień</button>
 				<a class="button" href="{{$.WeekURL}}" data-close autofocus>Anuluj</a>
 			</form>
+		</div>
+	</div>
+	{{- end}}
+
+	{{- with .Calendar}}
+	<div class="dialog-backdrop">
+		<div class="dialog dialog-calendar" role="dialog" aria-modal="true" aria-labelledby="calendar-title">
+			<div class="calendar-header">
+				<a class="button button-icon" href="{{.PrevURL}}" aria-label="Poprzedni rok">
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7"/></svg>
+				</a>
+				<h2 class="calendar-year" id="calendar-title">{{.Year}}</h2>
+				<a class="button button-icon" href="{{.NextURL}}" aria-label="Następny rok">
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 5l7 7-7 7"/></svg>
+				</a>
+				<div class="calendar-legend">
+					<span class="calendar-legend-label">Intencje w dniu:</span>
+					<span class="calendar-day calendar-swatch level-0">0</span>
+					<span class="calendar-day calendar-swatch level-1">1</span>
+					<span class="calendar-day calendar-swatch level-2">2</span>
+					<span class="calendar-day calendar-swatch level-3">3</span>
+					<span class="calendar-day calendar-swatch level-4">4</span>
+					<span class="calendar-day calendar-swatch level-5">5+</span>
+					<span class="calendar-legend-empty"><span class="calendar-day calendar-swatch level-2 has-empty">12</span> msze do uzupełnienia</span>
+				</div>
+				<a class="panel-close" href="{{.CloseURL}}" aria-label="Zamknij kalendarz" data-close{{if not .HasCurrent}} autofocus{{end}}>×</a>
+			</div>
+			<div class="calendar-months">
+				{{- range .Months}}
+				<section class="calendar-month">
+					<h3 class="calendar-month-name">{{.Name}}</h3>
+					<div class="calendar-weekdays" aria-hidden="true">
+						<span>Pn</span><span>Wt</span><span>Śr</span><span>Cz</span><span>Pt</span><span>So</span><span>Nd</span>
+					</div>
+					{{- range .Weeks}}
+					<a class="calendar-week" href="{{.URL}}" aria-label="{{.Label}}"{{if .IsCurrent}} aria-current="true" autofocus{{end}}>
+						{{- range .Days}}
+						{{- if .InMonth}}
+						<span class="calendar-day level-{{.Level}}{{if .HasEmpty}} has-empty{{end}}{{if .IsToday}} is-today{{end}}" title="{{.Title}}">{{.Day}}</span>
+						{{- else}}
+						<span class="calendar-day is-out"></span>
+						{{- end}}
+						{{- end}}
+					</a>
+					{{- end}}
+				</section>
+				{{- end}}
+			</div>
 		</div>
 	</div>
 	{{- end}}

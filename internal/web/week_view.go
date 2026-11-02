@@ -25,6 +25,7 @@ type weekView struct {
 	Delete      *deleteView
 	Clear       *clearView
 	Feast       *feastView
+	Calendar    *calendarView
 
 	ImportError string
 }
@@ -89,6 +90,14 @@ func (v weekView) SettingsURL() string {
 
 func (v weekView) ClearURL() string {
 	return "/?clear=1&week=" + v.Start.Format(intentions.DateLayout)
+}
+
+func (v weekView) CalendarURL() string {
+	return calendarURL(v.Week(), v.Start.Year())
+}
+
+func (v weekView) HasDialog() bool {
+	return v.Delete != nil || v.Clear != nil || v.Feast != nil || v.Calendar != nil
 }
 
 func (v weekView) urlFor(start time.Time) string {

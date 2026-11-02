@@ -1,6 +1,7 @@
 package intentions
 
 import (
+	"maps"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -123,6 +124,36 @@ func TestDeleteWeek(t *testing.T) {
 	want := []string{"sunday before", "next monday"}
 	if got := contents(left); !slices.Equal(got, want) {
 		t.Errorf("left after DeleteWeek = %q, want %q", got, want)
+	}
+}
+
+func TestCountByDay(t *testing.T) {
+	db := newTestDB(t)
+	createIntention(t, db, "2026-09-30 23:45", "day before the range")
+	createIntention(t, db, "2026-10-01 00:00", "first minute")
+	createIntention(t, db, "2026-10-01 00:30", "still 30 September in UTC")
+	createPlaceholder(t, db, "2026-10-01 18:00")
+	createIntention(t, db, "2026-10-25 23:45", "day of the DST change")
+	createIntention(t, db, "2026-11-01 00:00", "day after the range")
+
+	err := db.Create(&Intention{MassAt: time.Date(2026, 10, 26, 7, 0, 0, 0, TimeZone), Content: "hidden", IsHidden: true}).Error
+	if err != nil {
+		t.Fatalf("creating hidden intention: %v", err)
+	}
+
+	from := time.Date(2026, 10, 1, 0, 0, 0, 0, TimeZone)
+	got, err := CountByDay(db, from, from.AddDate(0, 1, 0))
+	if err != nil {
+		t.Fatalf("CountByDay() error = %v", err)
+	}
+
+	want := map[string]DayCount{
+		"2026-10-01": {Filled: 2, Placeholders: 1},
+		"2026-10-25": {Filled: 1},
+		"2026-10-26": {Filled: 1},
+	}
+	if !maps.Equal(got, want) {
+		t.Errorf("CountByDay() = %v, want %v", got, want)
 	}
 }
 

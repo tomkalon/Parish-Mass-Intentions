@@ -235,7 +235,7 @@ func TestWeekShowsIntentions(t *testing.T) {
 		`<a class="action" href="/?edit=2&amp;week=2026-11-02" aria-label="Edytuj intencję poza parafią 1. z godz. 6:30">Edytuj</a>`,
 		`<h3 class="mass-time">18:00</h3>`,
 		"&lt;script&gt;alert(1)&lt;/script&gt;",
-		`<a class="button button-primary toolbar-add" href="/?new=1&amp;week=2026-11-02">+ Dodaj intencję</a>`,
+		`<a class="button button-primary toolbar-add" href="/?new=1&amp;week=2026-11-02" title="Dodaj intencję">+ Intencja</a>`,
 		`<a class="button-small" href="/?day=2026-11-02&amp;new=1&amp;week=2026-11-02" aria-label="Dodaj intencję – Poniedziałek 2.11.">+ Dodaj</a>`,
 		`<a class="add-mass" href="/?day=2026-11-02&amp;new=1&amp;time=06%3A30&amp;week=2026-11-02" aria-label="Dodaj intencję na godz. 6:30">+</a>`,
 	} {
@@ -1305,6 +1305,90 @@ func TestWeekClearDialogForEmptyWeek(t *testing.T) {
 
 	if strings.Contains(body, "Wyczyścić tydzień?") || strings.Contains(body, "inert") {
 		t.Error("empty week shows the clear dialog")
+	}
+}
+
+func TestWeekWithCalendarDialog(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 11, 2, 10, 0, 0, 0, intentions.TimeZone))
+	for range 6 {
+		seedIntention(t, h.db, "2026-11-09 18:00", false, "+ Jan Kowalski")
+	}
+	seedIntention(t, h.db, "2026-11-11 07:00", true, "+ Anna Nowak")
+	seedPlaceholder(t, h.db, "2026-11-10 06:30")
+	seedIntention(t, h.db, "2027-01-04 07:00", false, "next year")
+
+	rec := getWeek(t, h, "/?week=2026-11-09&calendar=2026")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	body := rec.Body.String()
+	for _, want := range []string{
+		`<main inert>`,
+		`<a class="button toolbar-calendar is-open" href="/?week=2026-11-09&amp;calendar=2026">`,
+		`<h2 class="calendar-year" id="calendar-title">2026</h2>`,
+		`<a class="button button-icon" href="/?week=2026-11-09&amp;calendar=2025" aria-label="Poprzedni rok">`,
+		`<a class="button button-icon" href="/?week=2026-11-09&amp;calendar=2027" aria-label="Następny rok">`,
+		`<a class="panel-close" href="/?week=2026-11-09" aria-label="Zamknij kalendarz" data-close>×</a>`,
+		`<h3 class="calendar-month-name">Listopad</h3>`,
+		`<a class="calendar-week" href="/?week=2026-11-09" aria-label="Tydzień 9.11 – 15.11.2026: 7 intencji, są msze do uzupełnienia" aria-current="true" autofocus>`,
+		`<span class="calendar-day level-5" title="6 intencji">9</span>`,
+		`<span class="calendar-day level-0 has-empty" title="0 intencji · msze do uzupełnienia">10</span>`,
+		`<span class="calendar-day level-1" title="1 intencja">11</span>`,
+		`<span class="calendar-day level-0 is-today" title="0 intencji">2</span>`,
+		`<a class="calendar-week" href="/?week=2025-12-29" aria-label="Tydzień 29.12 – 4.1.2026: 0 intencji">`,
+		`<span class="calendar-day is-out"></span>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+}
+
+func TestWeekCalendarForOtherYear(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 11, 2, 10, 0, 0, 0, intentions.TimeZone))
+	seedIntention(t, h.db, "2027-01-04 07:00", false, "+ Jan Kowalski")
+
+	body := getWeek(t, h, "/?week=2026-11-09&calendar=2027").Body.String()
+
+	for _, want := range []string{
+		`<a class="panel-close" href="/?week=2026-11-09" aria-label="Zamknij kalendarz" data-close autofocus>×</a>`,
+		`<span class="calendar-day level-1" title="1 intencja">4</span>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+	if strings.Contains(body, `class="calendar-week" href="/?week=2026-11-09"`) {
+		t.Error("2027 calendar shows the week 9.11.2026")
+	}
+}
+
+func TestWeekCalendarRejectsInvalidYear(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 11, 2, 10, 0, 0, 0, intentions.TimeZone))
+
+	for _, target := range []string{
+		"/?week=2026-11-09&calendar=bzdura",
+		"/?week=2026-11-09&calendar=2026-11",
+		"/?week=2026-11-09&calendar=999",
+		"/?week=2026-11-09&calendar=10000",
+	} {
+		if rec := getWeek(t, h, target); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: status = %d, want %d", target, rec.Code, http.StatusBadRequest)
+		}
+	}
+}
+
+func TestWeekToolbarLinksToCalendar(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 11, 2, 10, 0, 0, 0, intentions.TimeZone))
+
+	body := getWeek(t, h, "/?week=2026-12-28").Body.String()
+
+	if want := `<a class="button toolbar-calendar" href="/?week=2026-12-28&amp;calendar=2026">`; !strings.Contains(body, want) {
+		t.Errorf("body does not contain %q", want)
+	}
+	if strings.Contains(body, "inert") || strings.Contains(body, "calendar-months") {
+		t.Error("week page shows the calendar without ?calendar=")
 	}
 }
 
@@ -2577,7 +2661,7 @@ func TestWeekUpcomingLink(t *testing.T) {
 
 	body := getWeek(t, h, "/?week=2026-11-16").Body.String()
 
-	if want := `<a class="upcoming" href="/?week=2026-11-02">Nadchodzący tydzień</a>`; !strings.Contains(body, want) {
+	if want := `<a class="button upcoming" href="/?week=2026-11-02">Nadchodzący tydzień</a>`; !strings.Contains(body, want) {
 		t.Errorf("week view does not contain %q", want)
 	}
 }
@@ -2635,6 +2719,7 @@ func TestTopbarInertBehindDialog(t *testing.T) {
 		"/?week=2026-11-02&delete=1",
 		"/?week=2026-11-02&clear=1",
 		"/?week=2026-11-02&feast=2026-11-03",
+		"/?week=2026-11-02&calendar=2026",
 	} {
 		if body := getWeek(t, h, target).Body.String(); !strings.Contains(body, `<header class="topbar" inert>`) {
 			t.Errorf("%s: top bar is not inert behind the dialog", target)

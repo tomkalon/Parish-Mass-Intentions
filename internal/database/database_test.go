@@ -24,9 +24,18 @@ func openTestDB(t *testing.T, path string) *gorm.DB {
 	if err != nil {
 		t.Fatalf("opening %s: %v", path, err)
 	}
-	t.Cleanup(func() { closeDB(db) })
+	t.Cleanup(func() { mustClose(t, db) })
 
 	return db
+}
+
+func mustClose(t *testing.T, db *gorm.DB) {
+	t.Helper()
+
+	err := closeDB(db)
+	if err != nil {
+		t.Errorf("closing database: %v", err)
+	}
 }
 
 type fixture struct {
@@ -157,7 +166,7 @@ func TestPrepareImportRejectsInvalidFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = otherDB.Exec("CREATE TABLE products (id integer PRIMARY KEY, name text)").Error
-	closeDB(otherDB)
+	mustClose(t, otherDB)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +208,7 @@ func TestPrepareImportMigratesOldSchema(t *testing.T) {
 		{MassAt: last, Content: "+ Anna Stolarz"},
 		{MassAt: first, Content: "+ Helena Cichoń"},
 	}).Error
-	closeDB(old)
+	mustClose(t, old)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +241,7 @@ func TestRestore(t *testing.T) {
 	source := openTestDB(t, importPath)
 	seed(t, source, fixture{parish: "Parafia nowa", feastDate: "2026-12-25", feast: "Boże Narodzenie", schedule: "Nowy porządek", contents: []string{"nowa 1"}})
 	want := read(t, source)
-	closeDB(source)
+	mustClose(t, source)
 
 	backup := filepath.Join(dir, "data-2026-11-02-221700.db.bak")
 	err := Restore(db, importPath, backup)

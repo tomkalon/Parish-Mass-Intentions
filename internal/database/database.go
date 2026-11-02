@@ -66,8 +66,7 @@ func Export(db *gorm.DB, path string) error {
 
 	err = os.Rename(tmp, path)
 	if err != nil {
-		os.Remove(tmp)
-		return err
+		return errors.Join(err, os.Remove(tmp))
 	}
 
 	return nil
@@ -80,8 +79,8 @@ type Summary struct {
 	ParishName string
 }
 
-func PrepareImport(path string) (Summary, error) {
-	_, err := os.Stat(path)
+func PrepareImport(path string) (summary Summary, err error) {
+	_, err = os.Stat(path)
 	if err != nil {
 		return Summary{}, fmt.Errorf("%w: %v", ErrInvalidFile, err)
 	}
@@ -90,7 +89,9 @@ func PrepareImport(path string) (Summary, error) {
 	if err != nil {
 		return Summary{}, fmt.Errorf("%w: %v", ErrInvalidFile, err)
 	}
-	defer closeDB(db)
+	defer func() {
+		err = errors.Join(err, closeDB(db))
+	}()
 
 	var check string
 	err = db.Raw("PRAGMA quick_check").Scan(&check).Error
@@ -211,9 +212,11 @@ func quoteAll(names []string) string {
 	return strings.Join(quoted, ", ")
 }
 
-func closeDB(db *gorm.DB) {
+func closeDB(db *gorm.DB) error {
 	sqlDB, err := db.DB()
-	if err == nil {
-		sqlDB.Close()
+	if err != nil {
+		return err
 	}
+
+	return sqlDB.Close()
 }

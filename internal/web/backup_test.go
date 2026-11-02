@@ -86,7 +86,10 @@ func exportFile(t *testing.T, parish string, list ...intentions.Intention) []byt
 	if err != nil {
 		t.Fatal(err)
 	}
-	sqlDB.Close()
+	err = sqlDB.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	content, err := os.ReadFile(path)
 	if err != nil {
@@ -406,7 +409,10 @@ func TestBackupRoutes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mw.Close()
+	err = mw.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/settings/import", &body)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
 	if rec := serve(req); rec.Code != http.StatusSeeOther {

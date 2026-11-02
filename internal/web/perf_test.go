@@ -73,7 +73,10 @@ func largeParish(b *testing.B) (http.Handler, *backup.Backups) {
 	b.Cleanup(func() {
 		sqlDB, err := db.DB()
 		if err == nil {
-			sqlDB.Close()
+			err = sqlDB.Close()
+		}
+		if err != nil {
+			b.Errorf("closing database: %v", err)
 		}
 	})
 	seedParishYears(b, db, benchYears)

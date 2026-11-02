@@ -73,8 +73,14 @@ func (h *handler) downloadExport(w http.ResponseWriter, name string) {
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
-	tmp.Close()
-	defer os.Remove(tmp.Name())
+	defer removeFile(tmp.Name())
+
+	err = tmp.Close()
+	if err != nil {
+		log.Printf("error creating export file: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
 
 	err = database.Export(h.db, tmp.Name())
 	if err != nil {
@@ -89,7 +95,7 @@ func (h *handler) downloadExport(w http.ResponseWriter, name string) {
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	w.Header().Set("Content-Type", "application/vnd.sqlite3")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
@@ -115,7 +121,7 @@ func (h *handler) importData(w http.ResponseWriter, r *http.Request) {
 		h.renderImportError(w, http.StatusUnprocessableEntity, week, missingImportMessage)
 		return
 	}
-	defer upload.Close()
+	defer func() { _ = upload.Close() }()
 
 	path := h.importPath()
 	err = saveUpload(upload, path)
@@ -127,7 +133,7 @@ func (h *handler) importData(w http.ResponseWriter, r *http.Request) {
 
 	_, err = database.PrepareImport(path)
 	if err != nil {
-		os.Remove(path)
+		removeFile(path)
 		if errors.Is(err, database.ErrInvalidFile) {
 			log.Printf("rejected import file: %v", err)
 			h.renderImportError(w, http.StatusUnprocessableEntity, week, invalidImportMessage)
@@ -139,6 +145,13 @@ func (h *handler) importData(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, settingsNoticeURL(week, "import", "1"), http.StatusSeeOther)
+}
+
+func removeFile(path string) {
+	err := os.Remove(path)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		log.Printf("error removing %s: %v", path, err)
+	}
 }
 
 func saveUpload(upload multipart.File, path string) error {
@@ -172,10 +185,7 @@ func (h *handler) confirmImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = os.Remove(h.importPath())
-	if err != nil {
-		log.Printf("error removing import file: %v", err)
-	}
+	removeFile(h.importPath())
 
 	http.Redirect(w, r, settingsNoticeURL(week, "imported", backupName), http.StatusSeeOther)
 }

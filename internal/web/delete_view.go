@@ -29,6 +29,9 @@ func newDeleteView(start time.Time, intention intentions.Intention) deleteView {
 	if intention.IsGregorian {
 		when += " · msza gregoriańska"
 	}
+	if intention.IsHidden {
+		when += " · ukryta na wydruku"
+	}
 
 	return deleteView{
 		Action:   "/intentions/" + strconv.Itoa(intention.ID) + "/delete",

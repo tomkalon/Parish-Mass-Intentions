@@ -3,6 +3,7 @@ package web
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"testing"
@@ -90,8 +91,8 @@ func TestLayoutWeek(t *testing.T) {
 			numbers++
 		}
 	}
-	if numbers != 2 {
-		t.Errorf("numbers = %d, want 2 (only the 18:00 mass has more than one intention)", numbers)
+	if numbers != 0 {
+		t.Errorf("numbers = %d, want 0 (at 18:00 the parish and the outside list have one intention each)", numbers)
 	}
 
 	for _, text := range texts {
@@ -151,11 +152,11 @@ func TestLayoutWeekShrinksBeforeAddingAPage(t *testing.T) {
 
 	for count := 1; count < 300; count++ {
 		view := newWeekView(start, intentionsPerMass(t, count))
-		if header.Height+totalHeight(layoutDays(view, pdfStyles[0], m)) <= pageContent {
+		if header.Height+totalHeight(layoutDays(printableDays(view), pdfStyles[0], m)) <= pageContent {
 			continue
 		}
 
-		if header.Height+totalHeight(layoutDays(view, smallest, m)) > pageContent {
+		if header.Height+totalHeight(layoutDays(printableDays(view), smallest, m)) > pageContent {
 			t.Fatalf("with %d intentions even the smallest style does not fit, cannot test shrinking", count)
 		}
 		if pages := layoutWeek(view, m); len(pages) != 1 {
@@ -364,5 +365,176 @@ func TestLayoutWeekPrintsGregorianMark(t *testing.T) {
 
 	if !slices.Contains(texts, "+ Stanisław Grocholski (greg.)") {
 		t.Errorf("page does not contain the marked gregorian intention: %q", texts)
+	}
+}
+
+func findRun(t *testing.T, runs []pdfRun, text string) pdfRun {
+	t.Helper()
+
+	i := slices.IndexFunc(runs, func(run pdfRun) bool { return run.Text == text })
+	if i < 0 {
+		t.Fatalf("page does not contain %q", text)
+	}
+
+	return runs[i]
+}
+
+func TestLayoutWeekNumbersParishAndOutsideSeparately(t *testing.T) {
+	start := time.Date(2026, 11, 2, 0, 0, 0, 0, intentions.TimeZone)
+	view := newWeekView(start, []intentions.Intention{
+		newIntention(t, 1, "2026-11-02 18:00", false, "Parafia A"),
+		newIntention(t, 2, "2026-11-02 18:00", false, "Parafia B"),
+		newIntention(t, 3, "2026-11-02 18:00", true, "Poza C"),
+		newIntention(t, 4, "2026-11-02 18:00", true, "Poza D"),
+		newIntention(t, 5, "2026-11-03 18:00", false, "Parafia E"),
+		newIntention(t, 6, "2026-11-03 18:00", false, "Parafia F"),
+		newIntention(t, 7, "2026-11-03 18:00", true, "Poza G"),
+	})
+
+	runs := layoutWeek(view, fakeMeasurer{})[0].Runs
+
+	var numbers []string
+	for _, run := range runs {
+		if strings.HasSuffix(run.Text, ".") && run.Font == fontRegular && len(run.Text) <= 3 {
+			numbers = append(numbers, run.Text)
+		}
+	}
+	if want := []string{"1.", "2.", "1.", "2.", "1.", "2."}; !slices.Equal(numbers, want) {
+		t.Errorf("numbers = %q, want %q (parish and outside counted separately, a single intention not numbered)", numbers, want)
+	}
+
+	a, b, c := findRun(t, runs, "Parafia A"), findRun(t, runs, "Parafia B"), findRun(t, runs, "Poza C")
+	if got, want := c.Baseline-b.Baseline, b.Baseline-a.Baseline+groupGap; math.Abs(got-want) > 0.01 {
+		t.Errorf("space before the outside list = %.2f, want %.2f (one line plus a small gap)", got, want)
+	}
+
+	e := findRun(t, runs, "Parafia E")
+	var prefix pdfRun
+	for _, run := range runs {
+		if run.Text == "POZA PARAFIĄ · " && run.Baseline > e.Baseline {
+			prefix = run
+			break
+		}
+	}
+	if prefix.X != e.X {
+		t.Errorf("unnumbered outside intention starts at x = %.1f, want %.1f (aligned with the numbered parish ones)", prefix.X, e.X)
+	}
+}
+
+func TestPrintedDaySplit(t *testing.T) {
+	mass := func(time string, contents ...string) printedMass {
+		m := printedMass{time: time, numbered: len(contents) > 1}
+		for i, content := range contents {
+			m.intentions = append(m.intentions, printedIntention{content: content, number: i + 1})
+		}
+		return m
+	}
+	contents := func(masses []printedMass) []string {
+		var list []string
+		for _, m := range masses {
+			for _, intention := range m.intentions {
+				list = append(list, m.time+" "+intention.content)
+			}
+		}
+		return list
+	}
+
+	day := printedDay{
+		feast:     "uroczystość",
+		masses:    []printedMass{mass("7:00", "A", "B"), mass("9:00", "C", "D", "E")},
+		ruleBelow: true,
+	}
+
+	tests := []struct {
+		n         int
+		wantFirst []string
+		wantRest  []string
+	}{
+		{n: 2, wantFirst: []string{"7:00 A", "7:00 B"}, wantRest: []string{"9:00 C", "9:00 D", "9:00 E"}},
+		{n: 3, wantFirst: []string{"7:00 A", "7:00 B", "9:00 C"}, wantRest: []string{"9:00 D", "9:00 E"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprint(tt.n), func(t *testing.T) {
+			first, rest := day.split(tt.n)
+
+			if got := contents(first.masses); !slices.Equal(got, tt.wantFirst) {
+				t.Errorf("first = %q, want %q", got, tt.wantFirst)
+			}
+			if got := contents(rest.masses); !slices.Equal(got, tt.wantRest) {
+				t.Errorf("rest = %q, want %q", got, tt.wantRest)
+			}
+			if first.feast != "uroczystość" || first.continued || first.ruleBelow {
+				t.Errorf("first = feast %q, continued %v, rule %v; want the feast, not continued, no rule (the day goes on)", first.feast, first.continued, first.ruleBelow)
+			}
+			if rest.feast != "" || !rest.continued || !rest.ruleBelow {
+				t.Errorf("rest = feast %q, continued %v, rule %v; want no feast, continued, the day's rule", rest.feast, rest.continued, rest.ruleBelow)
+			}
+		})
+	}
+
+	_, rest := day.split(3)
+	if got := rest.masses[0].intentions[0].number; got != 2 {
+		t.Errorf("first number after the split = %d, want 2 (numbering goes on)", got)
+	}
+	if day.masses[1].intentions[0].content != "C" {
+		t.Error("split changed the original day")
+	}
+}
+
+func TestLayoutWeekSplitsDayTallerThanAPage(t *testing.T) {
+	start := time.Date(2026, 11, 2, 0, 0, 0, 0, intentions.TimeZone)
+	list := []intentions.Intention{newIntention(t, 1, "2026-11-07 18:00", false, "Sobota")}
+	for k := range 90 {
+		massAt := fmt.Sprintf("2026-11-08 %02d:00", 7+k/15)
+		list = append(list, newIntention(t, k+2, massAt, false, fmt.Sprintf("Intencja %d", k)))
+	}
+	view := newWeekView(start, list)
+
+	pages := layoutWeek(view, fakeMeasurer{})
+
+	if len(pages) < 2 {
+		t.Fatalf("pages = %d, want at least 2", len(pages))
+	}
+
+	var all []string
+	var numbers []string
+	for p, page := range pages {
+		for _, run := range page.Runs {
+			if run.Baseline > marginTop+pageContent {
+				t.Errorf("page %d: %q at %.0f is below the bottom margin (%.0f)", p+1, run.Text, run.Baseline, marginTop+pageContent)
+			}
+			all = append(all, run.Text)
+			if run.Font == fontRegular && strings.HasSuffix(run.Text, ".") && len(run.Text) <= 3 {
+				numbers = append(numbers, run.Text)
+			}
+		}
+	}
+
+	for k := range 90 {
+		if got := slices.Index(all, fmt.Sprintf("Intencja %d", k)); got < 0 {
+			t.Errorf("Intencja %d is missing", k)
+		}
+	}
+
+	var want []string
+	for range 6 {
+		for n := 1; n <= 15; n++ {
+			want = append(want, fmt.Sprintf("%d.", n))
+		}
+	}
+	if !slices.Equal(numbers, want) {
+		t.Errorf("numbers = %q, want 1.–15. for each of the 6 masses", numbers)
+	}
+
+	first := pageTexts(pages[0])
+	if !slices.Contains(first, "Sobota") || !slices.Contains(first, "Intencja 0") {
+		t.Error("Sunday does not start on the first page right after Saturday")
+	}
+	for p, page := range pages[1:] {
+		texts := pageTexts(page)
+		if !slices.Contains(texts, "ciąg dalszy") || !slices.Contains(texts, "IEDZIELA") {
+			t.Errorf("page %d does not start with „Niedziela – ciąg dalszy”", p+2)
+		}
 	}
 }

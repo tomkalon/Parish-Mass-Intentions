@@ -525,3 +525,28 @@ func TestMassAtJSONFormat(t *testing.T) {
 		})
 	}
 }
+
+func TestPatchKeepsHiddenFlag(t *testing.T) {
+	router, db := newTestRouter(t)
+	intention := seedIntention(t, db)
+	err := db.Model(&intention).Update("is_hidden", true).Error
+	if err != nil {
+		t.Fatalf("hiding intention: %v", err)
+	}
+
+	rec := doRequest(t, router, http.MethodPatch, "/intentions/1", `{"content":"za zdrowie Anny"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if !loadIntention(t, db, 1).IsHidden {
+		t.Error("IsHidden = false after patching only the content, want true")
+	}
+
+	rec = doRequest(t, router, http.MethodPatch, "/intentions/1", `{"is_hidden":false}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if loadIntention(t, db, 1).IsHidden {
+		t.Error("IsHidden = true after patching is_hidden to false, want false")
+	}
+}

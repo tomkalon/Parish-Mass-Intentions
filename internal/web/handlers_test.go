@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -882,6 +883,7 @@ func TestPrintPreview(t *testing.T) {
 	for _, want := range []string{
 		`<a class="button" href="/?week=2026-11-02" data-close>← Wróć do tygodnia</a>`,
 		`<iframe class="print-preview" src="/pdf?week=2026-11-02" title="Podgląd PDF: intencje 2.11.2026 r. – 8.11.2026 r."></iframe>`,
+		`<input type="checkbox" name="hidden" value="1" disabled data-autosubmit> Pokaż ukryte intencje (0)`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body does not contain %q", want)
@@ -2237,6 +2239,7 @@ func TestCreateIntentionWithFlags(t *testing.T) {
 	form := validForm()
 	form.Set("deceased", "on")
 	form.Set("gregorian", "on")
+	form.Set("hidden", "on")
 
 	rec := postIntention(t, h, form)
 	if rec.Code != http.StatusSeeOther {
@@ -2248,8 +2251,8 @@ func TestCreateIntentionWithFlags(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loading intention: %v", err)
 	}
-	if !saved.IsDeceased || !saved.IsGregorian {
-		t.Errorf("flags = deceased %v, gregorian %v; want both true", saved.IsDeceased, saved.IsGregorian)
+	if !saved.IsDeceased || !saved.IsGregorian || !saved.IsHidden {
+		t.Errorf("flags = deceased %v, gregorian %v, hidden %v; want all true", saved.IsDeceased, saved.IsGregorian, saved.IsHidden)
 	}
 }
 
@@ -2301,6 +2304,7 @@ func TestEditPanelShowsFlags(t *testing.T) {
 	for _, want := range []string{
 		`<input type="checkbox" name="deceased"> Za zmarłych`,
 		`<input type="checkbox" name="gregorian" checked> Msza gregoriańska`,
+		`<input type="checkbox" name="hidden"> Ukryj na wydruku`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("edit panel does not contain %q", want)
@@ -2344,6 +2348,7 @@ func TestCopyIntention(t *testing.T) {
 		"outside":   {"on"},
 		"deceased":  {"on"},
 		"gregorian": {"on"},
+		"hidden":    {"on"},
 		"copy":      {"1"},
 	}
 	rec := postToRouter(t, h.db, "/intentions", form)
@@ -2370,7 +2375,7 @@ func TestCopyIntention(t *testing.T) {
 	if day := copied.MassAt.In(intentions.TimeZone).Format(intentions.MassAtLayout); day != "2026-11-04 18:00" {
 		t.Errorf("copy at %s, want 2026-11-04 18:00", day)
 	}
-	if copied.Content != "+ Anna Kutyba" || !copied.IsOutsideParish || !copied.IsGregorian || !copied.IsDeceased {
+	if copied.Content != "+ Anna Kutyba" || !copied.IsOutsideParish || !copied.IsGregorian || !copied.IsDeceased || !copied.IsHidden {
 		t.Errorf("copy = %+v, want the same content and flags", copied)
 	}
 }
@@ -2670,5 +2675,167 @@ func TestLogo(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), `fill="#7A1F2B"`) {
 		t.Error("logo does not use the accent colour of the app icon")
+	}
+}
+
+func seedHidden(t *testing.T, db *gorm.DB, massAt, content string) intentions.Intention {
+	t.Helper()
+
+	intention := newIntention(t, 0, massAt, false, content)
+	intention.IsHidden = true
+	err := db.Create(&intention).Error
+	if err != nil {
+		t.Fatalf("creating hidden intention: %v", err)
+	}
+
+	return intention
+}
+
+func TestWeekShowsHiddenIntention(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	hidden := seedHidden(t, h.db, "2026-11-02 18:00", "+ Jan Kowalski")
+	seedIntention(t, h.db, "2026-11-02 18:00", false, "W int. Parafian")
+
+	body := getWeek(t, h, "/").Body.String()
+
+	for _, want := range []string{
+		fmt.Sprintf(`<li class="intention is-hidden" id="i-%d">`, hidden.ID),
+		`<span>&#43; Jan Kowalski <span class="badge badge-hidden" title="Ta intencja nie pojawi się na wydruku">`,
+		`</svg>ukryta na wydruku</span></span>`,
+		`<span>W int. Parafian</span>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+	if got := strings.Count(body, "badge-hidden"); got != 1 {
+		t.Errorf("hidden badges = %d, want 1", got)
+	}
+
+	edit := getWeek(t, h, fmt.Sprintf("/?week=2026-11-02&edit=%d", hidden.ID)).Body.String()
+	if want := `<input type="checkbox" name="hidden" checked> Ukryj na wydruku`; !strings.Contains(edit, want) {
+		t.Errorf("edit panel does not contain %q", want)
+	}
+
+	dialog := getWeek(t, h, fmt.Sprintf("/?week=2026-11-02&delete=%d", hidden.ID)).Body.String()
+	if want := "Poniedziałek 2.11., godz. 18:00 · ukryta na wydruku"; !strings.Contains(dialog, want) {
+		t.Errorf("delete dialog does not contain %q", want)
+	}
+}
+
+func TestUpdateIntentionUnhides(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	hidden := seedHidden(t, h.db, "2026-11-02 18:00", "+ Jan Kowalski")
+
+	form := url.Values{
+		"week":    {"2026-11-02"},
+		"day":     {"2026-11-02"},
+		"time":    {"18:00"},
+		"content": {"+ Jan Kowalski"},
+	}
+	rec := postToRouter(t, h.db, fmt.Sprintf("/intentions/%d", hidden.ID), form)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+
+	var saved intentions.Intention
+	err := h.db.First(&saved, hidden.ID).Error
+	if err != nil {
+		t.Fatalf("loading intention: %v", err)
+	}
+	if saved.IsHidden {
+		t.Error("IsHidden = true after saving without the checkbox, want false")
+	}
+}
+
+func getPrint(t *testing.T, h *handler, target string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, target, nil)
+	rec := httptest.NewRecorder()
+	h.printPreview(rec, req)
+
+	return rec
+}
+
+func TestPrintPreviewWithHiddenIntentions(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedHidden(t, h.db, "2026-11-02 18:00", "+ Jan Kowalski")
+	seedHidden(t, h.db, "2026-11-04 06:30", "+ Anna Nowak")
+	seedHidden(t, h.db, "2026-11-09 06:30", "next week")
+	seedIntention(t, h.db, "2026-11-03 18:00", false, "W int. Parafian")
+
+	tests := []struct {
+		name   string
+		target string
+		want   []string
+	}{
+		{
+			name:   "hidden by default",
+			target: "/print?week=2026-11-02",
+			want: []string{
+				`<form class="print-options" method="get" action="/print">`,
+				`<input type="hidden" name="week" value="2026-11-02">`,
+				`<input type="checkbox" name="hidden" value="1" data-autosubmit> Pokaż ukryte intencje (2)`,
+				`<iframe class="print-preview" src="/pdf?week=2026-11-02" title=`,
+			},
+		},
+		{
+			name:   "shown on request",
+			target: "/print?week=2026-11-02&hidden=1",
+			want: []string{
+				`<input type="checkbox" name="hidden" value="1" checked data-autosubmit> Pokaż ukryte intencje (2)`,
+				`<iframe class="print-preview" src="/pdf?week=2026-11-02&amp;hidden=1" title=`,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := getPrint(t, h, tt.target)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+			}
+
+			body := rec.Body.String()
+			for _, want := range tt.want {
+				if !strings.Contains(body, want) {
+					t.Errorf("body does not contain %q", want)
+				}
+			}
+		})
+	}
+}
+
+func TestPrintPreviewDatabaseError(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	err := h.db.Migrator().DropTable(&intentions.Intention{})
+	if err != nil {
+		t.Fatalf("dropping intentions table: %v", err)
+	}
+
+	if rec := getPrint(t, h, "/print?week=2026-11-02"); rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestWeekPDFSkipsHiddenIntentions(t *testing.T) {
+	now := time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone)
+
+	plain := newTestHandler(t, now)
+	seedIntention(t, plain.db, "2026-11-02 18:00", false, "W int. Parafian")
+
+	withHidden := newTestHandler(t, now)
+	seedIntention(t, withHidden.db, "2026-11-02 18:00", false, "W int. Parafian")
+	seedHidden(t, withHidden.db, "2026-11-02 18:00", "+ Jan Kowalski")
+
+	want := getPDF(t, plain, "/pdf?week=2026-11-02").Body.Bytes()
+
+	if got := getPDF(t, withHidden, "/pdf?week=2026-11-02").Body.Bytes(); !bytes.Equal(got, want) {
+		t.Error("PDF with a hidden intention differs from the PDF without it, want the hidden one skipped")
+	}
+	if got := getPDF(t, withHidden, "/pdf?week=2026-11-02&hidden=1").Body.Bytes(); bytes.Equal(got, want) {
+		t.Error("PDF with hidden=1 is the same as without the hidden intention, want it printed")
 	}
 }

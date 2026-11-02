@@ -28,3 +28,17 @@ func TestApplyCopiesFlags(t *testing.T) {
 		t.Errorf("flags = gregorian %v, deceased %v; want false, true", intention.IsGregorian, intention.IsDeceased)
 	}
 }
+
+func TestApplyCopiesHidden(t *testing.T) {
+	intention := Intention{}
+
+	intention.Apply(Input{MassAt: "2026-11-02 18:00", Content: "+ Jan Kowalski", IsHidden: true})
+	if !intention.IsHidden {
+		t.Error("IsHidden = false, want true")
+	}
+
+	intention.Apply(Input{MassAt: "2026-11-02 18:00", Content: "+ Jan Kowalski"})
+	if intention.IsHidden {
+		t.Error("IsHidden = true after Apply without the flag, want false")
+	}
+}

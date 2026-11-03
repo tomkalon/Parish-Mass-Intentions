@@ -269,3 +269,34 @@ func TestWeekViewEmptyMasses(t *testing.T) {
 		t.Errorf("EmptyMasses = %+v, want nil when every mass has an intention", notice)
 	}
 }
+
+func TestNewWeekRelation(t *testing.T) {
+	now := time.Date(2026, 11, 3, 10, 0, 0, 0, intentions.TimeZone)
+
+	tests := []struct {
+		start string
+		want  weekRelation
+	}{
+		{start: "2026-11-02", want: weekRelation{Text: "bieżący", Kind: "current"}},
+		{start: "2026-11-09", want: weekRelation{Text: "nadchodzący", Kind: "upcoming"}},
+		{start: "2026-10-26", want: weekRelation{Text: "poprzedni", Kind: "past"}},
+		{start: "2026-11-23", want: weekRelation{Text: "za 3 tygodnie", Kind: "future"}},
+		{start: "2027-01-04", want: weekRelation{Text: "za 9 tygodni", Kind: "future"}},
+		{start: "2026-10-19", want: weekRelation{Text: "2 tygodnie temu", Kind: "past"}},
+		{start: "2026-08-03", want: weekRelation{Text: "13 tygodni temu", Kind: "past"}},
+		{start: "2027-04-05", want: weekRelation{Text: "za 22 tygodnie", Kind: "future"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.start, func(t *testing.T) {
+			start, err := time.ParseInLocation(intentions.DateLayout, tt.start, intentions.TimeZone)
+			if err != nil {
+				t.Fatalf("parsing %q: %v", tt.start, err)
+			}
+
+			if got := newWeekRelation(start, now); got != tt.want {
+				t.Errorf("newWeekRelation(%s) = %+v, want %+v", tt.start, got, tt.want)
+			}
+		})
+	}
+}

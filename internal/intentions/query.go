@@ -23,13 +23,17 @@ type DayCount struct {
 	Filled       int
 	Placeholders int
 	Unpaid       int
+	Paid         int
 	Amount       Grosze
+
+	GregorianPaid   int
+	GregorianAmount Grosze
 }
 
 func CountByDay(db *gorm.DB, from, to time.Time) (map[string]DayCount, error) {
 	var list []Intention
 	err := inRange(db, from, to).
-		Select("id", "mass_at", "is_placeholder", "amount", "series_id").
+		Select("id", "mass_at", "is_placeholder", "is_gregorian", "amount", "series_id").
 		Find(&list).Error
 	if err != nil {
 		return nil, err
@@ -49,7 +53,12 @@ func CountByDay(db *gorm.DB, from, to time.Time) (map[string]DayCount, error) {
 			count.Placeholders++
 		case intention.Amount > 0:
 			count.Filled++
+			count.Paid++
 			count.Amount += intention.Amount
+			if intention.IsGregorian {
+				count.GregorianPaid++
+				count.GregorianAmount += intention.Amount
+			}
 		case paidInSeries[intention.ID]:
 			count.Filled++
 		default:

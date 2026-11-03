@@ -369,8 +369,33 @@
 				<div class="stat">
 					<span class="stat-label" title="Średnia kwota na intencję z wpisaną kwotą">Średnia wpłata</span>
 					<span class="stat-value">{{with .Average}}{{.}}{{else}}—{{end}}</span>
+					{{- if .GregorianPaid}}
+					<span class="stat-note">{{if .WithGregorian}}z gregoriankami{{else}}bez gregorianek{{end}}</span>
+					{{- end}}
+				</div>
+				<div class="stat">
+					<span class="stat-label">Gregorianki</span>
+					<span class="stat-value">{{if .GregorianAmount}}<svg class="amount-icon" width="10" height="14" viewBox="0 0 12 16" aria-hidden="true" focusable="false"><path d="M6 .5C7.9 2.6 8.3 4.3 6 6.1 3.7 4.3 4.1 2.6 6 .5z" fill="#D9921E"/><rect x="3.3" y="7.2" width="5.4" height="8.3" rx="1" fill="currentColor"/></svg>{{.GregorianAmount}}{{else}}—{{end}}</span>
+					{{- if .GregorianPaid}}
+					<span class="stat-note">{{.GregorianLabel}}</span>
+					{{- end}}
 				</div>
 			</div>
+			{{- if .GregorianPaid}}
+			<form class="payments-options" method="get" action="/">
+				<input type="hidden" name="week" value="{{.Week}}">
+				<input type="hidden" name="payments" value="{{.Tab}}">
+				{{- with .Month}}
+				<input type="hidden" name="month" value="{{.}}">
+				{{- end}}
+				{{- with .Year}}
+				<input type="hidden" name="year" value="{{.}}">
+				{{- end}}
+				<label class="checkbox"><input type="checkbox" name="greg" value="1"{{if .WithGregorian}} checked{{end}} data-autosubmit> Wliczaj gregorianki do średniej</label>
+				<span class="payments-options-note">({{if .WithGregorian}}bez gregorianek{{else}}z gregoriankami{{end}}: {{with .OtherAverage}}{{.}}{{else}}—{{end}})</span>
+				<noscript><button class="button" type="submit">Odśwież</button></noscript>
+			</form>
+			{{- end}}
 			<table class="payments-table">
 				<thead>
 					<tr>
@@ -386,7 +411,7 @@
 					<tr{{if .IsCurrent}} class="is-current"{{end}}>
 						<th scope="row">{{if .URL}}<a class="row-link" href="{{.URL}}">{{.Label}}</a>{{else}}{{.Label}}{{end}}</th>
 						<td class="bar-cell">{{if .Amount}}<span class="bar" style="width: {{.Width}}" title="{{.Title}}"></span>{{end}}</td>
-						<td class="num{{if not .Amount}} zero{{end}}">{{if .Amount}}{{.Amount}}{{else}}—{{end}}</td>
+						<td class="num{{if not .Amount}} zero{{end}}">{{if .Amount}}{{if .GregorianAmount}}<span class="greg-mark" title="w tym gregorianki: {{.GregorianAmount}}"><svg class="amount-icon" width="10" height="14" viewBox="0 0 12 16" aria-hidden="true" focusable="false"><path d="M6 .5C7.9 2.6 8.3 4.3 6 6.1 3.7 4.3 4.1 2.6 6 .5z" fill="#D9921E"/><rect x="3.3" y="7.2" width="5.4" height="8.3" rx="1" fill="currentColor"/></svg><span class="visually-hidden">w tym gregorianki: {{.GregorianAmount}}, razem </span></span>{{end}}{{.Amount}}{{else}}—{{end}}</td>
 						<td class="num">{{.Count}}</td>
 						<td class="num{{if .Unpaid}} missing{{end}}">{{if .Unpaid}}{{.Unpaid}}{{end}}</td>
 					</tr>
@@ -483,7 +508,8 @@
 </html>
 
 {{define "amount" -}}
-{{if .Amount}}<span class="amount">{{.Amount}}</span>
+{{if and .Amount .IsGregorian}}<span class="amount" title="{{if .SeriesStep}}Ofiara za całą serię (30 Mszy){{else}}Msza gregoriańska{{end}}"><svg class="amount-icon" width="10" height="14" viewBox="0 0 12 16" aria-hidden="true" focusable="false"><path d="M6 .5C7.9 2.6 8.3 4.3 6 6.1 3.7 4.3 4.1 2.6 6 .5z" fill="#D9921E"/><rect x="3.3" y="7.2" width="5.4" height="8.3" rx="1" fill="currentColor"/></svg>{{.Amount}}</span>
+{{- else if .Amount}}<span class="amount">{{.Amount}}</span>
 {{- else if gt .SeriesStep 1}}<span class="amount is-missing" title="Ofiara wpisana przy pierwszej Mszy serii">w serii</span>
 {{- else}}<span class="amount is-missing" title="Brak wpisanej kwoty"><span aria-hidden="true">{{if .IsUnpaid}}brak{{else}}—{{end}}</span><span class="visually-hidden">bez kwoty</span></span>
 {{- end}}

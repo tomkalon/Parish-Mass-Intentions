@@ -98,7 +98,8 @@ func TestCreateGregorianStartsSeries(t *testing.T) {
 	checkBody(t, body,
 		`<a class="badge badge-gregorian" href="/?week=2026-11-09&amp;gregorian=active&amp;series=1#s-1" title="Msza gregoriańska 1 z 30 – pokaż serię">`,
 		`gregoriańska <span class="series-step">1/30</span></a>`,
-		`<span class="amount">1`+nbsp+`500`+nbsp+`zł</span>`,
+		`<span class="amount" title="Ofiara za całą serię (30 Mszy)"><svg class="amount-icon"`,
+		`</svg>1`+nbsp+`500`+nbsp+`zł</span>`,
 		`<span class="count-badge" aria-hidden="true">1</span>`,
 		`<a class="series-due" href="/?day=2026-11-10&amp;new=1&amp;time=18%3A00&amp;week=2026-11-09&amp;series=1" title="Dodaj kolejną Mszę gregoriańską na ten dzień">`,
 	)
@@ -599,4 +600,54 @@ func TestOutsideParishDoesNotShareTheParishMass(t *testing.T) {
 
 	form.Set("outside", "on")
 	checkBody(t, postToRouter(t, h.db, "/intentions", form).Body.String(), `<p class="mass-warning" id="shared-hint" hidden>`)
+}
+
+func TestPaymentsDialogWithGregorianOffering(t *testing.T) {
+	h := newTestHandler(t, seriesNow)
+	seedSeries(t, h.db, "+ Jan", "2026-11-09 18:00", 3, 150000)
+	seedPaid(t, h.db, "2026-11-10 06:30", false, "+ Anna", 10000)
+	seedPaid(t, h.db, "2026-11-11 06:30", false, "+ Józef", 15000)
+
+	body := getWeek(t, h, "/?week=2026-11-09&payments=week").Body.String()
+	checkBody(t, body,
+		`<span class="stat-value">1`+nbsp+`750`+nbsp+`zł</span>`,
+		`<span class="stat-value">125`+nbsp+`zł</span>`,
+		`<span class="stat-note">bez gregorianek</span>`,
+		`<span class="stat-label">Gregorianki</span>`,
+		`</svg>1`+nbsp+`500`+nbsp+`zł</span>`,
+		`<span class="stat-note">1 seria</span>`,
+		`<form class="payments-options" method="get" action="/">`,
+		`<input type="hidden" name="payments" value="week">`,
+		`<input type="checkbox" name="greg" value="1" data-autosubmit> Wliczaj gregorianki do średniej</label>`,
+		`<span class="payments-options-note">(z gregoriankami: 583`+nbsp+`zł)</span>`,
+		`<span class="greg-mark" title="w tym gregorianki: 1`+nbsp+`500`+nbsp+`zł">`,
+	)
+	if got := strings.Count(body, `class="greg-mark"`); got != 1 {
+		t.Errorf("rows with a candle = %d, want 1 (only Monday has the offering)", got)
+	}
+
+	with := getWeek(t, h, "/?week=2026-11-09&payments=month&month=2026-11&greg=1").Body.String()
+	checkBody(t, with,
+		`<span class="stat-value">583`+nbsp+`zł</span>`,
+		`<span class="stat-note">z gregoriankami</span>`,
+		`<input type="hidden" name="month" value="2026-11">`,
+		`<input type="checkbox" name="greg" value="1" checked data-autosubmit>`,
+		`<span class="payments-options-note">(bez gregorianek: 125`+nbsp+`zł)</span>`,
+		`href="/?week=2026-11-09&amp;payments=year&amp;greg=1">Rok</a>`,
+	)
+}
+
+func TestPaymentsDialogWithoutGregorianHasNoCheckbox(t *testing.T) {
+	h := newTestHandler(t, seriesNow)
+	seedPaid(t, h.db, "2026-11-10 06:30", false, "+ Anna", 10000)
+
+	body := getWeek(t, h, "/?week=2026-11-09&payments=week").Body.String()
+
+	checkBody(t, body, `<span class="stat-label">Gregorianki</span>
+					<span class="stat-value">—</span>`)
+	for _, unwanted := range []string{"payments-options", "greg-mark", "bez gregorianek"} {
+		if strings.Contains(body, unwanted) {
+			t.Errorf("body contains %q without any gregorian offering", unwanted)
+		}
+	}
 }

@@ -3,6 +3,7 @@ package web
 import (
 	"net/url"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -116,7 +117,15 @@ type paymentsRowSummary struct {
 func summarizeRows(rows []paymentsRow) []paymentsRowSummary {
 	var out []paymentsRowSummary
 	for _, r := range rows {
-		out = append(out, paymentsRowSummary(r))
+		out = append(out, paymentsRowSummary{
+			Label:     r.Label,
+			URL:       r.URL,
+			Amount:    r.Amount,
+			Count:     r.Count,
+			Unpaid:    r.Unpaid,
+			Width:     r.Width,
+			IsCurrent: r.IsCurrent,
+		})
 	}
 
 	return out
@@ -285,24 +294,83 @@ func TestNewPaymentsViewYear(t *testing.T) {
 
 func TestPaymentsAverage(t *testing.T) {
 	tests := []struct {
-		total  intentions.Grosze
-		count  int
-		unpaid int
-		want   intentions.Grosze
+		total intentions.Grosze
+		paid  int
+		want  intentions.Grosze
 	}{
-		{total: 190000, count: 19, unpaid: 3, want: 11900},
-		{total: 15050, count: 1, want: 15100},
-		{total: 15049, count: 1, want: 15000},
-		{total: 30000, count: 4, unpaid: 1, want: 10000},
-		{total: 0, count: 3, unpaid: 3, want: 0},
-		{total: 0, count: 0, want: 0},
+		{total: 190000, paid: 16, want: 11900},
+		{total: 15050, paid: 1, want: 15100},
+		{total: 15049, paid: 1, want: 15000},
+		{total: 30000, paid: 3, want: 10000},
+		{total: 0, paid: 0, want: 0},
 	}
 
 	for _, tt := range tests {
-		v := paymentsView{Total: tt.total, Count: tt.count, Unpaid: tt.unpaid}
+		v := paymentsView{Total: tt.total, Paid: tt.paid}
 		if got := v.Average(); got != tt.want {
-			t.Errorf("Average(%d over %d, %d unpaid) = %d, want %d", tt.total, tt.count, tt.unpaid, got, tt.want)
+			t.Errorf("Average(%d over %d paid) = %d, want %d", tt.total, tt.paid, got, tt.want)
 		}
+	}
+}
+
+func TestPaymentsAverageWithAndWithoutGregorian(t *testing.T) {
+	v := paymentsView{Total: 175000, Paid: 4, GregorianAmount: 150000, GregorianPaid: 1}
+
+	if got := v.Average(); got != 8300 {
+		t.Errorf("Average() = %d, want 8300 (25 000 / 3 without the gregorian offering)", got)
+	}
+	if got := v.OtherAverage(); got != 43800 {
+		t.Errorf("OtherAverage() = %d, want 43800 (175 000 / 4)", got)
+	}
+
+	v.WithGregorian = true
+	if v.Average() != 43800 || v.OtherAverage() != 8300 {
+		t.Errorf("with gregorian: Average() = %d, OtherAverage() = %d, want 43800 and 8300", v.Average(), v.OtherAverage())
+	}
+
+	onlyGregorian := paymentsView{Total: 150000, Paid: 1, GregorianAmount: 150000, GregorianPaid: 1}
+	if got := onlyGregorian.Average(); got != 0 {
+		t.Errorf("average without gregorian when all payments are gregorian = %d, want 0 (shown as —)", got)
+	}
+}
+
+func TestGregorianLabel(t *testing.T) {
+	for n, want := range map[int]string{1: "1 seria", 2: "2 serie", 4: "4 serie", 5: "5 serii", 12: "12 serii", 22: "22 serie"} {
+		if got := (paymentsView{GregorianPaid: n}).GregorianLabel(); got != want {
+			t.Errorf("GregorianLabel(%d) = %q, want %q", n, got, want)
+		}
+	}
+}
+
+func TestPaymentsViewKeepsGregorianOption(t *testing.T) {
+	query, err := url.ParseQuery("payments=month&greg=1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	current := date(t, "2026-11-09")
+	p, err := parsePaymentsQuery(query, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !p.withGregorian {
+		t.Fatal("greg=1 not parsed")
+	}
+
+	view := newPaymentsView(p, current, current, nil)
+
+	for name, link := range map[string]string{
+		"week tab": view.WeekTabURL, "month tab": view.MonthTabURL, "year tab": view.YearTabURL,
+		"prev": view.PrevURL, "next": view.NextURL, "row": view.Rows[0].URL,
+	} {
+		if !strings.HasSuffix(link, "&greg=1") {
+			t.Errorf("%s link %q does not keep greg=1", name, link)
+		}
+	}
+	if view.Month != "2026-11" || view.Week != "2026-11-09" || view.Year != "" {
+		t.Errorf("form values = %q %q %q", view.Week, view.Month, view.Year)
+	}
+	if view.CloseURL != "/?week=2026-11-09" {
+		t.Errorf("CloseURL = %q, want the plain week", view.CloseURL)
 	}
 }
 

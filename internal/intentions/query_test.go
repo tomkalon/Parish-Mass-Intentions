@@ -178,8 +178,8 @@ func TestCountByDaySumsAmounts(t *testing.T) {
 	}
 
 	want := map[string]DayCount{
-		"2026-11-09": {Filled: 4, Placeholders: 1, Unpaid: 1, Amount: 30050},
-		"2026-11-10": {Filled: 1, Amount: 20000},
+		"2026-11-09": {Filled: 4, Placeholders: 1, Unpaid: 1, Paid: 3, Amount: 30050},
+		"2026-11-10": {Filled: 1, Paid: 1, Amount: 20000},
 	}
 	if !maps.Equal(got, want) {
 		t.Errorf("CountByDay() = %v, want %v", got, want)
@@ -324,11 +324,33 @@ func TestCountByDayCountsSeriesPaymentOnce(t *testing.T) {
 	}
 
 	want := map[string]DayCount{
-		"2026-11-09": {Filled: 3, Unpaid: 1, Amount: 150000},
+		"2026-11-09": {Filled: 3, Unpaid: 1, Paid: 1, Amount: 150000, GregorianPaid: 1, GregorianAmount: 150000},
 		"2026-11-10": {Filled: 2},
 		"2026-11-11": {Filled: 1},
 	}
 	if !maps.Equal(got, want) {
 		t.Errorf("CountByDay() = %v, want %v (only the unpaid first mass of a series counts as bez kwoty)", got, want)
+	}
+}
+
+func TestCountByDayCountsOldGregorianWithAmount(t *testing.T) {
+	db := newTestDB(t)
+	day := time.Date(2026, 11, 9, 18, 0, 0, 0, TimeZone)
+	err := db.Create(&[]Intention{
+		{MassAt: day, Content: "+ Jan (stara gregorianka)", IsGregorian: true, Amount: 100000},
+		{MassAt: day, Content: "+ Anna", Amount: 10000},
+	}).Error
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := CountByDay(db, day.Add(-18*time.Hour), day.Add(6*time.Hour))
+	if err != nil {
+		t.Fatalf("CountByDay() error = %v", err)
+	}
+
+	want := DayCount{Filled: 2, Paid: 2, Amount: 110000, GregorianPaid: 1, GregorianAmount: 100000}
+	if got["2026-11-09"] != want {
+		t.Errorf("CountByDay() = %+v, want %+v", got["2026-11-09"], want)
 	}
 }

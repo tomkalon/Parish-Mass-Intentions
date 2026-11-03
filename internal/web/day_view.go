@@ -42,9 +42,11 @@ type intentionView struct {
 	ID        int
 	Number    int
 	Content   string
+	Amount    intentions.Grosze
 	EditURL   string
 	DeleteURL string
 
+	IsUnpaid      bool
 	IsSaved       bool
 	IsEditing     bool
 	IsPlaceholder bool
@@ -92,6 +94,7 @@ func appendIntention(list []intentionView, intention intentions.Intention, week 
 	view := intentionView{
 		ID:        intention.ID,
 		Content:   intention.Content,
+		Amount:    intention.Amount,
 		EditURL:   editURL(week, intention.ID),
 		DeleteURL: deleteURL(week, intention.ID),
 

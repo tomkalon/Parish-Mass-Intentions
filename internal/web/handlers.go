@@ -172,6 +172,7 @@ func (h *handler) week(w http.ResponseWriter, r *http.Request) {
 		f.IsGregorian = intention.IsGregorian
 		f.IsDeceased = intention.IsDeceased
 		f.IsHidden = intention.IsHidden
+		f.Amount = intention.Amount.FormValue()
 		state.form = &f
 	case query.Get("new") == "1":
 		f := newFormView(start, query.Get("day"), query.Get("time"))
@@ -201,9 +202,18 @@ func (h *handler) week(w http.ResponseWriter, r *http.Request) {
 		}
 
 		state.calendarYear = year
+	case query.Get("payments") != "":
+		payments, err := parsePaymentsQuery(query, start)
+		if err != nil {
+			http.Error(w, "nieprawidłowy okres wpłat, oczekiwano payments=week|month|year, month=RRRR-MM, year=RRRR", http.StatusBadRequest)
+			return
+		}
+
+		state.payments = &payments
 	}
 
 	state.saved, _ = strconv.Atoi(query.Get("saved"))
+	state.unpaid = query.Get("unpaid") == "1"
 
 	h.renderWeek(w, http.StatusOK, start, state)
 }
@@ -575,14 +585,16 @@ func (h *handler) saveSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setting := settingsFromForm(r.PostForm)
+	setting, errs := settingsFromForm(r.PostForm)
 	view, ok := h.settingsView(w, setting, r.PostForm.Get("week"))
 	if !ok {
 		return
 	}
 
-	if errs := settingsErrors(setting); len(errs) > 0 {
+	if len(errs) > 0 {
 		view.Errors = errs
+		view.QuickAmounts = r.PostForm.Get("quick_amounts")
+		view.QuickPreview = nil
 		render(w, http.StatusUnprocessableEntity, settingsTemplate, view)
 		return
 	}
@@ -816,6 +828,12 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 	gregorian := r.PostForm.Get("gregorian") == "on"
 	deceased := r.PostForm.Get("deceased") == "on"
 	hidden := r.PostForm.Get("hidden") == "on"
+	amountText := r.PostForm.Get("amount")
+	amount, amountErr := intentions.ParseGrosze(amountText)
+	copying := r.PostForm.Get("copy") == "1"
+	if copying && gregorian {
+		amount = 0
+	}
 
 	input := intentions.Input{
 		MassAt:          day + " " + massTime,
@@ -824,6 +842,7 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 		IsGregorian:     gregorian,
 		IsDeceased:      deceased,
 		IsHidden:        hidden,
+		Amount:          amount,
 	}
 
 	err = h.validate.Struct(input)
@@ -834,7 +853,7 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 		return
 	}
 
-	if errs := formErrors(day, massTime, messages); len(errs) > 0 {
+	if errs := formErrors(day, massTime, messages, amountErr); len(errs) > 0 {
 		start := intentions.NextWeekStart(h.now())
 		if week, parseErr := time.ParseInLocation(intentions.DateLayout, r.PostForm.Get("week"), intentions.TimeZone); parseErr == nil {
 			start = intentions.WeekStart(week)
@@ -846,6 +865,7 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 		form.IsGregorian = gregorian
 		form.IsDeceased = deceased
 		form.IsHidden = hidden
+		form.Amount = amountText
 		form.Errors = errs
 		form.EditID = intention.ID
 
@@ -863,7 +883,7 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 	}
 
 	week := intentions.WeekStart(intention.MassAt).Format(intentions.DateLayout)
-	if r.PostForm.Get("copy") == "1" {
+	if copying {
 		query := url.Values{}
 		query.Set("week", week)
 		query.Set("edit", strconv.Itoa(intention.ID))
@@ -875,7 +895,7 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 	http.Redirect(w, r, fmt.Sprintf("/?week=%s&saved=%d#i-%d", week, intention.ID, intention.ID), http.StatusSeeOther)
 }
 
-func formErrors(day, massTime string, messages map[string]string) map[string]string {
+func formErrors(day, massTime string, messages map[string]string, amountErr error) map[string]string {
 	errs := make(map[string]string)
 
 	if day == "" {
@@ -890,6 +910,11 @@ func formErrors(day, massTime string, messages map[string]string) map[string]str
 	if message, ok := messages["content"]; ok {
 		errs["content"] = message
 	}
+	if amountErr != nil {
+		errs["amount"] = intentions.AmountMessage(amountErr)
+	} else if message, ok := messages["amount"]; ok {
+		errs["amount"] = message
+	}
 
 	return errs
 }
@@ -900,7 +925,9 @@ type weekState struct {
 	feast        *feastView
 	clear        bool
 	calendarYear int
+	payments     *paymentsQuery
 	saved        int
+	unpaid       bool
 	importError  string
 }
 
@@ -942,6 +969,7 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 	view.Topbar = newTopbarView(setting, h.backups.State(), h.now())
 
 	if state.form != nil {
+		state.form.QuickAmounts = quickAmountOptions(setting.QuickAmounts, state.form.Amount)
 		view.Form = state.form
 		markSelected(view.Days, state.form.Day, state.form.Time)
 		markEditing(view.Days, state.form.EditID)
@@ -963,6 +991,25 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 
 		c := newCalendarView(state.calendarYear, start, h.now(), counts)
 		view.Calendar = &c
+	}
+	if state.payments != nil {
+		from, to := state.payments.span(start)
+		counts, err := intentions.CountByDay(h.db, from, to)
+		if err != nil {
+			log.Printf("error summing payments from %s to %s: %v", from.Format(intentions.DateLayout), to.Format(intentions.DateLayout), err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		p := newPaymentsView(*state.payments, start, h.now(), counts)
+		if week := view.WeekPayments(); p.Tab == paymentsWeek && week != nil && week.Unpaid > 0 {
+			p.UnpaidURL = unpaidURL(view.Week(), week.firstUnpaid)
+		}
+		view.PaymentsDialog = &p
+	}
+	if state.unpaid {
+		view.ShowUnpaid = true
+		markUnpaid(view.Days)
 	}
 	view.ImportError = state.importError
 	markSaved(view.Days, state.saved)

@@ -29,6 +29,9 @@ type weekView struct {
 	Feast       *feastView
 	Calendar    *calendarView
 
+	PaymentsDialog *paymentsView
+	ShowUnpaid     bool
+
 	ImportError string
 }
 
@@ -133,7 +136,7 @@ func (v weekView) CalendarURL() string {
 }
 
 func (v weekView) HasDialog() bool {
-	return v.Delete != nil || v.Clear != nil || v.Feast != nil || v.Calendar != nil
+	return v.Delete != nil || v.Clear != nil || v.Feast != nil || v.Calendar != nil || v.PaymentsDialog != nil
 }
 
 func (v weekView) urlFor(start time.Time) string {

@@ -44,6 +44,7 @@ func seedParishYears(b *testing.B, db *gorm.DB, years int) {
 					MassAt:          time.Date(day.Year(), day.Month(), day.Day(), m/60, m%60, 0, 0, intentions.TimeZone),
 					Content:         fmt.Sprintf("+ Jan Kowalski w %d rocznicę śmierci od rodziny", 1+r.IntN(40)),
 					IsOutsideParish: k > 0 && r.IntN(3) == 0,
+					Amount:          intentions.Grosze(r.IntN(5)) * 5000,
 				})
 			}
 		}
@@ -120,6 +121,23 @@ func BenchmarkSaveIntentionLargeParish(b *testing.B) {
 		if rec.Code != http.StatusSeeOther {
 			b.Fatalf("status = %d", rec.Code)
 		}
+	}
+}
+
+func BenchmarkPaymentsLargeParish(b *testing.B) {
+	router, _ := largeParish(b)
+
+	for _, tab := range []string{paymentsWeek, paymentsMonth, paymentsYear} {
+		b.Run(tab, func(b *testing.B) {
+			target := "/?week=" + benchWeek + "&payments=" + tab
+			for b.Loop() {
+				rec := httptest.NewRecorder()
+				router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+				if rec.Code != http.StatusOK {
+					b.Fatalf("status = %d", rec.Code)
+				}
+			}
+		})
 	}
 }
 

@@ -148,12 +148,63 @@ func TestCountByDay(t *testing.T) {
 	}
 
 	want := map[string]DayCount{
-		"2026-10-01": {Filled: 2, Placeholders: 1},
-		"2026-10-25": {Filled: 1},
-		"2026-10-26": {Filled: 1},
+		"2026-10-01": {Filled: 2, Placeholders: 1, Unpaid: 2},
+		"2026-10-25": {Filled: 1, Unpaid: 1},
+		"2026-10-26": {Filled: 1, Unpaid: 1},
 	}
 	if !maps.Equal(got, want) {
 		t.Errorf("CountByDay() = %v, want %v", got, want)
+	}
+}
+
+func TestCountByDaySumsAmounts(t *testing.T) {
+	db := newTestDB(t)
+	day := time.Date(2026, 11, 9, 0, 0, 0, 0, TimeZone)
+	err := db.Create(&[]Intention{
+		{MassAt: day.Add(6*time.Hour + 30*time.Minute), Content: "+ Stanisław", Amount: 10000},
+		{MassAt: day.Add(18 * time.Hour), Content: "+ Helena", Amount: 15050},
+		{MassAt: day.Add(18 * time.Hour), Content: "Za parafian"},
+		{MassAt: day.Add(18 * time.Hour), Content: "ukryta, ale opłacona", Amount: 5000, IsHidden: true},
+		{MassAt: day.Add(20 * time.Hour), IsPlaceholder: true},
+		{MassAt: day.AddDate(0, 0, 1).Add(7 * time.Hour), Content: "+ Józef", Amount: 20000, IsOutsideParish: true},
+	}).Error
+	if err != nil {
+		t.Fatalf("creating intentions: %v", err)
+	}
+
+	got, err := CountByDay(db, day, day.AddDate(0, 0, 7))
+	if err != nil {
+		t.Fatalf("CountByDay() error = %v", err)
+	}
+
+	want := map[string]DayCount{
+		"2026-11-09": {Filled: 4, Placeholders: 1, Unpaid: 1, Amount: 30050},
+		"2026-11-10": {Filled: 1, Amount: 20000},
+	}
+	if !maps.Equal(got, want) {
+		t.Errorf("CountByDay() = %v, want %v", got, want)
+	}
+}
+
+func TestCountByDayQueryUsesMassAtIndex(t *testing.T) {
+	db := newTestDB(t)
+	from := time.Date(2026, 1, 1, 0, 0, 0, 0, TimeZone)
+	query := db.ToSQL(func(tx *gorm.DB) *gorm.DB {
+		return inRange(tx, from, from.AddDate(1, 0, 0)).Select("mass_at", "is_placeholder", "amount").Find(&[]Intention{})
+	})
+
+	var plan []struct{ Detail string }
+	err := db.Raw("EXPLAIN QUERY PLAN " + query).Scan(&plan).Error
+	if err != nil {
+		t.Fatalf("explaining %q: %v", query, err)
+	}
+
+	var details []string
+	for _, step := range plan {
+		details = append(details, step.Detail)
+	}
+	if got := strings.Join(details, "; "); !strings.Contains(got, "USING INDEX idx_intentions_mass_at") {
+		t.Errorf("summary query plan = %q, want a search using idx_intentions_mass_at (a year summary must not read the whole table)", got)
 	}
 }
 

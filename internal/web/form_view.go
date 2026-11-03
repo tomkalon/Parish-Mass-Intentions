@@ -26,6 +26,8 @@ type formView struct {
 	IsGregorian     bool
 	IsDeceased      bool
 	IsHidden        bool
+	Amount          string
+	QuickAmounts    []quickAmount
 	Errors          map[string]string
 	EditID          int
 
@@ -57,6 +59,30 @@ type dayOption struct {
 	Short   string
 	Date    string
 	Checked bool
+}
+
+type quickAmount struct {
+	Value   string
+	Label   string
+	Pressed bool
+}
+
+func quickAmountOptions(amounts []intentions.Grosze, current string) []quickAmount {
+	selected, err := intentions.ParseGrosze(current)
+	if err != nil {
+		selected = 0
+	}
+
+	options := make([]quickAmount, 0, len(amounts))
+	for _, amount := range amounts {
+		options = append(options, quickAmount{
+			Value:   amount.FormValue(),
+			Label:   amount.String(),
+			Pressed: selected != 0 && amount == selected,
+		})
+	}
+
+	return options
 }
 
 type timeOption struct {

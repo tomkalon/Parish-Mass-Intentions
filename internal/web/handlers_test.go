@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -1325,7 +1326,7 @@ func TestWeekWithCalendarDialog(t *testing.T) {
 	body := rec.Body.String()
 	for _, want := range []string{
 		`<main inert>`,
-		`<a class="button toolbar-calendar is-open" href="/?week=2026-11-09&amp;calendar=2026">`,
+		`<a class="button toolbar-calendar is-open" href="/?week=2026-11-09&amp;calendar=2026" title="Kalendarz">`,
 		`<h2 class="calendar-year" id="calendar-title">2026</h2>`,
 		`<a class="button button-icon" href="/?week=2026-11-09&amp;calendar=2025" aria-label="Poprzedni rok">`,
 		`<a class="button button-icon" href="/?week=2026-11-09&amp;calendar=2027" aria-label="Następny rok">`,
@@ -1384,7 +1385,7 @@ func TestWeekToolbarLinksToCalendar(t *testing.T) {
 
 	body := getWeek(t, h, "/?week=2026-12-28").Body.String()
 
-	if want := `<a class="button toolbar-calendar" href="/?week=2026-12-28&amp;calendar=2026">`; !strings.Contains(body, want) {
+	if want := `<a class="button toolbar-calendar" href="/?week=2026-12-28&amp;calendar=2026" title="Kalendarz">`; !strings.Contains(body, want) {
 		t.Errorf("body does not contain %q", want)
 	}
 	if strings.Contains(body, "inert") || strings.Contains(body, "calendar-months") {
@@ -1945,8 +1946,9 @@ func TestSaveSettings(t *testing.T) {
 		Address:            "ul. Kościelna 1, 32-765 Rzezawa",
 		SelectedScheduleID: 2,
 		FeastImport:        settings.FeastImport{SkipOptionalMemorials: true, SkipOtherDays: true},
+		QuickAmounts:       settings.DefaultQuickAmounts,
 	}
-	if got != want {
+	if !reflect.DeepEqual(got, want) {
 		t.Errorf("settings = %+v, want %+v", got, want)
 	}
 

@@ -2,10 +2,14 @@ package settings
 
 import (
 	"path/filepath"
+	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+
+	"go-parafia/internal/intentions"
 )
 
 func newTestDB(t *testing.T) *gorm.DB {
@@ -129,7 +133,8 @@ func TestSaveScheduleKeepsParish(t *testing.T) {
 	want := parish
 	want.ID = settingID
 	want.SelectedScheduleID = 2
-	if got != want {
+	want.QuickAmounts = DefaultQuickAmounts
+	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Load = %+v, want %+v", got, want)
 	}
 }
@@ -159,5 +164,78 @@ func TestSaveParishKeepsSchedule(t *testing.T) {
 	}
 	if want := (FeastImport{SkipMemorials: true}); got.FeastImport != want {
 		t.Errorf("FeastImport = %+v, want %+v (unchecked again → false saved)", got.FeastImport, want)
+	}
+}
+
+func TestLoadDefaultQuickAmounts(t *testing.T) {
+	db := newTestDB(t)
+
+	setting, err := Load(db)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !slices.Equal(setting.QuickAmounts, DefaultQuickAmounts) {
+		t.Errorf("QuickAmounts = %v, want the defaults %v", setting.QuickAmounts, DefaultQuickAmounts)
+	}
+
+	setting.QuickAmounts[0] = 1
+	again, err := Load(db)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if again.QuickAmounts[0] != DefaultQuickAmounts[0] || DefaultQuickAmounts[0] != 5000 {
+		t.Error("changing the loaded quick amounts changed the defaults")
+	}
+}
+
+func TestSaveParishQuickAmounts(t *testing.T) {
+	db := newTestDB(t)
+	amounts := []intentions.Grosze{7000, 10000, 30000}
+
+	err := SaveParish(db, Setting{ParishName: "Parafia św. Jana", QuickAmounts: amounts})
+	if err != nil {
+		t.Fatalf("SaveParish: %v", err)
+	}
+	err = SaveSchedule(db, 2)
+	if err != nil {
+		t.Fatalf("SaveSchedule: %v", err)
+	}
+
+	got, err := Load(db)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !slices.Equal(got.QuickAmounts, amounts) {
+		t.Errorf("QuickAmounts = %v, want %v (SaveSchedule must not touch them)", got.QuickAmounts, amounts)
+	}
+
+	err = SaveParish(db, Setting{ParishName: "Parafia św. Jana"})
+	if err != nil {
+		t.Fatalf("SaveParish: %v", err)
+	}
+	got, err = Load(db)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !slices.Equal(got.QuickAmounts, DefaultQuickAmounts) {
+		t.Errorf("QuickAmounts = %v after saving none, want the defaults %v", got.QuickAmounts, DefaultQuickAmounts)
+	}
+}
+
+func TestQuickAmountsColumnIsJSON(t *testing.T) {
+	db := newTestDB(t)
+
+	err := SaveParish(db, Setting{ParishName: "Parafia św. Jana", QuickAmounts: []intentions.Grosze{5000, 15050}})
+	if err != nil {
+		t.Fatalf("SaveParish: %v", err)
+	}
+
+	var raw string
+	err = db.Raw("SELECT quick_amounts FROM settings WHERE id = ?", settingID).Scan(&raw).Error
+	if err != nil {
+		t.Fatalf("reading quick_amounts: %v", err)
+	}
+	if raw != "[5000,15050]" {
+		t.Errorf("quick_amounts column = %q, want %q", raw, "[5000,15050]")
 	}
 }

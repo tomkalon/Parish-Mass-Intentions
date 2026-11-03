@@ -69,6 +69,30 @@
 			</fieldset>
 
 			<fieldset class="settings-section">
+				<legend>Wpłaty</legend>
+
+				<div class="field">
+					<label class="label" for="quick_amounts">Szybkie kwoty</label>
+					<div class="quick-amounts">
+						<input class="input{{if .Errors.quick_amounts}} is-invalid{{end}}" type="text" id="quick_amounts" name="quick_amounts" value="{{.QuickAmounts}}" autocomplete="off" placeholder="{{.DefaultQuickAmounts}}" maxlength="{{.MaxLength}}" aria-describedby="{{if .Errors.quick_amounts}}quick_amounts-error {{end}}quick_amounts-hint"{{if .Errors.quick_amounts}} aria-invalid="true"{{end}}>
+						<span class="amount-unit" aria-hidden="true">zł</span>
+					</div>
+					{{- with .Errors.quick_amounts}}
+					<p class="field-error" id="quick_amounts-error">{{.}}</p>
+					{{- end}}
+					<p class="hint" id="quick_amounts-hint">Przyciski pod polem „Wpłata” w panelu intencji. Pełne złote, oddzielone przecinkami, najwyżej {{.MaxQuickAmounts}}. Puste pole przywraca domyślne: {{.DefaultQuickAmounts}}.</p>
+					{{- with .QuickPreview}}
+					<div class="quick-preview" aria-hidden="true">
+						<span class="quick-preview-label">W panelu:</span>
+						{{- range .}}
+						<span class="chip chip-preview">{{.}}</span>
+						{{- end}}
+					</div>
+					{{- end}}
+				</div>
+			</fieldset>
+
+			<fieldset class="settings-section">
 				<legend>Pobieranie świąt z GCatholic</legend>
 				<p class="hint">Rodzaje obchodów dopisywane przyciskiem „Pobierz święta z GCatholic”.</p>
 				<div class="checkboxes">

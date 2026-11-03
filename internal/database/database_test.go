@@ -229,6 +229,17 @@ func TestPrepareImportMigratesOldSchema(t *testing.T) {
 	if !migrated.Migrator().HasColumn(&intentions.Intention{}, "IsHidden") {
 		t.Error("intentions.is_hidden missing after PrepareImport")
 	}
+	if !migrated.Migrator().HasColumn(&intentions.Intention{}, "Amount") {
+		t.Fatal("intentions.amount missing after PrepareImport")
+	}
+	var amounts []intentions.Grosze
+	err = migrated.Model(&intentions.Intention{}).Pluck("amount", &amounts).Error
+	if err != nil {
+		t.Fatalf("reading amounts: %v", err)
+	}
+	if !slices.Equal(amounts, []intentions.Grosze{0, 0}) {
+		t.Errorf("amounts of old intentions = %v, want [0 0] (bez kwoty)", amounts)
+	}
 }
 
 func TestRestore(t *testing.T) {
@@ -280,6 +291,46 @@ func TestRestore(t *testing.T) {
 	}
 	if got := read(t, db); !slices.Equal(got.contents, before.contents) {
 		t.Errorf("after restoring the backup: intentions = %q, want %q", got.contents, before.contents)
+	}
+}
+
+func TestRestoreCopiesPayments(t *testing.T) {
+	dir := t.TempDir()
+	db := openTestDB(t, filepath.Join(dir, "data.db"))
+
+	importPath := filepath.Join(dir, "import.db")
+	source := openTestDB(t, importPath)
+	intention := intentions.Intention{MassAt: time.Date(2026, 11, 9, 18, 0, 0, 0, intentions.TimeZone), Content: "+ Jan", Amount: 15050}
+	err := intentions.Save(source, &intention)
+	if err != nil {
+		t.Fatalf("saving intention: %v", err)
+	}
+	quick := []intentions.Grosze{7000, 12000}
+	err = settings.SaveParish(source, settings.Setting{ParishName: "Parafia", QuickAmounts: quick})
+	if err != nil {
+		t.Fatalf("saving settings: %v", err)
+	}
+	mustClose(t, source)
+
+	err = Restore(db, importPath, filepath.Join(dir, "data.db.bak"))
+	if err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+
+	var restored intentions.Intention
+	err = db.First(&restored).Error
+	if err != nil {
+		t.Fatalf("loading restored intention: %v", err)
+	}
+	if restored.Amount != 15050 {
+		t.Errorf("restored amount = %d, want 15050", restored.Amount)
+	}
+	setting, err := settings.Load(db)
+	if err != nil {
+		t.Fatalf("loading settings: %v", err)
+	}
+	if !slices.Equal(setting.QuickAmounts, quick) {
+		t.Errorf("restored quick amounts = %v, want %v", setting.QuickAmounts, quick)
 	}
 }
 

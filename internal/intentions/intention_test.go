@@ -42,3 +42,17 @@ func TestApplyCopiesHidden(t *testing.T) {
 		t.Error("IsHidden = true after Apply without the flag, want false")
 	}
 }
+
+func TestApplyCopiesAmount(t *testing.T) {
+	intention := Intention{Amount: 5000}
+
+	intention.Apply(Input{MassAt: "2026-11-02 18:00", Content: "+ Jan Kowalski", Amount: 15050})
+	if intention.Amount != 15050 {
+		t.Errorf("Amount = %d, want 15050", intention.Amount)
+	}
+
+	intention.Apply(Input{MassAt: "2026-11-02 18:00", Content: "+ Jan Kowalski"})
+	if intention.Amount != 0 {
+		t.Errorf("Amount = %d after Apply without an amount, want 0", intention.Amount)
+	}
+}

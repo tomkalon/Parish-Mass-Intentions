@@ -11,6 +11,7 @@ type Intention struct {
 	IsGregorian     bool      `json:"is_gregorian" gorm:"not null;default:false"`
 	IsDeceased      bool      `json:"is_deceased" gorm:"not null;default:false"`
 	IsHidden        bool      `json:"is_hidden" gorm:"not null;default:false"`
+	Amount          Grosze    `json:"amount" gorm:"not null;default:0"`
 }
 
 type Input struct {
@@ -20,6 +21,7 @@ type Input struct {
 	IsGregorian     bool   `json:"is_gregorian"`
 	IsDeceased      bool   `json:"is_deceased"`
 	IsHidden        bool   `json:"is_hidden"`
+	Amount          Grosze `json:"amount" validate:"amount"`
 }
 
 func (i *Intention) Apply(input Input) {
@@ -29,5 +31,6 @@ func (i *Intention) Apply(input Input) {
 	i.IsGregorian = input.IsGregorian
 	i.IsDeceased = input.IsDeceased || input.IsGregorian
 	i.IsHidden = input.IsHidden
+	i.Amount = input.Amount
 	i.IsPlaceholder = false
 }

@@ -62,3 +62,22 @@ if (deceased && gregorian) {
 for (const input of document.querySelectorAll("[data-autosubmit]")) {
 	input.addEventListener("change", () => input.form.submit());
 }
+
+const amount = document.getElementById("amount");
+const chips = document.querySelectorAll(".chip[data-amount]");
+if (amount && chips.length > 0) {
+	const sync = () => {
+		const value = amount.value.trim();
+		for (const chip of chips) {
+			chip.setAttribute("aria-pressed", String(chip.dataset.amount === value));
+		}
+	};
+
+	for (const chip of chips) {
+		chip.addEventListener("click", () => {
+			amount.value = chip.getAttribute("aria-pressed") === "true" ? "" : chip.dataset.amount;
+			sync();
+		});
+	}
+	amount.addEventListener("input", sync);
+}

@@ -21,12 +21,16 @@
 				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
 			</a>
 		</div>
-		<a class="button toolbar-calendar{{if .Calendar}} is-open{{end}}" href="{{.CalendarURL}}">
+		<a class="button toolbar-calendar{{if .Calendar}} is-open{{end}}" href="{{.CalendarURL}}" title="Kalendarz">
 			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false">
 				<rect x="3.5" y="5" width="17" height="15.5" rx="2"/>
 				<path d="M3.5 10h17M8 3v4M16 3v4M8 14h2M14 14h2M8 17.5h2"/>
 			</svg>
-			Kalendarz
+			<span class="toolbar-label">Kalendarz</span>
+		</a>
+		<a class="button toolbar-payments{{if .PaymentsDialog}} is-open{{end}}" href="{{.PaymentsURL}}" title="Wpłaty">
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2.5" y="6" width="19" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 10v4M18 10v4"/></svg>
+			<span class="toolbar-label">Wpłaty</span>
 		</a>
 		<a class="button toolbar-print" href="{{.PrintURL}}">Drukuj / PDF</a>
 		<a class="button button-primary toolbar-add" href="{{.NewURL}}" title="Dodaj intencję">+ Intencja</a>
@@ -68,6 +72,16 @@
 				{{- end}}
 				{{.Text}}
 			</span>
+			{{- end}}
+			{{- with .WeekPayments}}
+			<a class="week-payments" href="{{.URL}}" title="{{.Title}}">
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2.5" y="6" width="19" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg>
+				Wpłaty <strong>{{.Total}}</strong>
+				<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 6l6 6-6 6"/></svg>
+			</a>
+			{{- if .Unpaid}}
+			<a class="week-unpaid{{if .ShowUnpaid}} is-active{{end}}" href="{{.UnpaidURL}}" title="{{if .ShowUnpaid}}Wyłącz zaznaczenie intencji bez kwoty{{else}}Zaznacz w tygodniu intencje bez wpisanej kwoty{{end}}">{{.UnpaidLabel}}</a>
+			{{- end}}
 			{{- end}}
 		</div>
 
@@ -139,10 +153,11 @@
 						{{- if .Parish}}
 						<ol class="intentions">
 							{{- range .Parish}}
-							<li class="intention{{if .IsGregorian}} is-gregorian{{else if .IsDeceased}} is-deceased{{end}}{{if .IsHidden}} is-hidden{{end}}{{if .IsSaved}} is-saved{{end}}{{if .IsEditing}} is-editing{{end}}" id="i-{{.ID}}">
+							<li class="intention{{if .IsGregorian}} is-gregorian{{else if .IsDeceased}} is-deceased{{end}}{{if .IsHidden}} is-hidden{{end}}{{if .IsUnpaid}} is-unpaid{{end}}{{if .IsSaved}} is-saved{{end}}{{if .IsEditing}} is-editing{{end}}" id="i-{{.ID}}">
 								{{- if .IsPlaceholder}}
 								<span class="number"></span>
 								<span class="placeholder">do uzupełnienia</span>
+								<span class="amount"></span>
 								<span class="intention-actions">
 									<a class="action" href="{{.EditURL}}" aria-label="Uzupełnij intencję z godz. {{$time}}">Uzupełnij</a>
 									<a class="action action-delete" href="{{.DeleteURL}}" aria-label="Usuń nieuzupełnioną intencję z godz. {{$time}}">Usuń</a>
@@ -150,6 +165,7 @@
 								{{- else}}
 								<span class="number">{{.Number}}.</span>
 								<span>{{.Content}}{{template "badges" .}}</span>
+								{{template "amount" .}}
 								<span class="intention-actions">
 									<a class="action" href="{{.EditURL}}" aria-label="Edytuj intencję {{.Number}}. z godz. {{$time}}">Edytuj</a>
 									<a class="action action-delete" href="{{.DeleteURL}}" aria-label="Usuń intencję {{.Number}}. z godz. {{$time}}">Usuń</a>
@@ -163,9 +179,10 @@
 						<p class="outside-label">Poza Parafią:</p>
 						<ol class="intentions outside">
 							{{- range .Outside}}
-							<li class="intention{{if .IsGregorian}} is-gregorian{{else if .IsDeceased}} is-deceased{{end}}{{if .IsHidden}} is-hidden{{end}}{{if .IsSaved}} is-saved{{end}}{{if .IsEditing}} is-editing{{end}}" id="i-{{.ID}}">
+							<li class="intention{{if .IsGregorian}} is-gregorian{{else if .IsDeceased}} is-deceased{{end}}{{if .IsHidden}} is-hidden{{end}}{{if .IsUnpaid}} is-unpaid{{end}}{{if .IsSaved}} is-saved{{end}}{{if .IsEditing}} is-editing{{end}}" id="i-{{.ID}}">
 								<span class="number">{{.Number}}.</span>
 								<span>{{.Content}}{{template "badges" .}}</span>
+								{{template "amount" .}}
 								<span class="intention-actions">
 									<a class="action" href="{{.EditURL}}" aria-label="Edytuj intencję poza parafią {{.Number}}. z godz. {{$time}}">Edytuj</a>
 									<a class="action action-delete" href="{{.DeleteURL}}" aria-label="Usuń intencję poza parafią {{.Number}}. z godz. {{$time}}">Usuń</a>
@@ -289,8 +306,86 @@
 		</div>
 	</div>
 	{{- end}}
+
+	{{- with .PaymentsDialog}}
+	<div class="dialog-backdrop">
+		<div class="dialog dialog-payments" role="dialog" aria-modal="true" aria-labelledby="payments-title">
+			<div class="payments-header">
+				<h2 class="dialog-title" id="payments-title">Wpłaty</h2>
+				<nav class="segmented" aria-label="Okres podsumowania">
+					<a class="segmented-item" href="{{.WeekTabURL}}"{{if eq .Tab "week"}} aria-current="page" autofocus{{end}}>Tydzień</a>
+					<a class="segmented-item" href="{{.MonthTabURL}}"{{if eq .Tab "month"}} aria-current="page" autofocus{{end}}>Miesiąc</a>
+					<a class="segmented-item" href="{{.YearTabURL}}"{{if eq .Tab "year"}} aria-current="page" autofocus{{end}}>Rok</a>
+				</nav>
+				<a class="panel-close" href="{{.CloseURL}}" aria-label="Zamknij podsumowanie wpłat" data-close>×</a>
+			</div>
+			<div class="payments-period">
+				<a class="button button-icon" href="{{.PrevURL}}" aria-label="{{.PrevLabel}}" title="{{.PrevLabel}}">
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7"/></svg>
+				</a>
+				<h3 class="payments-period-name">{{.Title}}</h3>
+				<a class="button button-icon" href="{{.NextURL}}" aria-label="{{.NextLabel}}" title="{{.NextLabel}}">
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 5l7 7-7 7"/></svg>
+				</a>
+				{{- with .OpenWeekURL}}
+				<a class="payments-period-link" href="{{.}}">Otwórz ten tydzień →</a>
+				{{- end}}
+			</div>
+			<div class="payments-stats">
+				<div class="stat stat-total">
+					<span class="stat-label">Razem</span>
+					<span class="stat-value">{{.Total}}</span>
+				</div>
+				<div class="stat">
+					<span class="stat-label">Intencje</span>
+					<span class="stat-value">{{.Count}}</span>
+				</div>
+				<div class="stat">
+					<span class="stat-label">Bez kwoty</span>
+					<span class="stat-value{{if .Unpaid}} is-alert{{end}}">{{.Unpaid}}</span>
+					{{- with .UnpaidURL}}
+					<a class="stat-link" href="{{.}}" title="Zaznacz w tygodniu intencje bez wpisanej kwoty">Pokaż</a>
+					{{- end}}
+				</div>
+				<div class="stat">
+					<span class="stat-label" title="Średnia kwota na intencję z wpisaną kwotą">Średnia wpłata</span>
+					<span class="stat-value">{{with .Average}}{{.}}{{else}}—{{end}}</span>
+				</div>
+			</div>
+			<table class="payments-table">
+				<thead>
+					<tr>
+						<th scope="col">{{.FirstColumn}}</th>
+						<th scope="col"><span class="visually-hidden">Udział w sumie</span></th>
+						<th scope="col" class="num">Kwota</th>
+						<th scope="col" class="num">Intencje</th>
+						<th scope="col" class="num">Bez kwoty</th>
+					</tr>
+				</thead>
+				<tbody>
+					{{- range .Rows}}
+					<tr{{if .IsCurrent}} class="is-current"{{end}}>
+						<th scope="row">{{if .URL}}<a class="row-link" href="{{.URL}}">{{.Label}}</a>{{else}}{{.Label}}{{end}}</th>
+						<td class="bar-cell">{{if .Amount}}<span class="bar" style="width: {{.Width}}" title="{{.Title}}"></span>{{end}}</td>
+						<td class="num{{if not .Amount}} zero{{end}}">{{if .Amount}}{{.Amount}}{{else}}—{{end}}</td>
+						<td class="num">{{.Count}}</td>
+						<td class="num{{if .Unpaid}} missing{{end}}">{{if .Unpaid}}{{.Unpaid}}{{end}}</td>
+					</tr>
+					{{- end}}
+				</tbody>
+			</table>
+			<p class="payments-note"><svg width="15" height="12" viewBox="0 0 15 12" aria-hidden="true" focusable="false"><path d="M1.2 6S3.6 1.8 7.5 1.8 13.8 6 13.8 6 11.4 10.2 7.5 10.2 1.2 6 1.2 6z" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="7.5" cy="6" r="1.9" fill="currentColor"/><path d="M2.5 11.2 12.5.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>Kwoty liczone według dnia mszy. Wpłaty nie trafiają na wydruk.</p>
+		</div>
+	</div>
+	{{- end}}
 </body>
 </html>
+
+{{define "amount" -}}
+{{if .Amount}}<span class="amount">{{.Amount}}</span>
+{{- else}}<span class="amount is-missing" title="Brak wpisanej kwoty"><span aria-hidden="true">{{if .IsUnpaid}}brak{{else}}—{{end}}</span><span class="visually-hidden">bez kwoty</span></span>
+{{- end}}
+{{- end}}
 
 {{define "badges" -}}
 {{if and .IsDeceased (not .IsGregorian)}} <span class="badge badge-deceased" title="Intencja za zmarłych"><svg class="badge-icon" width="11" height="15" viewBox="0 0 11 15" aria-hidden="true" focusable="false"><path d="M4.6 0h1.8v3.6H10v1.7H6.4V15H4.6V5.3H1V3.6h3.6z" fill="currentColor"/></svg>za zmarłych</span>{{end -}}

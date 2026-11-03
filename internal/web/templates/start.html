@@ -8,16 +8,19 @@
 </head>
 <body>
 	<main class="start">
-		<img class="start-logo" src="/static/logo.svg" width="88" height="88" alt="">
-		<h1>Intencje mszalne</h1>
-		<p class="start-parish">{{.ParishName}}</p>
-		{{- with .Address}}
-		<p class="start-address">{{.}}</p>
-		{{- end}}
-		<nav class="start-actions" aria-label="Start">
-			<a class="button button-primary" href="{{.WeekURL}}">Przejdź do intencji →</a>
-			<a class="button" href="/settings">Ustawienia</a>
-		</nav>
+		<div class="start-content">
+			<img class="start-logo" src="/static/logo.svg" width="88" height="88" alt="">
+			<h1>Intencje mszalne</h1>
+			<p class="start-parish">{{.ParishName}}</p>
+			{{- with .Address}}
+			<p class="start-address">{{.}}</p>
+			{{- end}}
+			<nav class="start-actions" aria-label="Start">
+				<a class="button button-primary" href="{{.WeekURL}}">Przejdź do intencji →</a>
+				<a class="button" href="/settings">Ustawienia</a>
+			</nav>
+		</div>
+		<p class="start-credit">autor: Tomasz Kaliński, Rzezawa</p>
 	</main>
 </body>
 </html>

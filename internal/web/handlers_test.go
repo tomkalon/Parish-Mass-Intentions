@@ -2144,7 +2144,8 @@ func TestSettingsListsSchedules(t *testing.T) {
 		`<a class="action action-delete" href="/settings?delete_schedule=2&amp;week=2026-11-02" aria-label="Usuń porządek Wakacje">Usuń</a>`,
 		`<a class="button" href="/settings/schedules/new?week=2026-11-02">+ Dodaj porządek</a>`,
 		`<a class="delete-link" href="/settings?restore=1&amp;week=2026-11-02">Przywróć domyślne</a>`,
-		`<p class="app-credit">Go Parafia · autor: Tomasz Kaliński, Gemma It Solutions</p>`,
+		`<p class="app-credit">Go Parafia · autor: Tomasz Kaliński, Rzezawa</p>`,
+		`<p class="app-prayer">Jeśli korzystasz z tego programu, w ramach wdzięczności pomódl się, proszę, za autora.</p>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body does not contain %q", want)
@@ -2605,6 +2606,7 @@ func TestStartPage(t *testing.T) {
 		`<p class="start-address">ul. Kościelna 1, 32-765 Rzezawa</p>`,
 		`<a class="button button-primary" href="/?week=2026-11-02">Przejdź do intencji →</a>`,
 		`<a class="button" href="/settings">Ustawienia</a>`,
+		`<p class="start-credit">autor: Tomasz Kaliński, Rzezawa</p>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("start page does not contain %q", want)

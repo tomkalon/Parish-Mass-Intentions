@@ -930,6 +930,7 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 	setFeasts(view.Days, feasts)
 	upcoming := intentions.NextWeekStart(h.now())
 	view.IsUpcoming = start.Equal(upcoming)
+	view.Relation = newWeekRelation(start, h.now())
 	view.UpcomingURL = weekURL(upcoming)
 	view.Schedules = schedules
 

@@ -48,7 +48,28 @@
 	</nav>
 
 	<main{{if .HasDialog}} inert{{end}}>
-		<h1>INTENCJE MSZY ŚWIĘTYCH – {{.Range}}</h1>
+		<div class="week-heading">
+			<span class="week-heading-icon" aria-hidden="true">
+				<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" focusable="false">
+					<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/>
+					<path d="M3.5 10h17M8 3v4M16 3v4"/>
+					<rect x="6.5" y="13" width="11" height="3.5" rx="1" fill="currentColor" stroke="none"/>
+				</svg>
+			</span>
+			<h1 class="week-title"><span class="week-title-label">Tydzień</span> {{.InWords}}</h1>
+			{{- with .Relation}}
+			<span class="week-relation is-{{.Kind}}">
+				{{- if eq .Kind "current"}}
+				<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" focusable="false"><circle cx="5" cy="5" r="4" fill="currentColor"/></svg>
+				{{- else if eq .Kind "past"}}
+				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
+				{{- else}}
+				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+				{{- end}}
+				{{.Text}}
+			</span>
+			{{- end}}
+		</div>
 
 		<div class="week-actions">
 			{{- if .Schedules}}

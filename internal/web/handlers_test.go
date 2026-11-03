@@ -93,17 +93,17 @@ func TestWeekDefaultsToUpcomingWeek(t *testing.T) {
 		{
 			name:        "thursday shows the week from next monday",
 			now:         time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone),
-			wantHeading: "<h1>INTENCJE MSZY ŚWIĘTYCH – 2.11.2026 r. – 8.11.2026 r.</h1>",
+			wantHeading: `<h1 class="week-title"><span class="week-title-label">Tydzień</span> 2 – 8 listopada 2026</h1>`,
 		},
 		{
 			name:        "monday shows the week from next monday",
 			now:         time.Date(2026, 11, 2, 7, 0, 0, 0, intentions.TimeZone),
-			wantHeading: "<h1>INTENCJE MSZY ŚWIĘTYCH – 9.11.2026 r. – 15.11.2026 r.</h1>",
+			wantHeading: `<h1 class="week-title"><span class="week-title-label">Tydzień</span> 9 – 15 listopada 2026</h1>`,
 		},
 		{
 			name:        "sunday shows the week from the next day",
 			now:         time.Date(2026, 11, 8, 20, 0, 0, 0, intentions.TimeZone),
-			wantHeading: "<h1>INTENCJE MSZY ŚWIĘTYCH – 9.11.2026 r. – 15.11.2026 r.</h1>",
+			wantHeading: `<h1 class="week-title"><span class="week-title-label">Tydzień</span> 9 – 15 listopada 2026</h1>`,
 		},
 	}
 
@@ -142,7 +142,7 @@ func TestWeekSelectedByQuery(t *testing.T) {
 	for _, want := range []string{
 		`<link rel="stylesheet" href="/static/app.css">`,
 		`<script src="/static/app.js" defer></script>`,
-		"<h1>INTENCJE MSZY ŚWIĘTYCH – 9.11.2026 r. – 15.11.2026 r.</h1>",
+		`<h1 class="week-title"><span class="week-title-label">Tydzień</span> 9 – 15 listopada 2026</h1>`,
 		`href="/?week=2026-11-02"`,
 		`href="/?week=2026-11-16"`,
 		`id="d-2026-11-09"`,
@@ -461,7 +461,7 @@ func TestCreateIntentionInvalid(t *testing.T) {
 			body := rec.Body.String()
 			want := append([]string{
 				`<div class="form-alert" role="alert">`,
-				"<h1>INTENCJE MSZY ŚWIĘTYCH – 2.11.2026 r. – 8.11.2026 r.</h1>",
+				`<h1 class="week-title"><span class="week-title-label">Tydzień</span> 2 – 8 listopada 2026</h1>`,
 			}, tt.want...)
 			for _, w := range want {
 				if !strings.Contains(body, w) {
@@ -1779,7 +1779,7 @@ func TestImportFeastsFetchError(t *testing.T) {
 	for _, want := range []string{
 		`<div class="form-alert week-alert" role="alert">`,
 		"<p>Nie udało się pobrać kalendarza z GCatholic. Sprawdź połączenie z internetem i spróbuj ponownie.</p>",
-		`<h1>INTENCJE MSZY ŚWIĘTYCH – 2.11.2026 r. – 8.11.2026 r.</h1>`,
+		`<h1 class="week-title"><span class="week-title-label">Tydzień</span> 2 – 8 listopada 2026</h1>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body does not contain %q", want)
@@ -2607,7 +2607,7 @@ func TestStartPage(t *testing.T) {
 			t.Errorf("start page does not contain %q", want)
 		}
 	}
-	if strings.Contains(body, "INTENCJE MSZY ŚWIĘTYCH") {
+	if strings.Contains(body, "week-title") {
 		t.Error("start page shows the week")
 	}
 }
@@ -2650,7 +2650,7 @@ func TestHomeWithQueryShowsWeek(t *testing.T) {
 
 	for _, target := range []string{"/?week=2026-11-09", "/?week=2026-11-09&new=1"} {
 		body := getHome(t, h, target).Body.String()
-		if !strings.Contains(body, "INTENCJE MSZY ŚWIĘTYCH – 9.11.2026 r. – 15.11.2026 r.") {
+		if !strings.Contains(body, "9 – 15 listopada 2026") {
 			t.Errorf("%s does not show the week", target)
 		}
 	}

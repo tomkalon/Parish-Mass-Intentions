@@ -2,6 +2,7 @@ package web
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"go-parafia/internal/intentions"
@@ -21,6 +22,7 @@ type weekView struct {
 
 	IsUpcoming  bool
 	UpcomingURL string
+	Relation    weekRelation
 	Form        *formView
 	Delete      *deleteView
 	Clear       *clearView
@@ -54,6 +56,40 @@ func newWeekView(start time.Time, intentionsList []intentions.Intention) weekVie
 
 func (v weekView) Week() string {
 	return v.Start.Format(intentions.DateLayout)
+}
+
+func (v weekView) InWords() string {
+	return weekInWords(v.Start)
+}
+
+type weekRelation struct {
+	Text string
+	Kind string
+}
+
+func newWeekRelation(start, now time.Time) weekRelation {
+	weeks := int(math.Round(start.Sub(intentions.WeekStart(now)).Hours() / (7 * 24)))
+
+	switch {
+	case weeks == 0:
+		return weekRelation{Text: "bieżący", Kind: "current"}
+	case weeks == 1:
+		return weekRelation{Text: "nadchodzący", Kind: "upcoming"}
+	case weeks == -1:
+		return weekRelation{Text: "poprzedni", Kind: "past"}
+	case weeks > 1:
+		return weekRelation{Text: "za " + weeksCount(weeks), Kind: "future"}
+	default:
+		return weekRelation{Text: weeksCount(-weeks) + " temu", Kind: "past"}
+	}
+}
+
+func weeksCount(n int) string {
+	if n%10 >= 2 && n%10 <= 4 && (n%100 < 12 || n%100 > 14) {
+		return fmt.Sprintf("%d tygodnie", n)
+	}
+
+	return fmt.Sprintf("%d tygodni", n)
 }
 
 func (v weekView) PrevURL() string {

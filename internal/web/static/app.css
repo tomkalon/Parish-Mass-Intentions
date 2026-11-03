@@ -232,6 +232,79 @@ h1 {
 	text-align: center;
 }
 
+.week-heading {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 16px;
+	margin: 0 0 22px;
+}
+
+.week-heading-icon {
+	display: flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: 56px;
+	height: 56px;
+	border-radius: 14px;
+	background: var(--accent);
+	color: var(--bg);
+}
+
+.week-heading-icon svg {
+	display: block;
+}
+
+.week-title {
+	display: flex;
+	flex-direction: column;
+	margin: 0;
+	font: 700 30px/1.15 var(--font-serif);
+	letter-spacing: 0;
+	text-align: left;
+}
+
+.week-title-label {
+	color: var(--accent);
+	font: 700 13px/1.4 var(--font-ui);
+	letter-spacing: .14em;
+	text-transform: uppercase;
+}
+
+.week-relation {
+	display: inline-flex;
+	align-items: center;
+	align-self: flex-end;
+	gap: 6px;
+	margin-bottom: 4px;
+	padding: 3px 10px 3px 8px;
+	border-radius: var(--radius-pill);
+	background: var(--hover);
+	color: var(--ink-2);
+	font-size: 13px;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.week-relation svg {
+	display: block;
+}
+
+.week-relation.is-current {
+	background: var(--accent);
+	color: #fff;
+}
+
+.week-relation.is-upcoming {
+	background: var(--accent-soft);
+	color: var(--accent);
+}
+
+.week-relation.is-past {
+	color: var(--muted);
+}
+
 .week-actions {
 	display: flex;
 	flex-wrap: wrap;

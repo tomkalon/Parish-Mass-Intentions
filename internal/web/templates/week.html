@@ -21,17 +21,26 @@
 				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
 			</a>
 		</div>
-		<a class="button toolbar-calendar{{if .Calendar}} is-open{{end}}" href="{{.CalendarURL}}" title="Kalendarz">
-			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false">
-				<rect x="3.5" y="5" width="17" height="15.5" rx="2"/>
-				<path d="M3.5 10h17M8 3v4M16 3v4M8 14h2M14 14h2M8 17.5h2"/>
-			</svg>
-			<span class="toolbar-label">Kalendarz</span>
-		</a>
-		<a class="button toolbar-payments{{if .PaymentsDialog}} is-open{{end}}" href="{{.PaymentsURL}}" title="Wpłaty">
-			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2.5" y="6" width="19" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 10v4M18 10v4"/></svg>
-			<span class="toolbar-label">Wpłaty</span>
-		</a>
+		<div class="toolbar-views" role="group" aria-label="Widoki">
+			<a class="button toolbar-calendar{{if .Calendar}} is-open{{end}}" href="{{.CalendarURL}}" title="Kalendarz">
+				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false">
+					<rect x="3.5" y="5" width="17" height="15.5" rx="2"/>
+					<path d="M3.5 10h17M8 3v4M16 3v4M8 14h2M14 14h2M8 17.5h2"/>
+				</svg>
+				<span class="toolbar-label">Kalendarz</span>
+			</a>
+			<a class="button toolbar-payments{{if .PaymentsDialog}} is-open{{end}}" href="{{.PaymentsURL}}" title="Wpłaty">
+				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2.5" y="6" width="19" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 10v4M18 10v4"/></svg>
+				<span class="toolbar-label">Wpłaty</span>
+			</a>
+			<a class="button toolbar-gregorian{{if .Gregorian}} is-open{{end}}" href="{{.GregorianURL}}" title="Msze gregoriańskie{{with .ActiveSeries}} – w trakcie: {{.}}{{end}}">
+				<svg width="15" height="20" viewBox="0 0 12 16" aria-hidden="true" focusable="false"><path d="M6 .5C7.9 2.6 8.3 4.3 6 6.1 3.7 4.3 4.1 2.6 6 .5z" fill="#D9921E"/><path d="M6 2.6c.8 1 .9 1.8 0 2.6-.9-.8-.8-1.6 0-2.6z" fill="#F6D27A"/><rect x="5.6" y="5.9" width=".8" height="1.4" fill="#5A4636"/><rect x="3.3" y="7.2" width="5.4" height="8.3" rx="1" fill="currentColor"/><rect x="4.2" y="8.2" width="1.1" height="6" rx=".5" fill="#fff" opacity=".35"/></svg>
+				<span class="toolbar-label">Msze gregoriańskie{{with .ActiveSeries}}, w trakcie: {{.}}{{end}}</span>
+				{{- with .ActiveSeries}}
+				<span class="count-badge" aria-hidden="true">{{.}}</span>
+				{{- end}}
+			</a>
+		</div>
 		<a class="button toolbar-print" href="{{.PrintURL}}">Drukuj / PDF</a>
 		<a class="button button-primary toolbar-add" href="{{.NewURL}}" title="Dodaj intencję">+ Intencja</a>
 		<a class="button button-icon" href="{{.SettingsURL}}" aria-label="Ustawienia" title="Ustawienia">
@@ -111,6 +120,10 @@
 		<p class="week-notice" role="status"><span>{{.Text}}</span> <a href="{{.URL}}">Pokaż</a></p>
 		{{- end}}
 
+		{{- range .SeriesNotices}}
+		<p class="week-notice is-series" role="status"><span>Seria gregoriańska <strong>{{.Name}}</strong> {{.Text}}</span> <a href="{{.URL}}">Pokaż serię</a></p>
+		{{- end}}
+
 		{{- with .ImportError}}
 		<div class="form-alert week-alert" role="alert">
 			<span class="form-alert-icon" aria-hidden="true">!</span>
@@ -140,11 +153,14 @@
 					{{- if $.Form}}
 					<span class="pill">wybrany w formularzu</span>
 					{{- end}}
+					{{- range .SeriesDue}}
+					<a class="series-due" href="{{.URL}}" title="Dodaj kolejną Mszę gregoriańską na ten dzień"><svg width="11" height="15" viewBox="0 0 12 16" aria-hidden="true" focusable="false"><path d="M6 .5C7.9 2.6 8.3 4.3 6 6.1 3.7 4.3 4.1 2.6 6 .5z" fill="#D9921E"/><rect x="3.3" y="7.2" width="5.4" height="8.3" rx="1" fill="currentColor"/></svg>{{.Name}} <span class="series-due-step">{{.Step}}/30</span></a>
+					{{- end}}
 					<a class="button-small" href="{{.NewURL}}" aria-label="Dodaj intencję – {{.Label}}">+ Dodaj</a>
 				</div>
 				{{- range .Masses}}
 				{{- $time := .Time}}
-				<div class="mass{{if .IsSelected}} is-selected{{end}}" data-time="{{.TimeValue}}">
+				<div class="mass{{if .IsSelected}} is-selected{{end}}" data-time="{{.TimeValue}}" data-count="{{.ParishFilled}}" data-gregorian="{{.ParishGregorians}}">
 					<div class="mass-side">
 						<h3 class="mass-time">{{.Time}}</h3>
 						<a class="add-mass" href="{{.NewURL}}" aria-label="Dodaj intencję na godz. {{.Time}}">+</a>
@@ -190,6 +206,9 @@
 							</li>
 							{{- end}}
 						</ol>
+						{{- end}}
+						{{- if .SharedWithGregorian}}
+						<p class="mass-warning">Gregorianka powinna być jedyną intencją tej Mszy.</p>
 						{{- end}}
 					</div>
 				</div>
@@ -350,8 +369,33 @@
 				<div class="stat">
 					<span class="stat-label" title="Średnia kwota na intencję z wpisaną kwotą">Średnia wpłata</span>
 					<span class="stat-value">{{with .Average}}{{.}}{{else}}—{{end}}</span>
+					{{- if .GregorianPaid}}
+					<span class="stat-note">{{if .WithGregorian}}z gregoriankami{{else}}bez gregorianek{{end}}</span>
+					{{- end}}
+				</div>
+				<div class="stat">
+					<span class="stat-label">Gregorianki</span>
+					<span class="stat-value">{{if .GregorianAmount}}<svg class="amount-icon" width="10" height="14" viewBox="0 0 12 16" aria-hidden="true" focusable="false"><path d="M6 .5C7.9 2.6 8.3 4.3 6 6.1 3.7 4.3 4.1 2.6 6 .5z" fill="#D9921E"/><rect x="3.3" y="7.2" width="5.4" height="8.3" rx="1" fill="currentColor"/></svg>{{.GregorianAmount}}{{else}}—{{end}}</span>
+					{{- if .GregorianPaid}}
+					<span class="stat-note">{{.GregorianLabel}}</span>
+					{{- end}}
 				</div>
 			</div>
+			{{- if .GregorianPaid}}
+			<form class="payments-options" method="get" action="/">
+				<input type="hidden" name="week" value="{{.Week}}">
+				<input type="hidden" name="payments" value="{{.Tab}}">
+				{{- with .Month}}
+				<input type="hidden" name="month" value="{{.}}">
+				{{- end}}
+				{{- with .Year}}
+				<input type="hidden" name="year" value="{{.}}">
+				{{- end}}
+				<label class="checkbox"><input type="checkbox" name="greg" value="1"{{if .WithGregorian}} checked{{end}} data-autosubmit> Wliczaj gregorianki do średniej</label>
+				<span class="payments-options-note">({{if .WithGregorian}}bez gregorianek{{else}}z gregoriankami{{end}}: {{with .OtherAverage}}{{.}}{{else}}—{{end}})</span>
+				<noscript><button class="button" type="submit">Odśwież</button></noscript>
+			</form>
+			{{- end}}
 			<table class="payments-table">
 				<thead>
 					<tr>
@@ -367,7 +411,7 @@
 					<tr{{if .IsCurrent}} class="is-current"{{end}}>
 						<th scope="row">{{if .URL}}<a class="row-link" href="{{.URL}}">{{.Label}}</a>{{else}}{{.Label}}{{end}}</th>
 						<td class="bar-cell">{{if .Amount}}<span class="bar" style="width: {{.Width}}" title="{{.Title}}"></span>{{end}}</td>
-						<td class="num{{if not .Amount}} zero{{end}}">{{if .Amount}}{{.Amount}}{{else}}—{{end}}</td>
+						<td class="num{{if not .Amount}} zero{{end}}">{{if .Amount}}{{if .GregorianAmount}}<span class="greg-mark" title="w tym gregorianki: {{.GregorianAmount}}"><svg class="amount-icon" width="10" height="14" viewBox="0 0 12 16" aria-hidden="true" focusable="false"><path d="M6 .5C7.9 2.6 8.3 4.3 6 6.1 3.7 4.3 4.1 2.6 6 .5z" fill="#D9921E"/><rect x="3.3" y="7.2" width="5.4" height="8.3" rx="1" fill="currentColor"/></svg><span class="visually-hidden">w tym gregorianki: {{.GregorianAmount}}, razem </span></span>{{end}}{{.Amount}}{{else}}—{{end}}</td>
 						<td class="num">{{.Count}}</td>
 						<td class="num{{if .Unpaid}} missing{{end}}">{{if .Unpaid}}{{.Unpaid}}{{end}}</td>
 					</tr>
@@ -378,17 +422,101 @@
 		</div>
 	</div>
 	{{- end}}
+	{{- with .Gregorian}}
+	<div class="dialog-backdrop">
+		{{- with .Stop}}
+		<div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dialog-title" aria-describedby="dialog-content">
+			<h2 class="dialog-title" id="dialog-title">Przerwać serię gregoriańską?</h2>
+			<p class="dialog-when">{{.Name}}</p>
+			<p class="dialog-content" id="dialog-content">Zapisano {{.Count}} z 30 Mszy, odprawiono {{.Done}}. Seria trafi do zakończonych jako przerwana i zniknie z przypomnień. Zapisane Msze zostają w tygodniach.</p>
+			<form class="dialog-actions" method="post" action="/series/{{.ID}}/stop">
+				<input type="hidden" name="week" value="{{$.Week}}">
+				<button class="button button-danger" type="submit">Przerwij serię</button>
+				<a class="button" href="{{.CloseURL}}" data-close autofocus>Anuluj</a>
+			</form>
+		</div>
+		{{- else}}
+		<div class="dialog dialog-series" role="dialog" aria-modal="true" aria-labelledby="series-title">
+			<div class="payments-header">
+				<h2 class="dialog-title" id="series-title">Msze gregoriańskie</h2>
+				<nav class="segmented" aria-label="Serie">
+					<a class="segmented-item" href="{{.ActiveURL}}"{{if eq .Tab "active"}} aria-current="page" autofocus{{end}}>W trakcie · {{.ActiveCount}}</a>
+					<a class="segmented-item" href="{{.ClosedURL}}"{{if eq .Tab "done"}} aria-current="page" autofocus{{end}}>Zakończone · {{.ClosedCount}}</a>
+				</nav>
+				<a class="panel-close" href="{{.CloseURL}}" aria-label="Zamknij msze gregoriańskie" data-close>×</a>
+			</div>
+			<p class="series-legend" aria-hidden="true">
+				<span><i class="legend-seg seg done"></i>odprawione</span>
+				<span><i class="legend-seg seg planned"></i>zapisane w tygodniach</span>
+				<span><i class="legend-seg seg todo"></i>do dodania</span>
+				<span><i class="legend-gap"></i>przerwa w serii</span>
+			</p>
+			{{- if .Rows}}
+			<ul class="series-list">
+				{{- range .Rows}}
+				<li class="series-row{{if .IsOpen}} is-open{{end}}" id="s-{{.ID}}">
+					<a class="series-summary" href="{{.ToggleURL}}" aria-expanded="{{if .IsOpen}}true{{else}}false{{end}}">
+						<span>
+							<span class="series-title">{{.Name}}{{if .Status}}<span class="series-status{{if .IsStopped}} is-stopped{{end}}">{{.Status}}</span>{{end}}</span>
+							<span class="series-sub">{{.Sub}}</span>
+						</span>
+						<span class="series-count"><strong>{{.Done}}</strong>/30<span>odprawionych</span></span>
+						<span class="series-bar" role="img" aria-label="{{.BarLabel}}">
+							{{- range .Segments}}<i class="{{.}}"></i>{{end -}}
+						</span>
+					</a>
+					<div class="series-foot">
+						<span class="series-next">{{.Plan}}{{with .Next}} · następna: <strong>{{.}}</strong>{{end}}</span>
+						{{- with .Gap}}
+						<span class="series-gap"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9.5"/><path d="M12 7.5v5.5M12 16.5v.01"/></svg>{{.}}</span>
+						{{- end}}
+						{{- if .AddURL}}
+						<a class="button-small" href="{{.AddURL}}">{{.AddLabel}}</a>
+						{{- end}}
+					</div>
+					{{- if .IsOpen}}
+					<div class="series-days">
+						{{- range .Days}}
+						{{- if .URL}}
+						<a class="{{.Class}}" href="{{.URL}}" title="{{.Title}}"><b>{{.Step}}</b><span>{{.Date}}</span></a>
+						{{- else}}
+						<span class="{{.Class}}" title="{{.Title}}"><b>{{.Step}}</b><span>{{.Date}}</span></span>
+						{{- end}}
+						{{- end}}
+					</div>
+					<div class="series-actions">
+						<span>{{if .Paid}}Ofiara: <strong>{{.Paid}}</strong> · wpisana przy 1/30{{else}}Ofiara nie została wpisana{{end}}</span>
+						{{- with .EditURL}}
+						<a class="series-edit" href="{{.}}">Zmień treść lub ofiarę</a>
+						{{- end}}
+						{{- with .StopURL}}
+						<a class="delete-link" href="{{.}}">Przerwij serię</a>
+						{{- end}}
+					</div>
+					{{- end}}
+				</li>
+				{{- end}}
+			</ul>
+			{{- else}}
+			<p class="series-empty">{{if eq .Tab "active"}}Nie ma serii w trakcie. Nową serię zaczniesz, dodając intencję z zaznaczonym „Msza gregoriańska”.{{else}}Nie ma jeszcze zakończonych serii.{{end}}</p>
+			{{- end}}
+		</div>
+		{{- end}}
+	</div>
+	{{- end}}
 </body>
 </html>
 
 {{define "amount" -}}
-{{if .Amount}}<span class="amount">{{.Amount}}</span>
+{{if and .Amount .IsGregorian}}<span class="amount" title="{{if .SeriesStep}}Ofiara za całą serię (30 Mszy){{else}}Msza gregoriańska{{end}}"><svg class="amount-icon" width="10" height="14" viewBox="0 0 12 16" aria-hidden="true" focusable="false"><path d="M6 .5C7.9 2.6 8.3 4.3 6 6.1 3.7 4.3 4.1 2.6 6 .5z" fill="#D9921E"/><rect x="3.3" y="7.2" width="5.4" height="8.3" rx="1" fill="currentColor"/></svg>{{.Amount}}</span>
+{{- else if .Amount}}<span class="amount">{{.Amount}}</span>
+{{- else if gt .SeriesStep 1}}<span class="amount is-missing" title="Ofiara wpisana przy pierwszej Mszy serii">w serii</span>
 {{- else}}<span class="amount is-missing" title="Brak wpisanej kwoty"><span aria-hidden="true">{{if .IsUnpaid}}brak{{else}}—{{end}}</span><span class="visually-hidden">bez kwoty</span></span>
 {{- end}}
 {{- end}}
 
 {{define "badges" -}}
 {{if and .IsDeceased (not .IsGregorian)}} <span class="badge badge-deceased" title="Intencja za zmarłych"><svg class="badge-icon" width="11" height="15" viewBox="0 0 11 15" aria-hidden="true" focusable="false"><path d="M4.6 0h1.8v3.6H10v1.7H6.4V15H4.6V5.3H1V3.6h3.6z" fill="currentColor"/></svg>za zmarłych</span>{{end -}}
-{{if .IsGregorian}} <span class="badge badge-gregorian" title="Msza gregoriańska"><svg class="badge-icon" width="12" height="16" viewBox="0 0 12 16" aria-hidden="true" focusable="false"><path d="M6 .5C7.9 2.6 8.3 4.3 6 6.1 3.7 4.3 4.1 2.6 6 .5z" fill="#D9921E"/><path d="M6 2.6c.8 1 .9 1.8 0 2.6-.9-.8-.8-1.6 0-2.6z" fill="#F6D27A"/><rect x="5.6" y="5.9" width=".8" height="1.4" fill="#5A4636"/><rect x="3.3" y="7.2" width="5.4" height="8.3" rx="1" fill="currentColor"/><rect x="4.2" y="8.2" width="1.1" height="6" rx=".5" fill="#fff" opacity=".35"/></svg>gregoriańska</span>{{end -}}
+{{if .IsGregorian}} {{if .SeriesStep}}<a class="badge badge-gregorian" href="{{.SeriesURL}}" title="Msza gregoriańska {{.SeriesStep}} z 30 – pokaż serię"><svg class="badge-icon" width="12" height="16" viewBox="0 0 12 16" aria-hidden="true" focusable="false"><path d="M6 .5C7.9 2.6 8.3 4.3 6 6.1 3.7 4.3 4.1 2.6 6 .5z" fill="#D9921E"/><path d="M6 2.6c.8 1 .9 1.8 0 2.6-.9-.8-.8-1.6 0-2.6z" fill="#F6D27A"/><rect x="5.6" y="5.9" width=".8" height="1.4" fill="#5A4636"/><rect x="3.3" y="7.2" width="5.4" height="8.3" rx="1" fill="currentColor"/><rect x="4.2" y="8.2" width="1.1" height="6" rx=".5" fill="#fff" opacity=".35"/></svg>gregoriańska <span class="series-step">{{.SeriesStep}}/30</span></a>{{else}}<span class="badge badge-gregorian" title="Msza gregoriańska"><svg class="badge-icon" width="12" height="16" viewBox="0 0 12 16" aria-hidden="true" focusable="false"><path d="M6 .5C7.9 2.6 8.3 4.3 6 6.1 3.7 4.3 4.1 2.6 6 .5z" fill="#D9921E"/><path d="M6 2.6c.8 1 .9 1.8 0 2.6-.9-.8-.8-1.6 0-2.6z" fill="#F6D27A"/><rect x="5.6" y="5.9" width=".8" height="1.4" fill="#5A4636"/><rect x="3.3" y="7.2" width="5.4" height="8.3" rx="1" fill="currentColor"/><rect x="4.2" y="8.2" width="1.1" height="6" rx=".5" fill="#fff" opacity=".35"/></svg>gregoriańska</span>{{end}}{{end -}}
 {{if .IsHidden}} <span class="badge badge-hidden" title="Ta intencja nie pojawi się na wydruku"><svg class="badge-icon" width="15" height="12" viewBox="0 0 15 12" aria-hidden="true" focusable="false"><path d="M1.2 6S3.6 1.8 7.5 1.8 13.8 6 13.8 6 11.4 10.2 7.5 10.2 1.2 6 1.2 6z" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="7.5" cy="6" r="1.9" fill="currentColor"/><path d="M2.5 11.2 12.5.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>ukryta na wydruku</span>{{end -}}
 {{- end}}

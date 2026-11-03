@@ -31,6 +31,13 @@ type formView struct {
 	Errors          map[string]string
 	EditID          int
 
+	SeriesID      int
+	SeriesOptions []seriesOption
+	SeriesStep    int
+	SeriesPaid    string
+	SeriesLocked  bool
+	SharedWarning bool
+
 	dayIndex int
 }
 
@@ -40,6 +47,41 @@ func (f formView) Title() string {
 	}
 
 	return "Nowa intencja"
+}
+
+func (f formView) StepLabel() string {
+	switch {
+	case f.SeriesID > 0 && f.SeriesStep > 0:
+		return fmt.Sprintf("gregoriańska %d/30", f.SeriesStep)
+	case f.StartsSeries():
+		return "gregoriańska 1/30"
+	default:
+		return ""
+	}
+}
+
+func (f formView) StartsSeries() bool {
+	return f.EditID == 0 && f.SeriesID == 0 && f.IsGregorian
+}
+
+func (f formView) ContentLocked() bool {
+	return f.SeriesID > 0 && f.SeriesStep != 1
+}
+
+func (f formView) ShowSeriesPaid() bool {
+	return f.SeriesID > 0 && f.SeriesStep != 1
+}
+
+func (f formView) AmountForSeries() bool {
+	return f.StartsSeries() || (f.SeriesID > 0 && f.SeriesStep == 1)
+}
+
+func (f formView) AmountLabel() string {
+	if f.AmountForSeries() {
+		return "Ofiara za całą serię (30 Mszy)"
+	}
+
+	return "Wpłata"
 }
 
 func (f formView) Action() string {

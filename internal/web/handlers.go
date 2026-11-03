@@ -25,6 +25,7 @@ import (
 	"go-parafia/internal/backup"
 	"go-parafia/internal/calendar"
 	"go-parafia/internal/gcatholic"
+	"go-parafia/internal/gregorian"
 	"go-parafia/internal/intentions"
 	"go-parafia/internal/masses"
 	"go-parafia/internal/settings"
@@ -91,6 +92,7 @@ func RegisterRoutes(router chi.Router, db *gorm.DB, opts Options) {
 		r.Post("/intentions/{id}/delete", h.delete)
 		r.Post("/slots", h.createSlots)
 		r.Post("/clear", h.clearWeek)
+		r.Post("/series/{id}/stop", h.stopSeries)
 		r.Post("/days/{date}", h.saveFeast)
 		r.Post("/feasts/import", h.importFeasts)
 		r.Post("/settings", h.saveSettings)
@@ -173,9 +175,13 @@ func (h *handler) week(w http.ResponseWriter, r *http.Request) {
 		f.IsDeceased = intention.IsDeceased
 		f.IsHidden = intention.IsHidden
 		f.Amount = intention.Amount.FormValue()
+		f.SeriesID = intention.SeriesID
 		state.form = &f
 	case query.Get("new") == "1":
 		f := newFormView(start, query.Get("day"), query.Get("time"))
+		if id, err := strconv.Atoi(query.Get("series")); err == nil && id > 0 {
+			f.SeriesID = id
+		}
 		state.form = &f
 	case query.Get("clear") == "1":
 		state.clear = true
@@ -210,6 +216,14 @@ func (h *handler) week(w http.ResponseWriter, r *http.Request) {
 		}
 
 		state.payments = &payments
+	case query.Get("gregorian") != "":
+		g, err := parseGregorianQuery(query)
+		if err != nil {
+			http.Error(w, "nieprawidłowe parametry okna mszy gregoriańskich, oczekiwano gregorian=active|done[&series=ID]", http.StatusBadRequest)
+			return
+		}
+
+		state.gregorian = &g
 	}
 
 	state.saved, _ = strconv.Atoi(query.Get("saved"))
@@ -286,8 +300,16 @@ func (h *handler) pdf(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	steps, err := gregorian.Steps(h.db, seriesIDs(list))
+	if err != nil {
+		log.Printf("error loading gregorian series steps: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
 	view := newWeekView(start, list)
 	setFeasts(view.Days, feasts)
+	setSeriesSteps(view.Days, steps)
 	view.ParishName = setting.ParishName
 	view.Address = setting.Address
 
@@ -328,7 +350,14 @@ func (h *handler) delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.db.Delete(&intention).Error
+	err := h.db.Transaction(func(tx *gorm.DB) error {
+		err := tx.Delete(&intention).Error
+		if err != nil {
+			return err
+		}
+
+		return gregorian.Release(tx, []intentions.Intention{intention})
+	})
 	if err != nil {
 		log.Printf("error deleting intention %d: %v", intention.ID, err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
@@ -715,7 +744,18 @@ func (h *handler) clearWeek(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = intentions.DeleteWeek(h.db, start)
+	err = h.db.Transaction(func(tx *gorm.DB) error {
+		list, err := intentions.ForWeek(tx, start)
+		if err != nil {
+			return err
+		}
+		err = intentions.DeleteWeek(tx, start)
+		if err != nil {
+			return err
+		}
+
+		return gregorian.Release(tx, list)
+	})
 	if err != nil {
 		log.Printf("error clearing week %s: %v", start.Format(intentions.DateLayout), err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
@@ -825,13 +865,66 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 	massTime := r.PostForm.Get("time")
 	content := r.PostForm.Get("content")
 	outside := r.PostForm.Get("outside") == "on"
-	gregorian := r.PostForm.Get("gregorian") == "on"
+	isGregorian := r.PostForm.Get("gregorian") == "on"
 	deceased := r.PostForm.Get("deceased") == "on"
 	hidden := r.PostForm.Get("hidden") == "on"
 	amountText := r.PostForm.Get("amount")
 	amount, amountErr := intentions.ParseGrosze(amountText)
 	copying := r.PostForm.Get("copy") == "1"
-	if copying && gregorian {
+
+	seriesID := intention.SeriesID
+	if intention.ID == 0 {
+		seriesID = 0
+		if param := r.PostForm.Get("series"); param != "" {
+			seriesID, err = strconv.Atoi(param)
+			if err != nil || seriesID < 0 {
+				http.Error(w, "nieprawidłowy identyfikator serii", http.StatusBadRequest)
+				return
+			}
+		}
+	}
+
+	var summary gregorian.Summary
+	seriesErr := ""
+	if seriesID > 0 {
+		summary, err = gregorian.Load(h.db, seriesID, h.now())
+		switch {
+		case errors.Is(err, gregorian.ErrSeriesNotFound):
+			if intention.ID == 0 {
+				seriesErr = "Ta seria gregoriańska już nie istnieje."
+			}
+			seriesID = 0
+		case err != nil:
+			log.Printf("error loading gregorian series %d: %v", seriesID, err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	step := 0
+	if seriesID > 0 {
+		isGregorian, deceased, outside = true, true, summary.Series.IsOutsideParish
+		for i, m := range summary.Masses {
+			if m.ID == intention.ID {
+				step = i + 1
+			}
+		}
+		if step != 1 {
+			content = summary.Series.Content
+			amount, amountErr = 0, nil
+		}
+		if other := summary.MassOn(day); other != nil && other.ID != intention.ID {
+			seriesErr = "Ta seria ma już Mszę w tym dniu."
+		}
+		if intention.ID == 0 {
+			switch {
+			case summary.Status != gregorian.StatusActive:
+				seriesErr = "Ta seria jest już zakończona albo przerwana."
+			case summary.Count() >= gregorian.Length:
+				seriesErr = "Ta seria ma już 30 Mszy."
+			}
+		}
+	} else if copying && isGregorian {
 		amount = 0
 	}
 
@@ -839,7 +932,7 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 		MassAt:          day + " " + massTime,
 		Content:         strings.TrimSpace(content),
 		IsOutsideParish: outside,
-		IsGregorian:     gregorian,
+		IsGregorian:     isGregorian,
 		IsDeceased:      deceased,
 		IsHidden:        hidden,
 		Amount:          amount,
@@ -853,7 +946,11 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 		return
 	}
 
-	if errs := formErrors(day, massTime, messages, amountErr); len(errs) > 0 {
+	errs := formErrors(day, massTime, messages, amountErr)
+	if seriesErr != "" {
+		errs["series"] = seriesErr
+	}
+	if len(errs) > 0 {
 		start := intentions.NextWeekStart(h.now())
 		if week, parseErr := time.ParseInLocation(intentions.DateLayout, r.PostForm.Get("week"), intentions.TimeZone); parseErr == nil {
 			start = intentions.WeekStart(week)
@@ -862,20 +959,50 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 		form := newFormView(start, day, massTime)
 		form.Content = content
 		form.IsOutsideParish = outside
-		form.IsGregorian = gregorian
+		form.IsGregorian = isGregorian
 		form.IsDeceased = deceased
 		form.IsHidden = hidden
 		form.Amount = amountText
 		form.Errors = errs
 		form.EditID = intention.ID
+		form.SeriesID = seriesID
 
 		h.renderWeek(w, http.StatusUnprocessableEntity, start, weekState{form: &form})
 		return
 	}
 
-	intention.Apply(input)
+	newSeries := intention.ID == 0 && seriesID == 0 && isGregorian && !copying
+	rename := seriesID > 0 && step == 1 && input.Content != summary.Series.Content
 
-	err = intentions.Save(h.db, &intention)
+	err = h.db.Transaction(func(tx *gorm.DB) error {
+		switch {
+		case newSeries:
+			series, err := gregorian.Create(tx, input.Content, input.IsOutsideParish)
+			if err != nil {
+				return err
+			}
+			intention.SeriesID = series.ID
+		case seriesID > 0:
+			intention.SeriesID = seriesID
+		}
+		if rename {
+			err := gregorian.Rename(tx, seriesID, input.Content)
+			if err != nil {
+				return err
+			}
+		}
+
+		intention.Apply(input)
+		err := intentions.Save(tx, &intention)
+		if err != nil {
+			return err
+		}
+		if intention.SeriesID > 0 {
+			return gregorian.Normalize(tx, intention.SeriesID)
+		}
+
+		return nil
+	})
 	if err != nil {
 		log.Printf("error saving intention %d: %v", intention.ID, err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
@@ -926,6 +1053,7 @@ type weekState struct {
 	clear        bool
 	calendarYear int
 	payments     *paymentsQuery
+	gregorian    *gregorianQuery
 	saved        int
 	unpaid       bool
 	importError  string
@@ -968,11 +1096,35 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 	view.SelectedScheduleID = setting.SelectedScheduleID
 	view.Topbar = newTopbarView(setting, h.backups.State(), h.now())
 
+	active, err := gregorian.Active(h.db, h.now())
+	if err != nil {
+		log.Printf("error loading gregorian series: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	steps, err := gregorian.Steps(h.db, seriesIDs(list))
+	if err != nil {
+		log.Printf("error loading gregorian series steps: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	setSeriesSteps(view.Days, steps)
+	view.ActiveSeries = len(active)
+	markSeriesDue(view.Days, active, view.Week())
+	view.SeriesNotices = seriesNotices(active, start)
+
 	if state.form != nil {
+		err = h.prepareSeriesForm(state.form, active)
+		if err != nil {
+			log.Printf("error loading gregorian series for the form: %v", err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
 		state.form.QuickAmounts = quickAmountOptions(setting.QuickAmounts, state.form.Amount)
 		view.Form = state.form
 		markSelected(view.Days, state.form.Day, state.form.Time)
 		markEditing(view.Days, state.form.EditID)
+		state.form.SharedWarning = sharedWarning(view.Days, state.form)
 	}
 	view.Delete = state.delete
 	if state.clear && len(list) > 0 {
@@ -1011,6 +1163,23 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 		view.ShowUnpaid = true
 		markUnpaid(view.Days)
 	}
+	if state.gregorian != nil {
+		var closed []gregorian.Summary
+		var total int64
+		if state.gregorian.tab == seriesClosed || (state.gregorian.open > 0 && !containsSeries(active, state.gregorian.open)) {
+			closed, total, err = gregorian.Closed(h.db, h.now(), closedSeriesLimit)
+		} else {
+			total, err = gregorian.CountClosed(h.db, h.now())
+		}
+		if err != nil {
+			log.Printf("error loading closed gregorian series: %v", err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		g := newGregorianView(*state.gregorian, start, h.now(), active, closed, total)
+		view.Gregorian = &g
+	}
 	view.ImportError = state.importError
 	markSaved(view.Days, state.saved)
 
@@ -1034,4 +1203,122 @@ func render(w http.ResponseWriter, status int, tmpl *template.Template, data any
 	if err != nil {
 		log.Printf("error writing response: %v", err)
 	}
+}
+
+func (h *handler) prepareSeriesForm(form *formView, active []gregorian.Summary) error {
+	if form.EditID > 0 {
+		if form.SeriesID == 0 {
+			return nil
+		}
+
+		summary, err := gregorian.Load(h.db, form.SeriesID, h.now())
+		if errors.Is(err, gregorian.ErrSeriesNotFound) {
+			form.SeriesID = 0
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		form.SeriesLocked = true
+		for i, m := range summary.Masses {
+			if m.ID == form.EditID {
+				form.SeriesStep = i + 1
+			}
+		}
+		form.SeriesPaid = paidLabel(summary)
+		form.IsGregorian = true
+		form.IsDeceased = true
+		form.IsOutsideParish = summary.Series.IsOutsideParish
+
+		return nil
+	}
+
+	form.SeriesOptions = newSeriesOptions(active, form.Day, form.SeriesID)
+	selected := form.SeriesID
+	form.SeriesID = 0
+	for _, option := range form.SeriesOptions {
+		if option.ID != selected || !option.Checked {
+			continue
+		}
+
+		form.SeriesID = option.ID
+		form.SeriesStep = option.Step
+		form.SeriesPaid = option.Paid
+		form.Content = option.Content
+		form.IsGregorian = true
+		form.IsDeceased = true
+		form.IsOutsideParish = option.Outside
+		if form.Time == "" {
+			form.Time = option.Time
+			form.Times = timeOptions(form.Time)
+		}
+	}
+
+	return nil
+}
+
+func sharedWarning(days []dayView, form *formView) bool {
+	for _, day := range days {
+		if day.Date != form.Day {
+			continue
+		}
+		for _, mass := range day.Masses {
+			if mass.TimeValue != form.Time {
+				continue
+			}
+
+			if form.IsOutsideParish {
+				return false
+			}
+
+			others, gregorians := mass.ParishFilled(), mass.ParishGregorians()
+			for _, intention := range mass.Parish {
+				if intention.ID != form.EditID || intention.IsPlaceholder {
+					continue
+				}
+				others--
+				if intention.IsGregorian {
+					gregorians--
+				}
+			}
+
+			return others > 0 && (form.IsGregorian || form.SeriesID > 0 || gregorians > 0)
+		}
+	}
+
+	return false
+}
+
+func (h *handler) stopSeries(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "nieprawidłowy identyfikator serii", http.StatusBadRequest)
+		return
+	}
+
+	err = r.ParseForm()
+	if err != nil {
+		http.Error(w, "nieprawidłowe dane formularza", http.StatusBadRequest)
+		return
+	}
+
+	start, err := postedWeekStart(r)
+	if err != nil {
+		http.Error(w, "nieprawidłowa data tygodnia, oczekiwano RRRR-MM-DD", http.StatusBadRequest)
+		return
+	}
+
+	err = gregorian.Stop(h.db, id, h.now())
+	if errors.Is(err, gregorian.ErrSeriesNotFound) {
+		http.Error(w, "nie znaleziono serii gregoriańskiej", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		log.Printf("error stopping gregorian series %d: %v", id, err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, gregorianURL(start.Format(intentions.DateLayout), seriesClosed, id), http.StatusSeeOther)
 }

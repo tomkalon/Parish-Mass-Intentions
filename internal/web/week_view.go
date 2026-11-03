@@ -32,6 +32,10 @@ type weekView struct {
 	PaymentsDialog *paymentsView
 	ShowUnpaid     bool
 
+	Gregorian     *gregorianView
+	ActiveSeries  int
+	SeriesNotices []seriesNotice
+
 	ImportError string
 }
 
@@ -136,7 +140,7 @@ func (v weekView) CalendarURL() string {
 }
 
 func (v weekView) HasDialog() bool {
-	return v.Delete != nil || v.Clear != nil || v.Feast != nil || v.Calendar != nil || v.PaymentsDialog != nil
+	return v.Delete != nil || v.Clear != nil || v.Feast != nil || v.Calendar != nil || v.PaymentsDialog != nil || v.Gregorian != nil
 }
 
 func (v weekView) urlFor(start time.Time) string {

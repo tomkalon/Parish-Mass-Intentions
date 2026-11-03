@@ -229,6 +229,9 @@ func TestPrepareImportMigratesOldSchema(t *testing.T) {
 	if !migrated.Migrator().HasColumn(&intentions.Intention{}, "IsHidden") {
 		t.Error("intentions.is_hidden missing after PrepareImport")
 	}
+	if !migrated.Migrator().HasColumn(&intentions.Intention{}, "SeriesID") || !migrated.Migrator().HasTable("gregorian_series") {
+		t.Error("intentions.series_id or the gregorian_series table missing after PrepareImport")
+	}
 	if !migrated.Migrator().HasColumn(&intentions.Intention{}, "Amount") {
 		t.Fatal("intentions.amount missing after PrepareImport")
 	}

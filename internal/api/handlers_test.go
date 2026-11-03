@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"gorm.io/gorm"
 
+	"go-parafia/internal/gregorian"
 	"go-parafia/internal/intentions"
 )
 
@@ -24,7 +25,7 @@ func newTestRouter(t *testing.T) (http.Handler, *gorm.DB) {
 		t.Fatalf("opening test database: %v", err)
 	}
 
-	err = db.AutoMigrate(&intentions.Intention{})
+	err = db.AutoMigrate(&intentions.Intention{}, &gregorian.Series{})
 	if err != nil {
 		t.Fatalf("migrating test database: %v", err)
 	}
@@ -624,5 +625,40 @@ func TestPutWithoutAmountClearsIt(t *testing.T) {
 	}
 	if got := loadIntention(t, db, 1).Amount; got != 0 {
 		t.Errorf("Amount = %d after PUT without an amount, want 0 (PUT replaces the whole intention)", got)
+	}
+}
+
+func TestSeriesIsKeptByPutAndPatchAndReleasedOnDelete(t *testing.T) {
+	router, db := newTestRouter(t)
+	series, err := gregorian.Create(db, "+ Jan", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, amount := range []intentions.Grosze{150000, 0} {
+		intention := intentions.Intention{MassAt: massAt(t, "2026-11-01 08:00").AddDate(0, 0, i), Content: "+ Jan", IsGregorian: true, SeriesID: series.ID, Amount: amount}
+		err = db.Create(&intention).Error
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	rec := doRequest(t, router, http.MethodPatch, "/intentions/2", `{"content":"+ Jan Kowalski"}`)
+	if rec.Code != http.StatusOK || loadIntention(t, db, 2).SeriesID != series.ID {
+		t.Errorf("PATCH: status %d, series %d; want 200 and the series kept", rec.Code, loadIntention(t, db, 2).SeriesID)
+	}
+	if !strings.Contains(rec.Body.String(), `"series_id":1`) {
+		t.Errorf("PATCH response = %s, want series_id", rec.Body.String())
+	}
+	rec = doRequest(t, router, http.MethodPut, "/intentions/2", `{"mass_at":"2026-11-02 08:00","content":"+ Jan"}`)
+	if rec.Code != http.StatusOK || loadIntention(t, db, 2).SeriesID != series.ID {
+		t.Errorf("PUT: status %d, want 200 and the series kept", rec.Code)
+	}
+
+	rec = doRequest(t, router, http.MethodDelete, "/intentions/1", "")
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("DELETE: status %d, want %d", rec.Code, http.StatusNoContent)
+	}
+	if got := loadIntention(t, db, 2).Amount; got != 150000 {
+		t.Errorf("amount of the remaining mass = %d, want the offering moved to it (150000)", got)
 	}
 }

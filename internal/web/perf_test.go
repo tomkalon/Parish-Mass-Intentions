@@ -17,6 +17,7 @@ import (
 	"go-parafia/internal/backup"
 	"go-parafia/internal/calendar"
 	"go-parafia/internal/database"
+	"go-parafia/internal/gregorian"
 	"go-parafia/internal/intentions"
 )
 
@@ -31,28 +32,44 @@ func seedParishYears(b *testing.B, db *gorm.DB, years int) {
 	first := intentions.WeekStart(time.Date(2026-years+1, 1, 5, 0, 0, 0, 0, intentions.TimeZone))
 	var list []intentions.Intention
 	var days []calendar.Day
+	var series []gregorian.Series
 
 	for d := range years * 364 {
 		day := first.AddDate(0, 0, d)
+		if d%gregorian.Length == 0 {
+			series = append(series, gregorian.Series{ID: len(series) + 1, Content: fmt.Sprintf("+ Seria %d", len(series)+1)})
+		}
 		masses, perMass := []int{6*60 + 30, 18 * 60}, 3
 		if day.Weekday() == time.Sunday {
 			masses, perMass = []int{7 * 60, 8*60 + 30, 10 * 60, 11*60 + 30, 15 * 60, 18 * 60}, 1
 		}
-		for _, m := range masses {
+		for i, m := range masses {
 			for k := range perMass + r.IntN(2) {
-				list = append(list, intentions.Intention{
+				intention := intentions.Intention{
 					MassAt:          time.Date(day.Year(), day.Month(), day.Day(), m/60, m%60, 0, 0, intentions.TimeZone),
 					Content:         fmt.Sprintf("+ Jan Kowalski w %d rocznicę śmierci od rodziny", 1+r.IntN(40)),
 					IsOutsideParish: k > 0 && r.IntN(3) == 0,
 					Amount:          intentions.Grosze(r.IntN(5)) * 5000,
-				})
+				}
+				if i == 0 && k == 0 {
+					intention.SeriesID = d/gregorian.Length + 1
+					intention.IsGregorian = true
+					if d%gregorian.Length > 0 {
+						intention.Amount = 0
+					}
+				}
+				list = append(list, intention)
 			}
 		}
 		days = append(days, calendar.Day{Date: day.Format(intentions.DateLayout), Feast: "wspomnienie św. Karola Boromeusza, biskupa"})
 	}
 
 	err := db.Transaction(func(tx *gorm.DB) error {
-		err := tx.CreateInBatches(list, 500).Error
+		err := tx.CreateInBatches(series, 500).Error
+		if err != nil {
+			return err
+		}
+		err = tx.CreateInBatches(list, 500).Error
 		if err != nil {
 			return err
 		}
@@ -130,6 +147,23 @@ func BenchmarkPaymentsLargeParish(b *testing.B) {
 	for _, tab := range []string{paymentsWeek, paymentsMonth, paymentsYear} {
 		b.Run(tab, func(b *testing.B) {
 			target := "/?week=" + benchWeek + "&payments=" + tab
+			for b.Loop() {
+				rec := httptest.NewRecorder()
+				router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+				if rec.Code != http.StatusOK {
+					b.Fatalf("status = %d", rec.Code)
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkGregorianLargeParish(b *testing.B) {
+	router, _ := largeParish(b)
+
+	for _, tab := range []string{seriesActive, seriesClosed} {
+		b.Run(tab, func(b *testing.B) {
+			target := "/?week=" + benchWeek + "&gregorian=" + tab
 			for b.Loop() {
 				rec := httptest.NewRecorder()
 				router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))

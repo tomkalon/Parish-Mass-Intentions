@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm/logger"
 
 	"go-parafia/internal/calendar"
+	"go-parafia/internal/gregorian"
 	"go-parafia/internal/intentions"
 	"go-parafia/internal/masses"
 	"go-parafia/internal/settings"
@@ -34,7 +35,7 @@ func Open(path string) (*gorm.DB, error) {
 }
 
 func Migrate(db *gorm.DB) error {
-	err := db.AutoMigrate(&intentions.Intention{}, &settings.Setting{}, &calendar.Day{})
+	err := db.AutoMigrate(&intentions.Intention{}, &settings.Setting{}, &calendar.Day{}, &gregorian.Series{})
 	if err != nil {
 		return err
 	}

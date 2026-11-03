@@ -1,6 +1,7 @@
 package intentions
 
 import (
+	"slices"
 	"time"
 
 	"gorm.io/gorm"
@@ -22,14 +23,23 @@ type DayCount struct {
 	Filled       int
 	Placeholders int
 	Unpaid       int
+	Paid         int
 	Amount       Grosze
+
+	GregorianPaid   int
+	GregorianAmount Grosze
 }
 
 func CountByDay(db *gorm.DB, from, to time.Time) (map[string]DayCount, error) {
 	var list []Intention
 	err := inRange(db, from, to).
-		Select("mass_at", "is_placeholder", "amount").
+		Select("id", "mass_at", "is_placeholder", "is_gregorian", "amount", "series_id").
 		Find(&list).Error
+	if err != nil {
+		return nil, err
+	}
+
+	paidInSeries, err := paidInSeries(db, list)
 	if err != nil {
 		return nil, err
 	}
@@ -41,17 +51,59 @@ func CountByDay(db *gorm.DB, from, to time.Time) (map[string]DayCount, error) {
 		switch {
 		case intention.IsPlaceholder:
 			count.Placeholders++
-		case intention.Amount == 0:
+		case intention.Amount > 0:
 			count.Filled++
-			count.Unpaid++
+			count.Paid++
+			count.Amount += intention.Amount
+			if intention.IsGregorian {
+				count.GregorianPaid++
+				count.GregorianAmount += intention.Amount
+			}
+		case paidInSeries[intention.ID]:
+			count.Filled++
 		default:
 			count.Filled++
-			count.Amount += intention.Amount
+			count.Unpaid++
 		}
 		counts[date] = count
 	}
 
 	return counts, nil
+}
+
+func paidInSeries(db *gorm.DB, list []Intention) (map[int]bool, error) {
+	var ids []int
+	for _, intention := range list {
+		if intention.SeriesID > 0 && intention.Amount == 0 && !slices.Contains(ids, intention.SeriesID) {
+			ids = append(ids, intention.SeriesID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	var masses []Intention
+	err := db.Select("id", "series_id", "mass_at", "amount").
+		Where("series_id IN ?", ids).
+		Order("mass_at, id").
+		Find(&masses).Error
+	if err != nil {
+		return nil, err
+	}
+
+	paid := make(map[int]bool)
+	seen := make(map[int]bool)
+	total := make(map[int]Grosze)
+	for _, mass := range masses {
+		total[mass.SeriesID] += mass.Amount
+	}
+	for _, mass := range masses {
+		first := !seen[mass.SeriesID]
+		seen[mass.SeriesID] = true
+		paid[mass.ID] = !first || total[mass.SeriesID] > 0
+	}
+
+	return paid, nil
 }
 
 func Save(db *gorm.DB, intention *Intention) error {

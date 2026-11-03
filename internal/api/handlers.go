@@ -12,6 +12,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"gorm.io/gorm"
 
+	"go-parafia/internal/gregorian"
 	"go-parafia/internal/intentions"
 )
 
@@ -157,7 +158,14 @@ func (h *intentionHandler) delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.db.Delete(&intention).Error
+	err := h.db.Transaction(func(tx *gorm.DB) error {
+		err := tx.Delete(&intention).Error
+		if err != nil {
+			return err
+		}
+
+		return gregorian.Release(tx, []intentions.Intention{intention})
+	})
 	if err != nil {
 		log.Printf("error deleting intention: %d, %v", intention.ID, err)
 		http.Error(w, "error deleting intention", http.StatusInternalServerError)

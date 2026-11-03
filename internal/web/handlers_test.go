@@ -25,6 +25,7 @@ import (
 	"go-parafia/internal/backup"
 	"go-parafia/internal/calendar"
 	"go-parafia/internal/gcatholic"
+	"go-parafia/internal/gregorian"
 	"go-parafia/internal/intentions"
 	"go-parafia/internal/masses"
 	"go-parafia/internal/settings"
@@ -43,7 +44,7 @@ func newTestHandler(t *testing.T, now time.Time) *handler {
 		t.Fatalf("opening test database: %v", err)
 	}
 
-	err = db.AutoMigrate(&intentions.Intention{}, &settings.Setting{}, &calendar.Day{})
+	err = db.AutoMigrate(&intentions.Intention{}, &settings.Setting{}, &calendar.Day{}, &gregorian.Series{})
 	if err != nil {
 		t.Fatalf("migrating test database: %v", err)
 	}
@@ -187,7 +188,7 @@ func TestWeekWithNewIntentionPanel(t *testing.T) {
 	for _, want := range []string{
 		`<body class="has-panel">`,
 		`<h2 class="panel-title" id="panel-title">Nowa intencja</h2>`,
-		`<form class="panel-form" method="post" action="/intentions">`,
+		`<form class="panel-form" method="post" action="/intentions" data-new>`,
 		`<input type="hidden" name="week" value="2026-11-02">`,
 		`<legend class="label">Dzień · 2.11 – 8.11.2026</legend>`,
 		`value="2026-11-03" checked required>`,
@@ -195,7 +196,7 @@ func TestWeekWithNewIntentionPanel(t *testing.T) {
 		`<a class="panel-close" href="/?week=2026-11-02" aria-label="Zamknij" data-close>×</a>`,
 		`<section class="day is-selected" id="d-2026-11-03">`,
 		`<span class="pill">wybrany w formularzu</span>`,
-		`<div class="mass is-selected" data-time="18:00">`,
+		`<div class="mass is-selected" data-time="18:00" data-count="1" data-gregorian="0">`,
 		// html/template writes & in attributes as &amp;.
 		`href="/?day=2026-10-27&amp;new=1&amp;time=18%3A00&amp;week=2026-10-26"`,
 	} {
@@ -2143,7 +2144,8 @@ func TestSettingsListsSchedules(t *testing.T) {
 		`<a class="action action-delete" href="/settings?delete_schedule=2&amp;week=2026-11-02" aria-label="Usuń porządek Wakacje">Usuń</a>`,
 		`<a class="button" href="/settings/schedules/new?week=2026-11-02">+ Dodaj porządek</a>`,
 		`<a class="delete-link" href="/settings?restore=1&amp;week=2026-11-02">Przywróć domyślne</a>`,
-		`<p class="app-credit">Go Parafia · autor: Tomasz Kaliński, Gemma It Solutions</p>`,
+		`<p class="app-credit">Go Parafia · autor: Tomasz Kaliński, Rzezawa</p>`,
+		`<p class="app-prayer">Jeśli korzystasz z tego programu, w ramach wdzięczności pomódl się, proszę, za autora.</p>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body does not contain %q", want)
@@ -2604,6 +2606,7 @@ func TestStartPage(t *testing.T) {
 		`<p class="start-address">ul. Kościelna 1, 32-765 Rzezawa</p>`,
 		`<a class="button button-primary" href="/?week=2026-11-02">Przejdź do intencji →</a>`,
 		`<a class="button" href="/settings">Ustawienia</a>`,
+		`<p class="start-credit">autor: Tomasz Kaliński, Rzezawa</p>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("start page does not contain %q", want)

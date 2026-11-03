@@ -21,9 +21,10 @@ const (
 var errInvalidPayments = errors.New("invalid payments query")
 
 type paymentsQuery struct {
-	tab   string
-	month time.Time
-	year  int
+	tab           string
+	month         time.Time
+	year          int
+	withGregorian bool
 }
 
 func parsePaymentsQuery(query url.Values, start time.Time) (paymentsQuery, error) {
@@ -31,6 +32,8 @@ func parsePaymentsQuery(query url.Values, start time.Time) (paymentsQuery, error
 		tab:   query.Get("payments"),
 		month: time.Date(start.Year(), start.Month(), 1, 0, 0, 0, 0, intentions.TimeZone),
 		year:  start.Year(),
+
+		withGregorian: query.Get("greg") == "1",
 	}
 
 	switch p.tab {
@@ -85,10 +88,19 @@ type paymentsView struct {
 	OpenWeekURL string
 	UnpaidURL   string
 
+	Week          string
+	Month         string
+	Year          string
+	WithGregorian bool
+
 	Total  intentions.Grosze
 	Count  int
 	Unpaid int
+	Paid   int
 	Rows   []paymentsRow
+
+	GregorianAmount intentions.Grosze
+	GregorianPaid   int
 }
 
 type paymentsRow struct {
@@ -97,34 +109,75 @@ type paymentsRow struct {
 	Amount intentions.Grosze
 	Count  int
 	Unpaid int
+	Paid   int
 	Width  string
+
+	GregorianAmount intentions.Grosze
+	GregorianPaid   int
 
 	IsCurrent bool
 }
 
 func (r paymentsRow) Title() string {
-	return r.Label + ": " + r.Amount.String() + ", " + intentionsCount(r.Count)
+	title := r.Label + ": " + r.Amount.String() + ", " + intentionsCount(r.Count)
+	if r.GregorianAmount > 0 {
+		title += ", w tym gregorianki " + r.GregorianAmount.String()
+	}
+
+	return title
 }
 
 func (v paymentsView) Average() intentions.Grosze {
-	paid := int64(v.Count - v.Unpaid)
-	if paid <= 0 {
+	return v.average(v.WithGregorian)
+}
+
+func (v paymentsView) OtherAverage() intentions.Grosze {
+	return v.average(!v.WithGregorian)
+}
+
+func (v paymentsView) average(withGregorian bool) intentions.Grosze {
+	total, paid := v.Total, v.Paid
+	if !withGregorian {
+		total -= v.GregorianAmount
+		paid -= v.GregorianPaid
+	}
+
+	return roundedAverage(total, paid)
+}
+
+func roundedAverage(total intentions.Grosze, count int) intentions.Grosze {
+	paid := int64(count)
+	if paid <= 0 || total <= 0 {
 		return 0
 	}
 
-	zloty := (int64(v.Total)*2 + paid*100) / (paid * 200)
+	zloty := (int64(total)*2 + paid*100) / (paid * 200)
 
 	return intentions.Grosze(zloty * 100)
+}
+
+func (v paymentsView) GregorianLabel() string {
+	n := v.GregorianPaid
+	switch {
+	case n == 1:
+		return "1 seria"
+	case n%10 >= 2 && n%10 <= 4 && (n%100 < 12 || n%100 > 14):
+		return fmt.Sprintf("%d serie", n)
+	default:
+		return fmt.Sprintf("%d serii", n)
+	}
 }
 
 func newPaymentsView(p paymentsQuery, current, today time.Time, counts map[string]intentions.DayCount) paymentsView {
 	week := current.Format(intentions.DateLayout)
 	view := paymentsView{
-		Tab:         p.tab,
-		WeekTabURL:  paymentsURL(week, paymentsWeek, ""),
-		MonthTabURL: paymentsURL(week, paymentsMonth, ""),
-		YearTabURL:  paymentsURL(week, paymentsYear, ""),
-		CloseURL:    weekURL(current),
+		Tab:           p.tab,
+		WeekTabURL:    paymentsURL(week, paymentsWeek, ""),
+		MonthTabURL:   paymentsURL(week, paymentsMonth, ""),
+		YearTabURL:    paymentsURL(week, paymentsYear, ""),
+		CloseURL:      weekURL(current),
+		Week:          week,
+		WithGregorian: p.withGregorian,
 	}
 
 	switch p.tab {
@@ -136,6 +189,7 @@ func newPaymentsView(p paymentsQuery, current, today time.Time, counts map[strin
 		view.NextURL = paymentsURL(week, paymentsMonth, p.month.AddDate(0, 1, 0).Format(monthLayout))
 		view.NextLabel = "Następny miesiąc"
 		view.Rows = monthRows(p.month, current, counts)
+		view.Month = p.month.Format(monthLayout)
 	case paymentsYear:
 		view.Title = strconv.Itoa(p.year)
 		view.FirstColumn = "Miesiąc"
@@ -144,6 +198,7 @@ func newPaymentsView(p paymentsQuery, current, today time.Time, counts map[strin
 		view.NextURL = paymentsURL(week, paymentsYear, strconv.Itoa(p.year+1))
 		view.NextLabel = "Następny rok"
 		view.Rows = yearRows(p.year, current, counts)
+		view.Year = strconv.Itoa(p.year)
 	default:
 		view.Title = weekInWords(current)
 		view.FirstColumn = "Dzień"
@@ -160,10 +215,24 @@ func newPaymentsView(p paymentsQuery, current, today time.Time, counts map[strin
 		view.Total += row.Amount
 		view.Count += row.Count
 		view.Unpaid += row.Unpaid
+		view.Paid += row.Paid
+		view.GregorianAmount += row.GregorianAmount
+		view.GregorianPaid += row.GregorianPaid
 		top = max(top, row.Amount)
 	}
 	for i := range view.Rows {
 		view.Rows[i].Width = barWidth(view.Rows[i].Amount, top)
+	}
+
+	if p.withGregorian {
+		for _, link := range []*string{&view.WeekTabURL, &view.MonthTabURL, &view.YearTabURL, &view.PrevURL, &view.NextURL} {
+			*link += "&greg=1"
+		}
+		for i := range view.Rows {
+			if view.Rows[i].URL != "" {
+				view.Rows[i].URL += "&greg=1"
+			}
+		}
 	}
 
 	return view
@@ -231,6 +300,9 @@ func sumDays(from, to time.Time, counts map[string]intentions.DayCount) payments
 		row.Amount += count.Amount
 		row.Count += count.Filled
 		row.Unpaid += count.Unpaid
+		row.Paid += count.Paid
+		row.GregorianAmount += count.GregorianAmount
+		row.GregorianPaid += count.GregorianPaid
 	}
 
 	return row
@@ -296,7 +368,7 @@ func (v weekView) WeekPayments() *weekPayments {
 		}
 		p.Count++
 		p.Total += intention.Amount
-		if intention.Amount == 0 {
+		if intention.Amount == 0 && intention.SeriesStep <= 1 {
 			p.Unpaid++
 			if p.firstUnpaid == 0 {
 				p.firstUnpaid = intention.ID
@@ -330,6 +402,6 @@ func unpaidURL(week string, firstID int) string {
 
 func markUnpaid(days []dayView) {
 	forEachIntention(days, func(intention *intentionView) {
-		intention.IsUnpaid = !intention.IsPlaceholder && intention.Amount == 0
+		intention.IsUnpaid = !intention.IsPlaceholder && intention.Amount == 0 && intention.SeriesStep <= 1
 	})
 }

@@ -79,4 +79,4 @@ GitHub Actions przy każdym pushu i pull requeście: formatowanie, `go vet` (tak
 
 ## Autor
 
-Tomasz Kaliński, Gemma It Solutions
+Tomasz Kaliński, Rzezawa

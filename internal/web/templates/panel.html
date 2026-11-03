@@ -1,8 +1,11 @@
 {{define "panel" -}}
 <aside class="panel" role="complementary" aria-labelledby="panel-title">
-	<form class="panel-form" method="post" action="{{.Action}}">
+	<form class="panel-form" method="post" action="{{.Action}}"{{if not .EditID}} data-new{{end}}>
 		<header class="panel-header">
-			<h2 class="panel-title" id="panel-title">{{.Title}}</h2>
+			<div class="panel-title-row">
+				<h2 class="panel-title" id="panel-title">{{.Title}}</h2>
+				<span class="panel-step" id="series-step"{{if not .StepLabel}} hidden{{end}}>{{.StepLabel}}</span>
+			</div>
 			<a class="panel-close" href="{{.CloseURL}}" aria-label="Zamknij" data-close>×</a>
 		</header>
 
@@ -15,6 +18,9 @@
 			{{- end}}
 
 			<input type="hidden" name="week" value="{{.Week}}">
+			{{- if .SeriesLocked}}
+			<input type="hidden" name="series" value="{{.SeriesID}}">
+			{{- end}}
 
 			<fieldset class="field{{if .Errors.day}} is-invalid{{end}}"{{if .Errors.day}} aria-describedby="day-error"{{end}}>
 				<legend class="label">Dzień · {{.Legend}}</legend>
@@ -30,10 +36,47 @@
 				<p class="field-error" id="day-error">{{.}}</p>
 				{{- end}}
 				<p class="hint">Inny tydzień? Użyj strzałek ← → albo kalendarza w pasku u góry.</p>
-				{{- if .EditID}}
+				{{- if .SeriesLocked}}
+				<p class="hint">Kolejna Msza tej serii? Wybierz dzień i godzinę i kliknij „Kopiuj”.</p>
+				{{- else if .EditID}}
 				<p class="hint">Ta sama intencja w innym terminie? Zmień dzień lub godzinę i kliknij „Kopiuj”.</p>
 				{{- end}}
 			</fieldset>
+
+			{{- if .SeriesOptions}}
+			<fieldset class="series-picker"{{if .Errors.series}} aria-describedby="series-error"{{end}}>
+				<legend class="label">Msze gregoriańskie w trakcie</legend>
+				<div class="series-options">
+					{{- range .SeriesOptions}}
+					<div class="series-option"{{if .Hidden}} hidden{{end}}>
+						<input type="radio" id="series-{{.ID}}" name="series" value="{{.ID}}"{{if .Checked}} checked{{end}}{{if .Disabled}} disabled{{end}} data-content="{{.Content}}" data-time="{{.Time}}" data-outside="{{if .Outside}}1{{end}}" data-paid="{{.Paid}}" data-days="{{.Days}}" data-next="{{.Next}}" data-first="{{.First}}">
+						<label for="series-{{.ID}}">
+							<span class="series-radio" aria-hidden="true"></span>
+							<span class="series-name">{{.Name}}</span>
+							<span class="series-step-big">{{if .Step}}{{.Step}}/30{{end}}</span>
+							<span class="series-meta{{with .MetaKind}} is-{{.}}{{end}}">{{.Meta}}</span>
+						</label>
+					</div>
+					{{- end}}
+					<div class="series-option">
+						<input type="radio" id="series-none" name="series" value=""{{if not .SeriesID}} checked{{end}}>
+						<label for="series-none">
+							<span class="series-radio" aria-hidden="true"></span>
+							<span class="series-name">Inna intencja</span>
+							<span class="series-step-big"></span>
+							<span class="series-meta">zwykła albo pierwsza Msza nowej serii</span>
+						</label>
+					</div>
+				</div>
+				{{- with .Errors.series}}
+				<p class="field-error" id="series-error">{{.}}</p>
+				{{- end}}
+			</fieldset>
+			{{- else}}
+			{{- with .Errors.series}}
+			<p class="field-error" id="series-error">{{.}}</p>
+			{{- end}}
+			{{- end}}
 
 			<div class="field">
 				<label class="label" for="time">Godzina</label>
@@ -50,25 +93,32 @@
 
 			<div class="field">
 				<label class="label" for="content">Treść intencji</label>
-				<textarea class="textarea{{if .Errors.content}} is-invalid{{end}}" id="content" name="content" maxlength="500" required autofocus{{if .Errors.content}} aria-invalid="true" aria-describedby="content-error"{{end}}>{{.Content}}</textarea>
+				<textarea class="textarea{{if .Errors.content}} is-invalid{{end}}" id="content" name="content" maxlength="500" required autofocus{{if .ContentLocked}} readonly{{end}}{{if .Errors.content}} aria-invalid="true" aria-describedby="content-error"{{end}}>{{.Content}}</textarea>
 				{{- with .Errors.content}}
 				<p class="field-error" id="content-error">{{.}}</p>
 				{{- end}}
+				<p class="hint" id="content-series-hint"{{if not .ContentLocked}} hidden{{end}}>Treść pochodzi z serii. Zmienisz ją, edytując pierwszą Mszę serii (1/30).</p>
 			</div>
 
 			<div class="checkboxes">
-				<label class="checkbox"><input type="checkbox" name="outside"{{if .IsOutsideParish}} checked{{end}}> Poza parafią</label>
-				<label class="checkbox"><input type="checkbox" name="deceased"{{if .IsDeceased}} checked{{end}}> Za zmarłych</label>
-				<label class="checkbox"><input type="checkbox" name="gregorian"{{if .IsGregorian}} checked{{end}}> Msza gregoriańska</label>
+				<label class="checkbox"><input type="checkbox" name="outside"{{if .IsOutsideParish}} checked{{end}}{{if .SeriesID}} disabled{{end}}> Poza parafią</label>
+				<label class="checkbox"><input type="checkbox" name="deceased"{{if .IsDeceased}} checked{{end}}{{if .SeriesID}} disabled{{end}}> Za zmarłych</label>
+				<label class="checkbox"><input type="checkbox" name="gregorian"{{if .IsGregorian}} checked{{end}}{{if .SeriesID}} disabled{{end}}> Msza gregoriańska</label>
 				<label class="checkbox checkbox-print"><input type="checkbox" name="hidden"{{if .IsHidden}} checked{{end}}> Ukryj na wydruku</label>
 			</div>
 
+			{{- if not .EditID}}
+			<p class="series-hint" id="series-new-hint"{{if not .StartsSeries}} hidden{{end}}><svg width="12" height="16" viewBox="0 0 12 16" aria-hidden="true" focusable="false"><path d="M6 .5C7.9 2.6 8.3 4.3 6 6.1 3.7 4.3 4.1 2.6 6 .5z" fill="#D9921E"/><rect x="3.3" y="7.2" width="5.4" height="8.3" rx="1" fill="currentColor"/></svg><span>Zapis rozpocznie <strong>nową serię gregoriańską</strong>: ta Msza będzie 1/30. Kolejne dodasz z listy „Msze gregoriańskie w trakcie” albo z przypomnienia przy dniu.</span></p>
+			{{- end}}
+			<p class="mass-warning" id="shared-hint"{{if not .SharedWarning}} hidden{{end}}>Na tej Mszy będzie gregorianka i inna intencja – gregorianka powinna być jedyną intencją swojej Mszy.</p>
+
 			<div class="field payment">
 				<div class="payment-head">
-					<label class="label" for="amount">Wpłata</label>
+					<label class="label" for="amount" data-series-label="Ofiara za całą serię (30 Mszy)">{{.AmountLabel}}</label>
 					<span class="payment-private"><svg width="15" height="12" viewBox="0 0 15 12" aria-hidden="true" focusable="false"><path d="M1.2 6S3.6 1.8 7.5 1.8 13.8 6 13.8 6 11.4 10.2 7.5 10.2 1.2 6 1.2 6z" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="7.5" cy="6" r="1.9" fill="currentColor"/><path d="M2.5 11.2 12.5.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>nie trafia na wydruk</span>
 				</div>
-				<div class="payment-row">
+				<p class="series-paid" id="series-paid"{{if not .ShowSeriesPaid}} hidden{{end}}>{{if .SeriesPaid}}Ofiara za całą serię: <strong>{{.SeriesPaid}}</strong> – wpisana przy 1/30.{{else}}Ofiara za tę serię nie została wpisana – wpisz ją przy 1/30.{{end}}</p>
+				<div class="payment-row" id="amount-row"{{if .ShowSeriesPaid}} hidden{{end}}>
 					<div class="amount-input">
 						<input class="input{{if .Errors.amount}} is-invalid{{end}}" type="text" id="amount" name="amount" value="{{.Amount}}" inputmode="decimal" autocomplete="off" placeholder="0" maxlength="20" aria-describedby="{{if .Errors.amount}}amount-error {{end}}amount-hint"{{if .Errors.amount}} aria-invalid="true"{{end}}>
 						<span class="amount-unit" aria-hidden="true">zł</span>
@@ -84,7 +134,8 @@
 				{{- with .Errors.amount}}
 				<p class="field-error" id="amount-error">{{.}}</p>
 				{{- end}}
-				<p class="hint" id="amount-hint">Puste pole – intencja bez wpłaty. Mszę gregoriańską opłaca się raz: kwotę wpisz przy pierwszej mszy (kopie jej nie przenoszą).</p>
+				<p class="hint" id="amount-once"{{if not .AmountForSeries}} hidden{{end}}>Płatne <strong>jednorazowo</strong> – za wszystkie 30 Mszy. Przy kolejnych Mszach tej serii pola już nie będzie.</p>
+				<p class="hint" id="amount-hint"{{if .ShowSeriesPaid}} hidden{{end}}>Puste pole – intencja bez wpłaty.</p>
 			</div>
 		</div>
 

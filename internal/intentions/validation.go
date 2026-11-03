@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,8 +23,18 @@ func NewValidator() *validator.Validate {
 	if err != nil {
 		panic(err)
 	}
+	err = validate.RegisterValidation("amount", isAmount)
+	if err != nil {
+		panic(err)
+	}
 
 	return validate
+}
+
+func isAmount(fl validator.FieldLevel) bool {
+	amount := fl.Field().Int()
+
+	return amount >= 0 && amount <= int64(MaxAmount)
 }
 
 func isQuarterHour(fl validator.FieldLevel) bool {
@@ -61,6 +72,8 @@ func validationMessage(fe validator.FieldError) string {
 		return "Godzina musi być pełnym kwadransem (:00, :15, :30, :45)."
 	case "max":
 		return fmt.Sprintf("Maksymalnie %s znaków.", fe.Param())
+	case "amount":
+		return "Kwota musi wynosić od 0 do " + MaxAmount.String() + " (w groszach: od 0 do " + strconv.FormatInt(int64(MaxAmount), 10) + ")."
 	default:
 		return "Nieprawidłowa wartość."
 	}

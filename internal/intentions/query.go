@@ -21,12 +21,14 @@ func ForWeek(db *gorm.DB, start time.Time) ([]Intention, error) {
 type DayCount struct {
 	Filled       int
 	Placeholders int
+	Unpaid       int
+	Amount       Grosze
 }
 
 func CountByDay(db *gorm.DB, from, to time.Time) (map[string]DayCount, error) {
 	var list []Intention
 	err := inRange(db, from, to).
-		Select("mass_at", "is_placeholder").
+		Select("mass_at", "is_placeholder", "amount").
 		Find(&list).Error
 	if err != nil {
 		return nil, err
@@ -36,10 +38,15 @@ func CountByDay(db *gorm.DB, from, to time.Time) (map[string]DayCount, error) {
 	for _, intention := range list {
 		date := intention.MassAt.In(TimeZone).Format(DateLayout)
 		count := counts[date]
-		if intention.IsPlaceholder {
+		switch {
+		case intention.IsPlaceholder:
 			count.Placeholders++
-		} else {
+		case intention.Amount == 0:
 			count.Filled++
+			count.Unpaid++
+		default:
+			count.Filled++
+			count.Amount += intention.Amount
 		}
 		counts[date] = count
 	}

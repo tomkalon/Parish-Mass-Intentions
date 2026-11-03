@@ -1,21 +1,29 @@
 package settings
 
 import (
+	"slices"
+
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+
+	"go-parafia/internal/intentions"
 )
 
 const (
 	settingID         = 1
 	DefaultParishName = "Parafia pw. Trójcy Przenajświętszej i św. Leopolda w Rzezawie"
+	MaxQuickAmounts   = 6
 )
 
+var DefaultQuickAmounts = []intentions.Grosze{5000, 10000, 15000, 20000}
+
 type Setting struct {
-	ID                 int         `json:"id"`
-	ParishName         string      `json:"parish_name"`
-	Address            string      `json:"address"`
-	SelectedScheduleID int         `json:"selected_schedule_id"`
-	FeastImport        FeastImport `json:"feast_import" gorm:"embedded;embeddedPrefix:feast_import_"`
+	ID                 int                 `json:"id"`
+	ParishName         string              `json:"parish_name"`
+	Address            string              `json:"address"`
+	SelectedScheduleID int                 `json:"selected_schedule_id"`
+	FeastImport        FeastImport         `json:"feast_import" gorm:"embedded;embeddedPrefix:feast_import_"`
+	QuickAmounts       []intentions.Grosze `json:"quick_amounts" gorm:"serializer:json"`
 }
 
 type FeastImport struct {
@@ -31,6 +39,9 @@ func Load(db *gorm.DB) (Setting, error) {
 	err := db.Limit(1).Find(&setting, settingID).Error
 	if setting.ParishName == "" {
 		setting.ParishName = DefaultParishName
+	}
+	if len(setting.QuickAmounts) == 0 {
+		setting.QuickAmounts = slices.Clone(DefaultQuickAmounts)
 	}
 
 	return setting, err
@@ -49,6 +60,7 @@ func SaveParish(db *gorm.DB, setting Setting) error {
 		"feast_import_skip_memorials",
 		"feast_import_skip_optional_memorials",
 		"feast_import_skip_other_days",
+		"quick_amounts",
 	)
 }
 

@@ -123,6 +123,7 @@ func (h *intentionHandler) patch(w http.ResponseWriter, r *http.Request) {
 		IsGregorian:     intention.IsGregorian,
 		IsDeceased:      intention.IsDeceased,
 		IsHidden:        intention.IsHidden,
+		Amount:          intention.Amount,
 	}
 
 	err := json.NewDecoder(r.Body).Decode(&input)

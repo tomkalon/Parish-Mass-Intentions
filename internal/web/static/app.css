@@ -234,9 +234,10 @@ h1 {
 
 .week-heading {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	justify-content: center;
-	gap: 16px;
+	gap: 8px 16px;
 	margin: 0 0 22px;
 }
 
@@ -547,7 +548,7 @@ h1 {
 
 .intention {
 	display: grid;
-	grid-template-columns: 28px 1fr auto;
+	grid-template-columns: 28px 1fr auto auto;
 	padding: 5px 8px;
 	border-radius: 6px;
 	font-size: 17px;
@@ -1090,13 +1091,15 @@ h1 {
 
 /* Calendar */
 
-.toolbar-calendar {
+.toolbar-calendar,
+.toolbar-payments {
 	gap: 8px;
 	padding: 0 14px;
 	color: var(--accent);
 }
 
-.toolbar-calendar svg {
+.toolbar-calendar svg,
+.toolbar-payments svg {
 	display: block;
 }
 
@@ -1105,9 +1108,24 @@ h1 {
 	font-size: 15px;
 }
 
-.toolbar-calendar.is-open {
+.toolbar-calendar.is-open,
+.toolbar-payments.is-open {
 	border-color: var(--accent);
 	background: var(--accent-soft);
+}
+
+.has-panel .toolbar-calendar,
+.has-panel .toolbar-payments {
+	padding: 0 11px;
+}
+
+.has-panel .toolbar-label {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
 }
 
 .dialog-calendar {
@@ -1599,4 +1617,448 @@ h1 {
 	min-height: 52px;
 	padding: 0 24px;
 	font-size: 17px;
+}
+
+/* Payments */
+
+.amount {
+	min-width: 76px;
+	margin-left: 12px;
+	color: var(--ink-2);
+	font-size: 15px;
+	line-height: 26px;
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+	white-space: nowrap;
+}
+
+.amount.is-missing,
+.intention.is-hidden .amount {
+	color: var(--muted);
+}
+
+@media (max-width: 1199px) {
+	.has-panel .intention {
+		grid-template-columns: 28px 1fr auto;
+	}
+
+	.has-panel .amount {
+		display: none;
+	}
+}
+
+.intention.is-unpaid {
+	outline: 2px dashed var(--accent);
+	outline-offset: -2px;
+}
+
+.intention.is-unpaid .amount {
+	color: var(--accent);
+	font-weight: 600;
+}
+
+.week-payments,
+.week-unpaid {
+	display: inline-flex;
+	align-items: center;
+	align-self: flex-end;
+	gap: 6px;
+	margin-bottom: 4px;
+	border-radius: var(--radius-pill);
+	font-size: 13px;
+	font-weight: 600;
+	text-decoration: none;
+	white-space: nowrap;
+}
+
+.week-payments {
+	margin-left: -6px;
+	padding: 2px 8px;
+	border: 1px solid var(--line-strong);
+	background: var(--surface);
+	color: var(--ink-2);
+}
+
+.week-payments strong {
+	color: var(--ink);
+	font-variant-numeric: tabular-nums;
+}
+
+.week-payments:hover {
+	border-color: var(--accent);
+	color: var(--accent);
+}
+
+.week-payments svg {
+	display: block;
+}
+
+.week-unpaid {
+	margin-left: -10px;
+	padding: 2px 10px;
+	border: 1px dashed var(--accent);
+	color: var(--accent);
+}
+
+.week-unpaid:hover {
+	background: var(--accent-soft);
+}
+
+.week-unpaid.is-active {
+	border-style: solid;
+	background: var(--accent);
+	color: #fff;
+}
+
+.payment {
+	padding-top: 14px;
+	border-top: 1px solid var(--line);
+}
+
+.payment-head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.payment-private {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--muted);
+	font-size: 13px;
+	white-space: nowrap;
+}
+
+.payment-private svg {
+	display: block;
+}
+
+.payment-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 12px;
+}
+
+.amount-input,
+.quick-amounts {
+	position: relative;
+}
+
+.amount-input {
+	flex: none;
+	width: 140px;
+}
+
+.quick-amounts {
+	max-width: 320px;
+}
+
+.amount-input .input,
+.quick-amounts .input {
+	padding-right: 38px;
+	font-variant-numeric: tabular-nums;
+}
+
+.amount-input .input {
+	height: 42px;
+	font-size: 17px;
+	font-weight: 600;
+	text-align: right;
+}
+
+.amount-unit {
+	position: absolute;
+	top: 0;
+	right: 12px;
+	bottom: 0;
+	display: flex;
+	align-items: center;
+	color: var(--muted);
+	font-size: 16px;
+	pointer-events: none;
+}
+
+.amount-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+.chip {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 46px;
+	min-height: 36px;
+	padding: 0 8px;
+	border: 1px solid var(--line-strong);
+	border-radius: var(--radius-pill);
+	background: var(--surface);
+	color: var(--ink-2);
+	font: 600 15px/1 var(--font-ui);
+	font-variant-numeric: tabular-nums;
+	cursor: pointer;
+}
+
+.chip:hover {
+	background: var(--hover);
+}
+
+.chip[aria-pressed="true"] {
+	border-color: var(--accent);
+	background: var(--accent-soft);
+	color: var(--accent);
+}
+
+.chip-preview,
+.chip-preview:hover {
+	background: var(--surface);
+	cursor: default;
+}
+
+.quick-preview {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+	margin-top: 10px;
+}
+
+.quick-preview-label {
+	margin-right: 4px;
+	color: var(--ink-2);
+	font-size: 13px;
+}
+
+.dialog-payments {
+	width: 760px;
+	max-height: 100%;
+	overflow-y: auto;
+	padding: 16px 24px 20px;
+}
+
+.payments-header {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 12px 20px;
+	margin-bottom: 14px;
+}
+
+.payments-header .dialog-title {
+	margin: 0;
+	font-size: 25px;
+}
+
+.payments-header .panel-close {
+	margin-left: auto;
+}
+
+.segmented {
+	display: inline-flex;
+	gap: 2px;
+	padding: 3px;
+	border: 1px solid var(--line-strong);
+	border-radius: var(--radius);
+	background: var(--surface-2);
+}
+
+.segmented-item {
+	display: inline-flex;
+	align-items: center;
+	min-height: 36px;
+	padding: 0 16px;
+	border-radius: 6px;
+	color: var(--ink-2);
+	font-size: 15px;
+	font-weight: 600;
+	text-decoration: none;
+	white-space: nowrap;
+}
+
+.segmented-item:hover {
+	background: var(--hover);
+	color: var(--ink);
+}
+
+.segmented-item[aria-current="page"] {
+	background: var(--accent);
+	color: #fff;
+}
+
+.payments-period {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 16px;
+}
+
+.payments-period-name {
+	min-width: 250px;
+	margin: 0;
+	font: 700 21px/1.3 var(--font-serif);
+	text-align: center;
+}
+
+.payments-period-link {
+	margin-left: auto;
+	color: var(--accent);
+	font-size: 15px;
+	font-weight: 600;
+	text-underline-offset: 3px;
+	white-space: nowrap;
+}
+
+.payments-stats {
+	display: grid;
+	grid-template-columns: 1.2fr repeat(3, minmax(0, 1fr));
+	margin: 0 0 18px;
+	border: 1px solid var(--line);
+	border-radius: var(--radius-card);
+	background: var(--surface-2);
+}
+
+.stat {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+	padding: 12px 16px;
+}
+
+.stat + .stat {
+	border-left: 1px solid var(--line);
+}
+
+.stat-label {
+	color: var(--ink-2);
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.stat-value {
+	font: 700 21px/1.25 var(--font-serif);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.stat-value.is-alert {
+	color: var(--accent);
+}
+
+.stat-total .stat-label {
+	color: var(--accent);
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: .14em;
+	text-transform: uppercase;
+}
+
+.stat-total .stat-value {
+	font-size: 32px;
+	line-height: 1.15;
+}
+
+.stat-link {
+	align-self: flex-start;
+	color: var(--accent);
+	font-size: 14px;
+	font-weight: 600;
+	text-underline-offset: 3px;
+}
+
+.payments-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-variant-numeric: tabular-nums;
+}
+
+.payments-table th,
+.payments-table td {
+	padding: 6px 10px;
+	border-top: 1px solid var(--line);
+	font-size: 15px;
+	text-align: left;
+	vertical-align: middle;
+}
+
+.payments-table thead th {
+	padding-top: 0;
+	padding-bottom: 6px;
+	border-top: 0;
+	color: var(--muted);
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: .1em;
+	text-transform: uppercase;
+}
+
+.payments-table tbody th {
+	width: 170px;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.payments-table .num {
+	width: 1%;
+	text-align: right;
+	white-space: nowrap;
+}
+
+.payments-table .bar-cell {
+	padding-right: 18px;
+}
+
+.payments-table tr.is-current {
+	background: var(--selected-day);
+}
+
+.payments-table .missing {
+	color: var(--accent);
+	font-weight: 600;
+}
+
+.payments-table .zero {
+	color: var(--muted);
+}
+
+.bar {
+	display: block;
+	height: 10px;
+	min-width: 2px;
+	border-radius: 0 4px 4px 0;
+	background: var(--heat-3);
+}
+
+.is-current .bar {
+	background: var(--accent);
+}
+
+.row-link {
+	color: var(--ink);
+	text-decoration-color: var(--line-strong);
+	text-underline-offset: 3px;
+}
+
+.row-link:hover {
+	color: var(--accent);
+	text-decoration-color: currentColor;
+}
+
+.payments-note {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin: 14px 0 0;
+	color: var(--ink-2);
+	font-size: 13px;
+}
+
+.payments-note svg {
+	display: block;
+	flex: none;
 }

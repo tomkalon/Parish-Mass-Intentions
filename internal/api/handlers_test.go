@@ -262,6 +262,9 @@ func TestCreateInvalid(t *testing.T) {
 		{"empty content", `{"mass_at":"2026-11-01 08:00","content":""}`},
 		{"whitespace content", `{"mass_at":"2026-11-01 08:00","content":"   "}`},
 		{"content too long", `{"mass_at":"2026-11-01 08:00","content":"` + strings.Repeat("a", 501) + `"}`},
+		{"negative amount", `{"mass_at":"2026-11-01 08:00","content":"za śp. Jana","amount":-100}`},
+		{"amount too large", `{"mass_at":"2026-11-01 08:00","content":"za śp. Jana","amount":10000000}`},
+		{"amount as text", `{"mass_at":"2026-11-01 08:00","content":"za śp. Jana","amount":"150,50"}`},
 	}
 
 	for _, tt := range tests {
@@ -548,5 +551,78 @@ func TestPatchKeepsHiddenFlag(t *testing.T) {
 	}
 	if loadIntention(t, db, 1).IsHidden {
 		t.Error("IsHidden = true after patching is_hidden to false, want false")
+	}
+}
+
+func TestCreateWithAmount(t *testing.T) {
+	router, db := newTestRouter(t)
+
+	rec := doRequest(t, router, http.MethodPost, "/intentions",
+		`{"mass_at":"2026-11-01 08:00","content":"za śp. Jana","amount":15050}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+
+	if got := decodeIntention(t, rec).Amount; got != 15050 {
+		t.Errorf("response amount = %d, want 15050", got)
+	}
+	if got := loadIntention(t, db, 1).Amount; got != 15050 {
+		t.Errorf("saved amount = %d, want 15050", got)
+	}
+}
+
+func TestAmountJSONIsGrosze(t *testing.T) {
+	router, db := newTestRouter(t)
+	intention := seedIntention(t, db)
+	err := db.Model(&intention).Update("amount", 15050).Error
+	if err != nil {
+		t.Fatalf("setting amount: %v", err)
+	}
+
+	rec := doRequest(t, router, http.MethodGet, "/intentions/1", "")
+	if !strings.Contains(rec.Body.String(), `"amount":15050`) {
+		t.Errorf("body = %s, want \"amount\":15050", rec.Body.String())
+	}
+}
+
+func TestPatchKeepsAmount(t *testing.T) {
+	router, db := newTestRouter(t)
+	intention := seedIntention(t, db)
+	err := db.Model(&intention).Update("amount", 10000).Error
+	if err != nil {
+		t.Fatalf("setting amount: %v", err)
+	}
+
+	rec := doRequest(t, router, http.MethodPatch, "/intentions/1", `{"content":"za zdrowie Anny"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := loadIntention(t, db, 1).Amount; got != 10000 {
+		t.Errorf("Amount = %d after patching only the content, want 10000", got)
+	}
+
+	rec = doRequest(t, router, http.MethodPatch, "/intentions/1", `{"amount":0}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := loadIntention(t, db, 1).Amount; got != 0 {
+		t.Errorf("Amount = %d after patching it to 0, want 0", got)
+	}
+}
+
+func TestPutWithoutAmountClearsIt(t *testing.T) {
+	router, db := newTestRouter(t)
+	intention := seedIntention(t, db)
+	err := db.Model(&intention).Update("amount", 10000).Error
+	if err != nil {
+		t.Fatalf("setting amount: %v", err)
+	}
+
+	rec := doRequest(t, router, http.MethodPut, "/intentions/1", `{"mass_at":"2026-11-02 18:00","content":"za zdrowie Anny"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := loadIntention(t, db, 1).Amount; got != 0 {
+		t.Errorf("Amount = %d after PUT without an amount, want 0 (PUT replaces the whole intention)", got)
 	}
 }

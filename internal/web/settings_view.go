@@ -53,9 +53,13 @@ type settingsView struct {
 	Address    string
 	Kinds      []kindOption
 	Errors     map[string]string
-	Saved      bool
-	Notice     string
-	DataDir    string
+
+	QuickAmounts string
+	QuickPreview []string
+
+	Saved   bool
+	Notice  string
+	DataDir string
 
 	ImportError string
 
@@ -82,6 +86,19 @@ func (v settingsView) MaxLength() int {
 	return maxSettingLength
 }
 
+func (v settingsView) MaxQuickAmounts() int {
+	return settings.MaxQuickAmounts
+}
+
+func (v settingsView) DefaultQuickAmounts() string {
+	values := make([]string, 0, len(settings.DefaultQuickAmounts))
+	for _, amount := range settings.DefaultQuickAmounts {
+		values = append(values, amount.FormValue())
+	}
+
+	return strings.Join(values, ", ")
+}
+
 func newSettingsView(setting settings.Setting, schedules []masses.Schedule, week string) settingsView {
 	view := settingsView{
 		Week:       normalizeWeek(week),
@@ -102,6 +119,13 @@ func newSettingsView(setting settings.Setting, schedules []masses.Schedule, week
 		})
 	}
 
+	var preview []string
+	for _, amount := range setting.QuickAmounts {
+		preview = append(preview, amount.FormValue())
+	}
+	view.QuickAmounts = strings.Join(preview, ", ")
+	view.QuickPreview = preview
+
 	view.Schedules = scheduleItems(schedules, view.Week)
 	view.NewScheduleURL = withWeek("/settings/schedules/new", view.Week)
 	view.RestoreURL = withWeek("/settings?restore=1", view.Week)
@@ -118,7 +142,7 @@ func normalizeWeek(week string) string {
 	return intentions.WeekStart(day).Format(intentions.DateLayout)
 }
 
-func settingsFromForm(form url.Values) settings.Setting {
+func settingsFromForm(form url.Values) (settings.Setting, map[string]string) {
 	setting := settings.Setting{
 		ParishName: strings.TrimSpace(form.Get("parish_name")),
 		Address:    strings.TrimSpace(form.Get("address")),
@@ -128,7 +152,38 @@ func settingsFromForm(form url.Values) settings.Setting {
 		*k.skip(&setting.FeastImport) = !slices.Contains(form["import"], k.value)
 	}
 
-	return setting
+	errs := settingsErrors(setting)
+	amounts, message := parseQuickAmounts(form.Get("quick_amounts"))
+	if message != "" {
+		errs["quick_amounts"] = message
+	}
+	setting.QuickAmounts = amounts
+
+	return setting, errs
+}
+
+const quickAmountsMessage = "Wpisz kwoty w pełnych złotych, oddzielone przecinkami, np. 50, 100, 150."
+
+func parseQuickAmounts(text string) ([]intentions.Grosze, string) {
+	var amounts []intentions.Grosze
+	for part := range strings.FieldsFuncSeq(text, func(r rune) bool { return r == ',' || r == ';' }) {
+		if strings.TrimSpace(part) == "" {
+			continue
+		}
+
+		amount, err := intentions.ParseGrosze(part)
+		if err != nil || amount <= 0 || amount%100 != 0 {
+			return nil, quickAmountsMessage
+		}
+		if !slices.Contains(amounts, amount) {
+			amounts = append(amounts, amount)
+		}
+	}
+	if len(amounts) > settings.MaxQuickAmounts {
+		return nil, fmt.Sprintf("Podaj najwyżej %d kwot.", settings.MaxQuickAmounts)
+	}
+
+	return amounts, ""
 }
 
 func settingsErrors(setting settings.Setting) map[string]string {

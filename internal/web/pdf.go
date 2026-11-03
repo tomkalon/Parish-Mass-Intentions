@@ -495,8 +495,12 @@ func printedContent(intention intentionView) string {
 	if intention.IsDeceased && !strings.HasPrefix(content, "+") {
 		content = "+ " + content
 	}
-	if intention.IsGregorian && !strings.Contains(strings.ToLower(content), "(greg.)") {
-		content += " (greg.)"
+	if intention.IsGregorian && !strings.Contains(strings.ToLower(content), "(greg.") {
+		if intention.SeriesStep > 0 {
+			content += fmt.Sprintf(" (greg. %d/30)", intention.SeriesStep)
+		} else {
+			content += " (greg.)"
+		}
 	}
 
 	return content

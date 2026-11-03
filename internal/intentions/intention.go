@@ -4,7 +4,7 @@ import "time"
 
 type Intention struct {
 	ID              int       `json:"id"`
-	MassAt          time.Time `json:"mass_at" gorm:"index"`
+	MassAt          time.Time `json:"mass_at" gorm:"index;index:idx_intentions_series_mass,priority:2"`
 	Content         string    `json:"content"`
 	IsOutsideParish bool      `json:"is_outside_parish"`
 	IsPlaceholder   bool      `json:"is_placeholder" gorm:"not null;default:false"`
@@ -12,6 +12,7 @@ type Intention struct {
 	IsDeceased      bool      `json:"is_deceased" gorm:"not null;default:false"`
 	IsHidden        bool      `json:"is_hidden" gorm:"not null;default:false"`
 	Amount          Grosze    `json:"amount" gorm:"not null;default:0"`
+	SeriesID        int       `json:"series_id" gorm:"index:idx_intentions_series_mass,priority:1;not null;default:0"`
 }
 
 type Input struct {

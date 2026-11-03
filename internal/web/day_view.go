@@ -25,6 +25,8 @@ type dayView struct {
 	NewURL   string
 	Masses   []massView
 
+	SeriesDue []seriesDue
+
 	IsSelected bool
 }
 
@@ -38,6 +40,32 @@ type massView struct {
 	IsSelected bool
 }
 
+func (m massView) ParishFilled() int {
+	count := 0
+	for _, intention := range m.Parish {
+		if !intention.IsPlaceholder {
+			count++
+		}
+	}
+
+	return count
+}
+
+func (m massView) ParishGregorians() int {
+	count := 0
+	for _, intention := range m.Parish {
+		if intention.IsGregorian && !intention.IsPlaceholder {
+			count++
+		}
+	}
+
+	return count
+}
+
+func (m massView) SharedWithGregorian() bool {
+	return m.ParishGregorians() > 0 && m.ParishFilled() > 1
+}
+
 type intentionView struct {
 	ID        int
 	Number    int
@@ -45,6 +73,10 @@ type intentionView struct {
 	Amount    intentions.Grosze
 	EditURL   string
 	DeleteURL string
+
+	SeriesID   int
+	SeriesStep int
+	SeriesURL  string
 
 	IsUnpaid      bool
 	IsSaved       bool
@@ -95,6 +127,8 @@ func appendIntention(list []intentionView, intention intentions.Intention, week 
 		ID:        intention.ID,
 		Content:   intention.Content,
 		Amount:    intention.Amount,
+		SeriesID:  intention.SeriesID,
+		SeriesURL: seriesLink(week, intention.SeriesID),
 		EditURL:   editURL(week, intention.ID),
 		DeleteURL: deleteURL(week, intention.ID),
 

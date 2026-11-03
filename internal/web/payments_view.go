@@ -296,7 +296,7 @@ func (v weekView) WeekPayments() *weekPayments {
 		}
 		p.Count++
 		p.Total += intention.Amount
-		if intention.Amount == 0 {
+		if intention.Amount == 0 && intention.SeriesStep <= 1 {
 			p.Unpaid++
 			if p.firstUnpaid == 0 {
 				p.firstUnpaid = intention.ID
@@ -330,6 +330,6 @@ func unpaidURL(week string, firstID int) string {
 
 func markUnpaid(days []dayView) {
 	forEachIntention(days, func(intention *intentionView) {
-		intention.IsUnpaid = !intention.IsPlaceholder && intention.Amount == 0
+		intention.IsUnpaid = !intention.IsPlaceholder && intention.Amount == 0 && intention.SeriesStep <= 1
 	})
 }

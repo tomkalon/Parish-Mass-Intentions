@@ -131,14 +131,14 @@ func TestPanelShowsPaymentField(t *testing.T) {
 	body := getWeek(t, h, "/?week=2026-11-02&new=1").Body.String()
 
 	checkBody(t, body,
-		`<label class="label" for="amount">Wpłata</label>`,
+		`<label class="label" for="amount" data-series-label="Ofiara za całą serię (30 Mszy)">Wpłata</label>`,
 		`nie trafia na wydruk</span>`,
 		`<input class="input" type="text" id="amount" name="amount" value="" inputmode="decimal" autocomplete="off" placeholder="0" maxlength="20" aria-describedby="amount-hint">`,
 		`<span class="amount-unit" aria-hidden="true">zł</span>`,
 		`<div class="amount-chips" role="group" aria-label="Częste kwoty">`,
 		`<button class="chip" type="button" data-amount="50" aria-label="50`+nbsp+`zł" aria-pressed="false">50</button>`,
 		`<button class="chip" type="button" data-amount="200" aria-label="200`+nbsp+`zł" aria-pressed="false">200</button>`,
-		`kwotę wpisz przy pierwszej mszy (kopie jej nie przenoszą)`,
+		`<p class="hint" id="amount-hint">Puste pole – intencja bez wpłaty.</p>`,
 	)
 	if got := strings.Count(body, `class="chip"`); got != len(settings.DefaultQuickAmounts) {
 		t.Errorf("chips = %d, want %d", got, len(settings.DefaultQuickAmounts))

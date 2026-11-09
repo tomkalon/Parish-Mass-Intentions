@@ -138,7 +138,10 @@ func appendIntention(list []intentionView, intention intentions.Intention, week 
 		IsHidden:      intention.IsHidden,
 	}
 
-	if !intention.IsPlaceholder {
+	if intention.IsPlaceholder {
+		at := intention.MassAt.In(intentions.TimeZone)
+		view.EditURL = newIntentionURL(week, at.Format(intentions.DateLayout), at.Format("15:04"))
+	} else {
 		view.Number = 1
 		for _, previous := range list {
 			if !previous.IsPlaceholder {

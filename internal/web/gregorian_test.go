@@ -105,6 +105,52 @@ func TestCreateGregorianStartsSeries(t *testing.T) {
 	)
 }
 
+func TestFillingPlaceholdersBuildsSeries(t *testing.T) {
+	h := newTestHandler(t, seriesNow)
+	seedPlaceholder(t, h.db, "2026-11-09 18:00")
+	seedPlaceholder(t, h.db, "2026-11-10 18:00")
+
+	fill := "/?day=2026-11-09&new=1&time=18%3A00&week=2026-11-09"
+	checkBody(t, getWeek(t, h, "/?week=2026-11-09").Body.String(),
+		`<a class="action" href="/?day=2026-11-09&amp;new=1&amp;time=18%3A00&amp;week=2026-11-09" aria-label="Uzupełnij intencję z godz. 18:00">Uzupełnij</a>`,
+	)
+	checkBody(t, getWeek(t, h, fill).Body.String(),
+		`<form class="panel-form" method="post" action="/intentions" data-new>`,
+	)
+
+	rec := postToRouter(t, h.db, "/intentions", url.Values{
+		"week":      {"2026-11-09"},
+		"day":       {"2026-11-09"},
+		"time":      {"18:00"},
+		"content":   {"+ Jan Kowalski"},
+		"gregorian": {"on"},
+		"amount":    {"1500"},
+	})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+
+	var saved intentions.Intention
+	err := h.db.Where("is_placeholder = ?", false).First(&saved).Error
+	if err != nil {
+		t.Fatalf("loading the filled intention: %v", err)
+	}
+	if saved.SeriesID == 0 {
+		t.Fatalf("filled intention = %+v, want it to start a series", saved)
+	}
+	var placeholders int64
+	h.db.Model(&intentions.Intention{}).Where("is_placeholder = ?", true).Count(&placeholders)
+	if placeholders != 1 {
+		t.Errorf("placeholders = %d, want 1 (the one on 10.11 is left)", placeholders)
+	}
+
+	checkBody(t, getWeek(t, h, "/?day=2026-11-10&new=1&time=18%3A00&week=2026-11-09").Body.String(),
+		`<input type="radio" id="series-1" name="series" value="1"`,
+		`<span class="series-step-big">2/30</span>`,
+		`<span class="series-meta is-due">na ten dzień · 18:00</span>`,
+	)
+}
+
 func TestCopyOfOldGregorianDoesNotStartSeries(t *testing.T) {
 	h := newTestHandler(t, seriesNow)
 	form := url.Values{

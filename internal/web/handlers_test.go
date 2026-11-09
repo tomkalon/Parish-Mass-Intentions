@@ -1106,7 +1106,7 @@ func TestWeekShowsPlaceholder(t *testing.T) {
 	for _, want := range []string{
 		`<span class="number"></span>`,
 		`<span class="placeholder">do uzupełnienia</span>`,
-		fmt.Sprintf(`<a class="action" href="/?edit=%d&amp;week=2026-11-02" aria-label="Uzupełnij intencję z godz. 6:30">Uzupełnij</a>`, id),
+		`<a class="action" href="/?day=2026-11-02&amp;new=1&amp;time=06%3A30&amp;week=2026-11-02" aria-label="Uzupełnij intencję z godz. 6:30">Uzupełnij</a>`,
 		fmt.Sprintf(`<a class="action action-delete" href="/?delete=%d&amp;week=2026-11-02" aria-label="Usuń nieuzupełnioną intencję z godz. 6:30">Usuń</a>`, id),
 	} {
 		if !strings.Contains(body, want) {

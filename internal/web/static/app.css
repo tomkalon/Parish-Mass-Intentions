@@ -1361,7 +1361,23 @@ h1 {
 }
 
 .print-options {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 12px;
 	margin-left: auto;
+}
+
+.print-field {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 15px;
+}
+
+.print-options .select {
+	min-height: 36px;
+	width: auto;
 }
 
 .print-options .checkbox {

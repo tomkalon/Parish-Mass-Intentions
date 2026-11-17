@@ -298,7 +298,57 @@ func (h *handler) printPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	render(w, http.StatusOK, printTemplate, newPrintView(start, list, query.Get("hidden") == "1"))
+	opts, schedules, ok := h.printOptions(w, query)
+	if !ok {
+		return
+	}
+
+	render(w, http.StatusOK, printTemplate, newPrintView(start, list, opts, schedules))
+}
+
+func (h *handler) printOptions(w http.ResponseWriter, query url.Values) (printOptions, []masses.Schedule, bool) {
+	setting, err := settings.Load(h.db)
+	if err != nil {
+		log.Printf("error loading settings: %v", err)
+	}
+
+	schedules, err := masses.Load(h.db)
+	if err != nil {
+		log.Printf("error loading schedules: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return printOptions{}, nil, false
+	}
+
+	return parsePrintOptions(query, setting.SelectedScheduleID, schedules), schedules, true
+}
+
+func (h *handler) plannedForPrint(start time.Time, opts printOptions, schedules []masses.Schedule) (map[string][]time.Time, error) {
+	if !opts.Blanks || !opts.Planned {
+		return nil, nil
+	}
+
+	for i := range schedules {
+		if schedules[i].ID != opts.ScheduleID {
+			continue
+		}
+
+		list, err := masses.InRange(h.db, start, start.AddDate(0, 0, 7), &schedules[i])
+		if err != nil {
+			return nil, err
+		}
+
+		planned := make(map[string][]time.Time)
+		for _, m := range list {
+			if m.Planned {
+				date := m.At.Format(intentions.DateLayout)
+				planned[date] = append(planned[date], m.At)
+			}
+		}
+
+		return planned, nil
+	}
+
+	return nil, nil
 }
 
 func (h *handler) pdf(w http.ResponseWriter, r *http.Request) {
@@ -316,10 +366,21 @@ func (h *handler) pdf(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
-	if query.Get("hidden") != "1" {
-		list = slices.DeleteFunc(list, func(intention intentions.Intention) bool {
-			return intention.IsHidden
-		})
+
+	options, schedules, ok := h.printOptions(w, query)
+	if !ok {
+		return
+	}
+	planned, err := h.plannedForPrint(start, options, schedules)
+	if err != nil {
+		log.Printf("error loading planned masses for week %s: %v", start.Format(intentions.DateLayout), err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	opts := pdfOptions{showHidden: options.ShowHidden, planned: planned}
+	if options.Blanks {
+		opts.blanks = options.Lines
+		opts.extra = options.Extra
 	}
 
 	feasts, err := calendar.FeastsForWeek(h.db, start)
@@ -350,7 +411,7 @@ func (h *handler) pdf(w http.ResponseWriter, r *http.Request) {
 	view.Address = setting.Address
 
 	var buf bytes.Buffer
-	err = writeWeekPDF(&buf, view)
+	err = writeWeekPDF(&buf, view, opts)
 	if err != nil {
 		log.Printf("error generating pdf for week %s: %v", start.Format(intentions.DateLayout), err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
@@ -358,6 +419,9 @@ func (h *handler) pdf(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filename := "intencje-" + start.Format(intentions.DateLayout) + ".pdf"
+	if options.Blanks {
+		filename = "intencje-" + start.Format(intentions.DateLayout) + "-do-wpisania.pdf"
+	}
 	w.Header().Set("Content-Type", "application/pdf")
 	w.Header().Set("Content-Disposition", `inline; filename="`+filename+`"`)
 

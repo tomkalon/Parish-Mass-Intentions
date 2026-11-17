@@ -14,6 +14,26 @@
 		<form class="print-options" method="get" action="/print">
 			<input type="hidden" name="week" value="{{.Week}}">
 			<label class="checkbox"><input type="checkbox" name="hidden" value="1"{{if .ShowHidden}} checked{{end}}{{if not .HiddenCount}} disabled{{end}} data-autosubmit> Pokaż ukryte intencje ({{.HiddenCount}})</label>
+			<label class="checkbox" title="Wykropkowane linie na Msze bez intencji, do wpisania długopisem"><input type="checkbox" id="p-blanks" name="blanks" value="1"{{if .Options.Blanks}} checked{{end}} data-autosubmit> Miejsca do wpisania</label>
+			{{- if .Options.Blanks}}
+			<input type="hidden" name="set" value="1">
+			<label class="print-field" for="p-lines">Linii na pustą Mszę
+				<select class="select" id="p-lines" name="lines" data-autosubmit>
+					{{- range .Lines}}
+					<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
+					{{- end}}
+				</select>
+			</label>
+			<label class="checkbox"><input type="checkbox" id="p-extra" name="extra" value="1"{{if .Options.Extra}} checked{{end}} data-autosubmit> Linia także pod uzupełnionymi Mszami</label>
+			<label class="checkbox" title="Dla tygodnia bez wczytanych godzin Msze zostaną wzięte z porządku Mszy"><input type="checkbox" id="p-planned" name="planned" value="1"{{if .Options.Planned}} checked{{end}} data-autosubmit> Godziny z porządku Mszy</label>
+			{{- if .Schedules}}
+			<select class="select" id="p-schedule" name="schedule" aria-label="Porządek Mszy dla tygodnia bez wczytanych godzin" data-autosubmit{{if not .Options.Planned}} disabled{{end}}>
+				{{- range .Schedules}}
+				<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
+				{{- end}}
+			</select>
+			{{- end}}
+			{{- end}}
 			<noscript><button class="button" type="submit">Odśwież</button></noscript>
 		</form>
 	</nav>

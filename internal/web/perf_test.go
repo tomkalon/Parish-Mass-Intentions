@@ -185,3 +185,16 @@ func BenchmarkBackupLargeParish(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkSearchYearLargeParish(b *testing.B) {
+	router, _ := largeParish(b)
+
+	for b.Loop() {
+		req := httptest.NewRequest(http.MethodGet, "/search?period=y1&n=0&n=1&n=2&n=3&planned=1&schedule=1&show=400", nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			b.Fatalf("status = %d", rec.Code)
+		}
+	}
+}

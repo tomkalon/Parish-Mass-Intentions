@@ -2,6 +2,7 @@ package web
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	"go-parafia/internal/intentions"
@@ -28,6 +29,54 @@ type dayView struct {
 	SeriesDue []seriesDue
 
 	IsSelected bool
+}
+
+func (d dayView) Stats() dayStats {
+	stats := dayStats{Masses: len(d.Masses)}
+	for _, mass := range d.Masses {
+		filled := mass.ParishFilled()
+		stats.Intentions += filled
+		if filled == 0 {
+			stats.Free++
+		}
+		stats.Outside += len(mass.Outside)
+	}
+
+	return stats
+}
+
+type dayStats struct {
+	Masses     int
+	Intentions int
+	Free       int
+	Outside    int
+}
+
+func (s dayStats) MassesLabel() string {
+	return countOf(s.Masses, "Msza", "Msze", "Mszy")
+}
+
+func (s dayStats) IntentionsLabel() string {
+	return intentionsCount(s.Intentions)
+}
+
+func (s dayStats) FreeLabel() string {
+	return countOf(s.Free, "wolna", "wolne", "wolnych")
+}
+
+func (s dayStats) OutsideLabel() string {
+	return outsideLabel(s.Outside, true)
+}
+
+func outsideLabel(n int, plus bool) string {
+	if n == 0 {
+		return ""
+	}
+	if plus {
+		return "(+" + strconv.Itoa(n) + " poza parafią)"
+	}
+
+	return "(" + strconv.Itoa(n) + " poza parafią)"
 }
 
 type massView struct {

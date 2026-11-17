@@ -39,7 +39,9 @@ var templateFS embed.FS
 //go:embed static
 var staticFS embed.FS
 
-var weekTemplate = template.Must(template.ParseFS(templateFS, "templates/week.html", "templates/panel.html", "templates/topbar.html"))
+var weekTemplate = template.Must(template.ParseFS(templateFS, "templates/week.html", "templates/panel.html", "templates/topbar.html", "templates/daystats.html"))
+
+var searchTemplate = template.Must(template.ParseFS(templateFS, "templates/search.html", "templates/topbar.html", "templates/daystats.html"))
 
 var printTemplate = template.Must(template.ParseFS(templateFS, "templates/print.html"))
 
@@ -113,6 +115,7 @@ func RegisterRoutes(router chi.Router, db *gorm.DB, opts Options) {
 	router.Post("/draft", h.saveDraft)
 	router.Post("/draft/discard", h.discardDraft)
 	router.Get("/", h.home)
+	router.Get("/search", h.search)
 	router.Get("/settings", h.settingsPage)
 	router.Get("/settings/schedules/new", h.scheduleForm)
 	router.Get("/settings/schedules/{id}", h.scheduleForm)
@@ -789,6 +792,10 @@ func (h *handler) clearWeek(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
+		err = masses.Unmark(tx, start)
+		if err != nil {
+			return err
+		}
 
 		return gregorian.Release(tx, list)
 	})
@@ -851,13 +858,20 @@ func (h *handler) createSlots(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slots := schedule.Slots(start, existing)
-	if len(slots) > 0 {
-		err = h.db.Create(&slots).Error
-		if err != nil {
-			log.Printf("error creating slots for week %s: %v", start.Format(intentions.DateLayout), err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
-			return
+	err = h.db.Transaction(func(tx *gorm.DB) error {
+		if len(slots) > 0 {
+			err := tx.Create(&slots).Error
+			if err != nil {
+				return err
+			}
 		}
+
+		return masses.MarkLoaded(tx, start, schedule.ID)
+	})
+	if err != nil {
+		log.Printf("error creating slots for week %s: %v", start.Format(intentions.DateLayout), err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
 	}
 
 	err = settings.SaveSchedule(h.db, schedule.ID)

@@ -132,8 +132,21 @@ if (deceased && gregorian) {
 }
 
 for (const input of document.querySelectorAll("[data-autosubmit]")) {
-	input.addEventListener("change", () => input.form.submit());
+	input.addEventListener("change", () => {
+		try {
+			if (input.id) {
+				sessionStorage.setItem("autosubmit-focus", input.id);
+			}
+		} catch {}
+		input.form.submit();
+	});
 }
+
+try {
+	const id = sessionStorage.getItem("autosubmit-focus");
+	sessionStorage.removeItem("autosubmit-focus");
+	document.getElementById(id ?? "")?.focus();
+} catch {}
 
 const amount = document.getElementById("amount");
 const chips = document.querySelectorAll(".chip[data-amount]");

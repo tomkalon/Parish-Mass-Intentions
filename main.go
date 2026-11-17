@@ -20,16 +20,24 @@ func main() {
 		log.Fatal(err)
 	}
 
+	warning := ""
+	err = database.Check(db)
+	if err != nil {
+		log.Printf("database check failed: %v", err)
+		warning = "Sprawdzenie bazy danych wykryło błąd. Dane mogą być niekompletne – przywróć je z kopii w Ustawieniach (Import danych)."
+	}
+
 	backups, err := backup.Load(db, filepath.Join(dir, "kopia.json"))
 	if err != nil {
 		log.Fatalf("error loading backup settings: %v", err)
 	}
 
 	opts := web.Options{
-		DataDir:   dir,
-		SaveFile:  saveFileDialog(),
-		Backups:   backups,
-		ChooseDir: chooseDirDialog(),
+		DataDir:         dir,
+		SaveFile:        saveFileDialog(),
+		Backups:         backups,
+		ChooseDir:       chooseDirDialog(),
+		DatabaseWarning: warning,
 	}
 
 	err = run(newRouter(db, opts), dir, backups)

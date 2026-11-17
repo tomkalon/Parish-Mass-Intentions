@@ -75,16 +75,45 @@ func TestLoadWithoutFile(t *testing.T) {
 	}
 }
 
-func TestLoadBrokenFile(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "kopia.json")
-	err := os.WriteFile(path, []byte("{nie json"), 0o644)
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestLoadBrokenFileDoesNotBlockStart(t *testing.T) {
+	for name, content := range map[string][]byte{
+		"invalid json":       []byte("{nie json"),
+		"zeros after outage": make([]byte, 128),
+		"empty":              nil,
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "kopia.json")
+			err := os.WriteFile(path, content, 0o644)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-	_, err = Load(nil, path)
-	if err == nil {
-		t.Error("Load accepted a broken file")
+			b, err := Load(nil, path)
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if got := b.State(); got != (State{}) {
+				t.Errorf("state = %+v, want empty", got)
+			}
+
+			_, err = os.Stat(path + ".bad")
+			if err != nil {
+				t.Errorf("broken file not kept as .bad: %v", err)
+			}
+
+			err = b.SetDir(dir)
+			if err != nil {
+				t.Fatalf("SetDir after a broken file: %v", err)
+			}
+			reloaded, err := Load(nil, path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if reloaded.State().Dir != dir {
+				t.Errorf("Dir after reload = %q, want %q", reloaded.State().Dir, dir)
+			}
+		})
 	}
 }
 

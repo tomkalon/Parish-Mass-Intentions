@@ -15,13 +15,17 @@ import (
 	"go-parafia/internal/gregorian"
 	"go-parafia/internal/intentions"
 	"go-parafia/internal/masses"
+	"go-parafia/internal/safefile"
 	"go-parafia/internal/settings"
 )
 
-var ErrInvalidFile = errors.New("to nie jest plik z danymi Go Parafia")
+var (
+	ErrInvalidFile = errors.New("to nie jest plik z danymi Go Parafia")
+	ErrDamaged     = errors.New("baza danych jest uszkodzona")
+)
 
 func Open(path string) (*gorm.DB, error) {
-	db, err := gorm.Open(sqlite.Open(path), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(dsn(path)), &gorm.Config{})
 	if err != nil {
 		return nil, fmt.Errorf("error opening database %s: %w", path, err)
 	}
@@ -32,6 +36,28 @@ func Open(path string) (*gorm.DB, error) {
 	}
 
 	return db, nil
+}
+
+func dsn(path string) string {
+	separator := "?"
+	if strings.Contains(path, "?") {
+		separator = "&"
+	}
+
+	return path + separator + "_pragma=synchronous(FULL)"
+}
+
+func Check(db *gorm.DB) error {
+	var results []string
+	err := db.Raw("PRAGMA quick_check").Scan(&results).Error
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrDamaged, err)
+	}
+	if len(results) != 1 || results[0] != "ok" {
+		return fmt.Errorf("%w: %s", ErrDamaged, strings.Join(results, "; "))
+	}
+
+	return nil
 }
 
 func Migrate(db *gorm.DB) error {
@@ -63,6 +89,11 @@ func Export(db *gorm.DB, path string) error {
 	err = db.Exec("VACUUM INTO ?", tmp).Error
 	if err != nil {
 		return fmt.Errorf("copying database: %w", err)
+	}
+
+	err = safefile.Sync(tmp)
+	if err != nil {
+		return errors.Join(fmt.Errorf("flushing copy to disk: %w", err), os.Remove(tmp))
 	}
 
 	err = os.Rename(tmp, path)

@@ -24,6 +24,7 @@ import (
 
 	"go-parafia/internal/backup"
 	"go-parafia/internal/calendar"
+	"go-parafia/internal/draft"
 	"go-parafia/internal/gcatholic"
 	"go-parafia/internal/gregorian"
 	"go-parafia/internal/intentions"
@@ -64,6 +65,8 @@ func newTestHandler(t *testing.T, now time.Time) *handler {
 		t.Fatalf("loading backups: %v", err)
 	}
 
+	dataDir := t.TempDir()
+
 	return &handler{
 		db:       db,
 		now:      func() time.Time { return now },
@@ -71,8 +74,9 @@ func newTestHandler(t *testing.T, now time.Time) *handler {
 		fetchCelebrations: func(context.Context, int) ([]gcatholic.Celebration, error) {
 			return nil, errors.New("no network in tests")
 		},
-		dataDir: t.TempDir(),
+		dataDir: dataDir,
 		backups: backups,
+		drafts:  draft.NewStore(filepath.Join(dataDir, draft.FileName)),
 	}
 }
 
@@ -193,7 +197,7 @@ func TestWeekWithNewIntentionPanel(t *testing.T) {
 		`<legend class="label">Dzień · 2.11 – 8.11.2026</legend>`,
 		`value="2026-11-03" checked required>`,
 		`<option value="18:00" selected>18:00</option>`,
-		`<a class="panel-close" href="/?week=2026-11-02" aria-label="Zamknij" data-close>×</a>`,
+		`<a class="panel-close" href="/?week=2026-11-02" aria-label="Zamknij" data-close data-discard>×</a>`,
 		`<section class="day is-selected" id="d-2026-11-03">`,
 		`<span class="pill">wybrany w formularzu</span>`,
 		`<div class="mass is-selected" data-time="18:00" data-count="1" data-gregorian="0">`,
@@ -559,7 +563,7 @@ func TestWeekWithEditPanel(t *testing.T) {
 	body := rec.Body.String()
 	for _, want := range []string{
 		`<h2 class="panel-title" id="panel-title">Edycja intencji</h2>`,
-		`<form class="panel-form" method="post" action="/intentions/1">`,
+		`<form class="panel-form" method="post" action="/intentions/1" data-edit="1">`,
 		`value="2026-11-03" checked`,
 		`<option value="18:00" selected>18:00</option>`,
 		`>&#43; Anna Kutyba (greg.)</textarea>`,
@@ -673,7 +677,7 @@ func TestUpdateIntentionInvalid(t *testing.T) {
 	body := rec.Body.String()
 	for _, want := range []string{
 		`<h2 class="panel-title" id="panel-title">Edycja intencji</h2>`,
-		`<form class="panel-form" method="post" action="/intentions/1">`,
+		`<form class="panel-form" method="post" action="/intentions/1" data-edit="1">`,
 		`<p class="field-error" id="content-error">Pole jest wymagane.</p>`,
 	} {
 		if !strings.Contains(body, want) {

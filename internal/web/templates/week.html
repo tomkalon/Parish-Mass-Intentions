@@ -11,6 +11,9 @@
 	<header class="topbar"{{if .HasDialog}} inert{{end}}>
 		{{template "topbar" .Topbar}}
 	</header>
+	{{- if and .Topbar.Draft (not .HasDialog)}}
+	{{template "draftbar" .Topbar.Draft}}
+	{{- end}}
 	<nav class="toolbar" aria-label="Wybór tygodnia"{{if .HasDialog}} inert{{end}}>
 		<div class="week-pager">
 			<a class="button button-icon" href="{{.PrevURL}}" aria-label="Poprzedni tydzień" title="Poprzedni tydzień">

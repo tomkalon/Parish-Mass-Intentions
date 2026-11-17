@@ -1,15 +1,21 @@
 {{define "panel" -}}
 <aside class="panel" role="complementary" aria-labelledby="panel-title">
-	<form class="panel-form" method="post" action="{{.Action}}"{{if not .EditID}} data-new{{end}}>
+	<form class="panel-form" method="post" action="{{.Action}}"{{if not .EditID}} data-new{{end}}{{if .EditID}} data-edit="{{.EditID}}"{{end}}{{with .DraftToken}} data-draft-token="{{.}}"{{end}}>
 		<header class="panel-header">
 			<div class="panel-title-row">
 				<h2 class="panel-title" id="panel-title">{{.Title}}</h2>
 				<span class="panel-step" id="series-step"{{if not .StepLabel}} hidden{{end}}>{{.StepLabel}}</span>
 			</div>
-			<a class="panel-close" href="{{.CloseURL}}" aria-label="Zamknij" data-close>×</a>
+			<a class="panel-close" href="{{.CloseURL}}" aria-label="Zamknij" data-close data-discard>×</a>
 		</header>
 
 		<div class="panel-body">
+			{{- with .Restored}}
+			<p class="form-restored" role="status">{{.}}</p>
+			{{- end}}
+			{{- with .OtherDraft}}
+			<p class="form-other-draft" role="status">Jest niezapisana intencja z {{.SavedAt}}: „{{.Content}}”. <a href="{{.RestoreURL}}">Przywróć ją</a> – wpisanie czegoś tutaj ją zastąpi.</p>
+			{{- end}}
 			{{- if .Errors}}
 			<div class="form-alert" role="alert">
 				<span class="form-alert-icon" aria-hidden="true">!</span>
@@ -144,7 +150,7 @@
 			{{- if .EditID}}
 			<button class="button" type="submit" formaction="/intentions" name="copy" value="1" title="Dodaj taką samą intencję w wybranym dniu i godzinie">Kopiuj</button>
 			{{- end}}
-			<a class="button" href="{{.CloseURL}}">Anuluj</a>
+			<a class="button" href="{{.CloseURL}}" data-discard>Anuluj</a>
 			{{- if .EditID}}
 			<a class="delete-link" href="{{.DeleteURL}}" aria-label="Usuń intencję">Usuń</a>
 			{{- end}}

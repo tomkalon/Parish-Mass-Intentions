@@ -38,6 +38,10 @@ type formView struct {
 	SeriesLocked  bool
 	SharedWarning bool
 
+	DraftToken string
+	Restored   string
+	OtherDraft *draftNotice
+
 	dayIndex int
 }
 

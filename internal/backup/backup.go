@@ -15,6 +15,7 @@ import (
 	"gorm.io/gorm"
 
 	"go-parafia/internal/database"
+	"go-parafia/internal/safefile"
 )
 
 const FileName = "intencje-kopia.db"
@@ -58,7 +59,12 @@ func Load(db *gorm.DB, path string) (*Backups, error) {
 
 	err = json.Unmarshal(data, &b.state)
 	if err != nil {
-		return nil, fmt.Errorf("reading %s: %w", path, err)
+		log.Printf("error reading %s, starting without backup settings: %v", path, err)
+		b.state = State{}
+		renameErr := os.Rename(path, path+".bad")
+		if renameErr != nil {
+			log.Printf("error moving %s aside: %v", path, renameErr)
+		}
 	}
 
 	return b, nil
@@ -154,11 +160,5 @@ func (b *Backups) save() error {
 		return err
 	}
 
-	tmp := b.path + ".tmp"
-	err = os.WriteFile(tmp, data, 0o644)
-	if err != nil {
-		return err
-	}
-
-	return os.Rename(tmp, b.path)
+	return safefile.Write(b.path, data, 0o644)
 }

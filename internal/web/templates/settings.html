@@ -11,6 +11,9 @@
 	<header class="topbar"{{if .Dialog}} inert{{end}}>
 		{{template "topbar" .Topbar}}
 	</header>
+	{{- if and .Topbar.Draft (not .Dialog)}}
+	{{template "draftbar" .Topbar.Draft}}
+	{{- end}}
 	<nav class="toolbar" aria-label="Ustawienia"{{if .Dialog}} inert{{end}}>
 		<a class="button" href="{{.BackURL}}" data-close>{{if .Week}}← Wróć do tygodnia{{else}}← Wróć{{end}}</a>
 	</nav>

@@ -89,8 +89,12 @@ func TestNewWeekViewGroupsIntentions(t *testing.T) {
 	})
 	checkMass(t, monday[1], massView{
 		Time:    "18:00",
+		Parish:  []intentionView{{}},
 		Outside: []intentionView{{ID: 4, Number: 1, Content: "D"}},
 	})
+	if slot := monday[1].Parish[0]; !slot.IsPlaceholder || slot.EditURL != "/?day=2026-11-02&new=1&time=18%3A00&week=2026-11-02" {
+		t.Errorf("18:00 with only an outside intention: parish = %+v, want an empty slot to fill", slot)
+	}
 
 	if n := len(got.Days[1].Masses); n != 0 {
 		t.Errorf("tuesday has %d masses, want 0", n)
@@ -257,8 +261,8 @@ func TestWeekViewEmptyMasses(t *testing.T) {
 	if got == nil {
 		t.Fatal("EmptyMasses = nil, want a notice")
 	}
-	if want := "2 msze nie mają uzupełnionej intencji."; got.Text != want {
-		t.Errorf("Text = %q, want %q (Pn 18:00 and Śr 6:30 only)", got.Text, want)
+	if want := "3 msze nie mają uzupełnionej intencji."; got.Text != want {
+		t.Errorf("Text = %q, want %q (Pn 18:00, Śr 6:30 and Śr 18:00, where the outside intention does not count)", got.Text, want)
 	}
 	if got.URL != "#d-2026-11-02" {
 		t.Errorf("URL = %q, want the first such day", got.URL)

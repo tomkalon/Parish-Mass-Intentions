@@ -148,7 +148,7 @@ func TestCountByDay(t *testing.T) {
 	}
 
 	want := map[string]DayCount{
-		"2026-10-01": {Filled: 2, Placeholders: 1, Unpaid: 2},
+		"2026-10-01": {Filled: 2, Empty: 1, Unpaid: 2},
 		"2026-10-25": {Filled: 1, Unpaid: 1},
 		"2026-10-26": {Filled: 1, Unpaid: 1},
 	}
@@ -178,8 +178,8 @@ func TestCountByDaySumsAmounts(t *testing.T) {
 	}
 
 	want := map[string]DayCount{
-		"2026-11-09": {Filled: 4, Placeholders: 1, Unpaid: 1, Paid: 3, Amount: 30050},
-		"2026-11-10": {Filled: 1, Paid: 1, Amount: 20000},
+		"2026-11-09": {Filled: 4, Empty: 1, Unpaid: 1, Paid: 3, Amount: 30050},
+		"2026-11-10": {Filled: 1, Empty: 1, Paid: 1, Amount: 20000},
 	}
 	if !maps.Equal(got, want) {
 		t.Errorf("CountByDay() = %v, want %v", got, want)
@@ -271,6 +271,62 @@ func TestSaveReplacesPlaceholderAtSameMass(t *testing.T) {
 				t.Errorf("after Save = %q, want %q", got, want)
 			}
 		})
+	}
+}
+
+func TestSaveOutsideIntentionKeepsPlaceholder(t *testing.T) {
+	db := newTestDB(t)
+	createPlaceholder(t, db, "2026-11-08 07:00")
+	at := time.Date(2026, 11, 8, 7, 0, 0, 0, TimeZone)
+
+	err := Save(db, &Intention{MassAt: at, Content: "+ Józef", IsOutsideParish: true})
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	var slots int64
+	err = db.Model(&Intention{}).Where("is_placeholder = ?", true).Count(&slots).Error
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slots != 1 {
+		t.Fatalf("placeholders after saving an outside-parish intention = %d, want 1", slots)
+	}
+
+	err = Save(db, &Intention{MassAt: at, Content: "+ Jan"})
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	err = db.Model(&Intention{}).Where("is_placeholder = ?", true).Count(&slots).Error
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slots != 0 {
+		t.Errorf("placeholders after saving a parish intention = %d, want 0", slots)
+	}
+}
+
+func TestCountByDayCountsOutsideOnlyMassAsEmpty(t *testing.T) {
+	db := newTestDB(t)
+	day := time.Date(2026, 11, 9, 0, 0, 0, 0, TimeZone)
+	err := db.Create(&[]Intention{
+		{MassAt: day.Add(7 * time.Hour), Content: "poza", IsOutsideParish: true},
+		{MassAt: day.Add(18 * time.Hour), Content: "poza", IsOutsideParish: true},
+		{MassAt: day.Add(18 * time.Hour), Content: "parafialna"},
+		{MassAt: day.Add(19 * time.Hour), IsPlaceholder: true},
+		{MassAt: day.Add(19 * time.Hour), Content: "poza", IsOutsideParish: true},
+	}).Error
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := CountByDay(db, day, day.AddDate(0, 0, 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if empty := got["2026-11-09"].Empty; empty != 2 {
+		t.Errorf("Empty = %d, want 2 (7:00 with only an outside intention and the 19:00 slot)", empty)
 	}
 }
 

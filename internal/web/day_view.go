@@ -162,6 +162,12 @@ func newDayView(day time.Time, list []intentions.Intention) dayView {
 		}
 	}
 
+	for i := range masses {
+		if len(masses[i].Parish) == 0 {
+			masses[i].Parish = []intentionView{{IsPlaceholder: true, EditURL: masses[i].NewURL}}
+		}
+	}
+
 	return dayView{
 		Date:     date,
 		Label:    dayLabel(day),

@@ -27,8 +27,8 @@ func TestNewCalendarView(t *testing.T) {
 		"2025-12-29": {Filled: 2},
 		"2026-01-01": {Filled: 1},
 		"2026-11-02": {Filled: 3},
-		"2026-11-09": {Filled: 7, Placeholders: 2},
-		"2026-11-10": {Placeholders: 1},
+		"2026-11-09": {Filled: 7, Empty: 2},
+		"2026-11-10": {Empty: 1},
 	}
 
 	view := newCalendarView(2026, current, today, counts)

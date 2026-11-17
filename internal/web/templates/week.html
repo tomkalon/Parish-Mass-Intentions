@@ -179,14 +179,16 @@
 						{{- if .Parish}}
 						<ol class="intentions">
 							{{- range .Parish}}
-							<li class="intention{{if .IsGregorian}} is-gregorian{{else if .IsDeceased}} is-deceased{{end}}{{if .IsHidden}} is-hidden{{end}}{{if .IsUnpaid}} is-unpaid{{end}}{{if .IsSaved}} is-saved{{end}}{{if .IsEditing}} is-editing{{end}}" id="i-{{.ID}}">
+							<li class="intention{{if .IsGregorian}} is-gregorian{{else if .IsDeceased}} is-deceased{{end}}{{if .IsHidden}} is-hidden{{end}}{{if .IsUnpaid}} is-unpaid{{end}}{{if .IsSaved}} is-saved{{end}}{{if .IsEditing}} is-editing{{end}}"{{if .ID}} id="i-{{.ID}}"{{end}}>
 								{{- if .IsPlaceholder}}
 								<span class="number"></span>
 								<span class="placeholder">do uzupełnienia</span>
 								<span class="amount"></span>
 								<span class="intention-actions">
 									<a class="action" href="{{.EditURL}}" aria-label="Uzupełnij intencję z godz. {{$time}}">Uzupełnij</a>
+									{{- if .ID}}
 									<a class="action action-delete" href="{{.DeleteURL}}" aria-label="Usuń nieuzupełnioną intencję z godz. {{$time}}">Usuń</a>
+									{{- end}}
 								</span>
 								{{- else}}
 								<span class="number">{{.Number}}.</span>
@@ -205,7 +207,7 @@
 						<p class="outside-label">Poza Parafią:</p>
 						<ol class="intentions outside">
 							{{- range .Outside}}
-							<li class="intention{{if .IsGregorian}} is-gregorian{{else if .IsDeceased}} is-deceased{{end}}{{if .IsHidden}} is-hidden{{end}}{{if .IsUnpaid}} is-unpaid{{end}}{{if .IsSaved}} is-saved{{end}}{{if .IsEditing}} is-editing{{end}}" id="i-{{.ID}}">
+							<li class="intention{{if .IsGregorian}} is-gregorian{{else if .IsDeceased}} is-deceased{{end}}{{if .IsHidden}} is-hidden{{end}}{{if .IsUnpaid}} is-unpaid{{end}}{{if .IsSaved}} is-saved{{end}}{{if .IsEditing}} is-editing{{end}}"{{if .ID}} id="i-{{.ID}}"{{end}}>
 								<span class="number">{{.Number}}.</span>
 								<span>{{.Content}}{{template "badges" .}}</span>
 								{{template "amount" .}}

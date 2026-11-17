@@ -179,13 +179,13 @@ func setFeasts(days []dayView, feasts map[string]string) {
 
 func markSaved(days []dayView, id int) {
 	forEachIntention(days, func(intention *intentionView) {
-		intention.IsSaved = intention.ID == id
+		intention.IsSaved = id > 0 && intention.ID == id
 	})
 }
 
 func markEditing(days []dayView, id int) {
 	forEachIntention(days, func(intention *intentionView) {
-		intention.IsEditing = intention.ID == id
+		intention.IsEditing = id > 0 && intention.ID == id
 	})
 }
 
@@ -230,9 +230,6 @@ func (v weekView) EmptyMasses() *emptyMassesNotice {
 }
 
 func withoutIntention(mass massView) bool {
-	if len(mass.Outside) > 0 {
-		return false
-	}
 	for _, intention := range mass.Parish {
 		if !intention.IsPlaceholder {
 			return false

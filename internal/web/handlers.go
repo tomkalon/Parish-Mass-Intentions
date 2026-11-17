@@ -63,6 +63,7 @@ type handler struct {
 	chooseDir         func(current string) (string, error)
 	drafts            *draft.Store
 	dbWarning         string
+	version           string
 }
 
 type Options struct {
@@ -71,6 +72,7 @@ type Options struct {
 	Backups         *backup.Backups
 	ChooseDir       func(current string) (string, error)
 	DatabaseWarning string
+	Version         string
 }
 
 func RegisterRoutes(router chi.Router, db *gorm.DB, opts Options) {
@@ -88,6 +90,7 @@ func RegisterRoutes(router chi.Router, db *gorm.DB, opts Options) {
 		chooseDir: opts.ChooseDir,
 		drafts:    draft.NewStore(draftPath(opts.DataDir)),
 		dbWarning: opts.DatabaseWarning,
+		version:   opts.Version,
 	}
 	if h.backups == nil {
 		h.backups, _ = backup.Load(db, "")
@@ -149,6 +152,7 @@ func (h *handler) start(w http.ResponseWriter, r *http.Request) {
 		WeekURL:    weekURL(intentions.NextWeekStart(h.now())),
 		Draft:      h.draftNotice(),
 		Warning:    h.dbWarning,
+		Version:    h.version,
 	})
 }
 

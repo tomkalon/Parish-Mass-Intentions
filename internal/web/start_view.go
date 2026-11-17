@@ -6,4 +6,5 @@ type startView struct {
 	WeekURL    string
 	Draft      *draftNotice
 	Warning    string
+	Version    string
 }

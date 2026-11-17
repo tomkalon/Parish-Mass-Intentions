@@ -2,3 +2,4 @@
 *.exe
 *.syso
 /data.db
+/szkic-intencji.json*

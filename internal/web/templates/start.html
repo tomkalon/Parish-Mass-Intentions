@@ -8,6 +8,12 @@
 </head>
 <body>
 	<main class="start">
+		{{- with .Warning}}
+		<p class="start-warning" role="alert">{{.}}</p>
+		{{- end}}
+		{{- with .Draft}}
+		{{template "draftbar" .}}
+		{{- end}}
 		<div class="start-content">
 			<img class="start-logo" src="/static/logo.svg" width="88" height="88" alt="">
 			<h1>Intencje mszalne</h1>

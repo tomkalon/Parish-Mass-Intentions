@@ -11,3 +11,18 @@
 			<button class="button-small" type="submit">Wykonaj kopię danych</button>
 		</form>
 {{- end}}
+
+{{define "draftbar" -}}
+<div class="draftbar" role="alert">
+		<svg class="draftbar-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4"/><path d="M14 3l5 5h-5z"/><circle cx="17" cy="17" r="4"/><path d="M17 15.5V17l1 1"/></svg>
+		<div class="draftbar-body">
+			<p class="draftbar-title">{{if .IsEdit}}Niezapisana zmiana intencji{{else}}Niezapisana intencja{{end}}</p>
+			<p class="draftbar-text">Wpisano {{.SavedAt}}, ale nie kliknięto „Zapisz”.</p>
+			<p class="draftbar-content">„{{.Content}}”{{with .When}}<span class="draftbar-when">{{.}}</span>{{end}}</p>
+			<form class="draftbar-actions" method="post" action="/draft/discard">
+				<a class="button button-primary" href="{{.RestoreURL}}">Przywróć</a>
+				<button class="button" type="submit">Odrzuć</button>
+			</form>
+		</div>
+	</div>
+{{- end}}

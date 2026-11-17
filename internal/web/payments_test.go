@@ -208,7 +208,7 @@ func TestUpdateIntentionInvalidAmountKeepsSavedOne(t *testing.T) {
 	if rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
 	}
-	checkBody(t, rec.Body.String(), `<form class="panel-form" method="post" action="/intentions/1">`, `name="amount" value="sto"`)
+	checkBody(t, rec.Body.String(), `<form class="panel-form" method="post" action="/intentions/1" data-edit="1">`, `name="amount" value="sto"`)
 	if got := loadAmount(t, h.db, 1); got != 10000 {
 		t.Errorf("amount = %d, want the saved 10000 unchanged", got)
 	}

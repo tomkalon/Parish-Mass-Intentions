@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="pl">
+<head>
+	<meta charset="utf-8">
+	<title>Szukaj Mszy – Go Parafia</title>
+	<link rel="icon" href="/static/logo.svg" type="image/svg+xml">
+	<link rel="stylesheet" href="/static/app.css">
+	<script src="/static/app.js" defer></script>
+</head>
+<body>
+	<header class="topbar">
+		{{template "topbar" .Topbar}}
+	</header>
+	{{- with .Topbar.Draft}}
+	{{template "draftbar" .}}
+	{{- end}}
+	<nav class="toolbar search-toolbar" aria-label="Szukaj Mszy">
+		<a class="button" href="{{.BackURL}}" data-close>← Wróć do tygodnia</a>
+		<h1 class="search-title">Szukaj Mszy</h1>
+	</nav>
+
+	<div class="search">
+		<form class="search-filters" method="get" action="/search" aria-label="Filtry">
+			<input type="hidden" name="week" value="{{.Week}}">
+
+			<fieldset class="facet">
+				<legend class="facet-title">Okres</legend>
+				{{- range .Periods}}
+				<label class="facet-row"><input type="radio" id="f-period-{{.Value}}" name="period" value="{{.Value}}"{{if .Selected}} checked{{end}} data-autosubmit><span class="facet-label">{{.Label}}</span></label>
+				{{- end}}
+				<p class="facet-hint">{{.RangeText}}</p>
+			</fieldset>
+
+			<fieldset class="facet">
+				<legend class="facet-title">Intencje na Mszy</legend>
+				{{- range .Counts}}
+				<label class="facet-row{{if and (not .Count) (not .Checked)}} is-empty{{end}}"><input type="checkbox" id="{{.ID}}" name="n" value="{{.Value}}"{{if .Checked}} checked{{end}} data-autosubmit><span class="facet-swatch is-{{.Kind}}" aria-hidden="true"></span><span class="facet-label">{{.Label}}</span><span class="facet-count">{{.Count}}</span></label>
+				{{- end}}
+				<p class="facet-hint">Liczą się intencje parafialne. Intencje poza parafią nie zajmują Mszy.</p>
+			</fieldset>
+
+			<fieldset class="facet">
+				<legend class="facet-title">Dzień tygodnia</legend>
+				<div class="facet-grid">
+					{{- range .Weekdays}}
+					<label class="facet-row{{if and (not .Count) (not .Checked)}} is-empty{{end}}"><input type="checkbox" id="{{.ID}}" name="dow" value="{{.Value}}"{{if .Checked}} checked{{end}} data-autosubmit><span class="facet-label">{{.Label}}</span><span class="facet-count">{{.Count}}</span></label>
+					{{- end}}
+				</div>
+			</fieldset>
+
+			<fieldset class="facet">
+				<legend class="facet-title">Godzina</legend>
+				{{- if .Times}}
+				<div class="facet-grid">
+					{{- range .Times}}
+					<label class="facet-row facet-time{{if and (not .Count) (not .Checked)}} is-empty{{end}}"><input type="checkbox" id="{{.ID}}" name="time" value="{{.Value}}"{{if .Checked}} checked{{end}} data-autosubmit><span class="facet-label">{{.Label}}</span><span class="facet-count">{{.Count}}</span></label>
+					{{- end}}
+				</div>
+				{{- else}}
+				<p class="facet-hint">Brak Mszy w tym okresie.</p>
+				{{- end}}
+			</fieldset>
+
+			<fieldset class="facet">
+				<legend class="facet-title">Inne</legend>
+				<label class="facet-row"><input type="checkbox" id="f-skipgreg" name="skipgreg" value="1"{{if .SkipGregorian}} checked{{end}} data-autosubmit><span class="facet-label">Pomijaj Msze z gregorianką</span></label>
+				<label class="facet-row facet-row-top"><input type="checkbox" id="f-planned" name="planned" value="1"{{if .Planned}} checked{{end}} data-autosubmit><span class="facet-label">Msze planowane<span class="facet-sub">tygodnie bez wczytanych godzin</span></span></label>
+				{{- if .Schedules}}
+				<label class="facet-select-label" for="f-schedule">według porządku Mszy</label>
+				<select class="select facet-select" id="f-schedule" name="schedule" data-autosubmit>
+					{{- range .Schedules}}
+					<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
+					{{- end}}
+				</select>
+				{{- end}}
+				<a class="button facet-clear" href="{{.ClearURL}}">Wyczyść filtry</a>
+				<noscript><button class="button facet-clear" type="submit">Pokaż wyniki</button></noscript>
+			</fieldset>
+		</form>
+
+		<main class="search-results">
+			<div class="search-summary">
+				<p class="search-total">{{.Total}}</p>
+				{{- with .Subtotal}}
+				<p class="search-subtotal">{{.}} · kliknij Mszę, aby dodać intencję</p>
+				{{- end}}
+			</div>
+
+			{{- if .Active}}
+			<div class="search-active">
+				{{- range .Active}}
+				<a class="search-filter-chip" href="{{.URL}}" aria-label="Usuń filtr: {{.Label}}">{{.Label}}<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></a>
+				{{- end}}
+				<a class="search-clear-all" href="{{.ClearURL}}">Wyczyść wszystko</a>
+			</div>
+			{{- end}}
+
+			<div class="search-legend" aria-hidden="true">
+				<span><span class="facet-swatch is-free"></span>wolna</span>
+				<span><span class="facet-swatch is-planned"></span>planowana (godziny niewczytane)</span>
+				<span><span class="facet-swatch is-one"></span>1 intencja</span>
+				<span><span class="facet-swatch is-two"></span>2</span>
+				<span><span class="facet-swatch is-many"></span>3+</span>
+				<span><i>(poza parafią)</i> – nie zajmują Mszy</span>
+			</div>
+
+			{{- if .Empty}}
+			<div class="search-empty">
+				<p class="search-empty-title">Brak Mszy spełniających warunki</p>
+				<p>Usuń któryś filtr albo wydłuż okres.</p>
+			</div>
+			{{- end}}
+
+			{{- range .Months}}
+			<section class="search-month">
+				<header class="search-month-header">
+					<h2>{{.Name}}</h2>
+					<span>{{.Count}}</span>
+				</header>
+				{{- range .Days}}
+				<div class="search-day{{if .IsSunday}} is-sunday{{end}}">
+					<div class="search-day-date">
+						<a href="{{.URL}}">{{.Label}}</a>
+						<span>{{.Weekday}}</span>
+					</div>
+					<div class="search-day-body">
+						<p class="search-day-meta">
+							{{template "daystats" .Stats}}
+							{{- with .Planned}}
+							<span class="search-day-planned">{{.}}</span>
+							{{- end}}
+							{{- with .Feast}}
+							<span class="search-day-feast">{{.}}</span>
+							{{- end}}
+						</p>
+						<div class="search-masses">
+							{{- range .Masses}}
+							<a class="mass-chip is-{{.Kind}}" href="{{.URL}}" title="{{.Title}}"><b>{{.Time}}</b><span>{{.Status}}</span>{{with .Outside}}<i>{{.}}</i>{{end}}</a>
+							{{- end}}
+						</div>
+					</div>
+				</div>
+				{{- end}}
+			</section>
+			{{- end}}
+
+			{{- with .More}}
+			{{- if $.MoreURL}}
+			<a class="button search-more" href="{{$.MoreURL}}">{{.}}</a>
+			{{- else}}
+			<p class="search-more-hint">{{.}}</p>
+			{{- end}}
+			{{- end}}
+		</main>
+	</div>
+</body>
+</html>

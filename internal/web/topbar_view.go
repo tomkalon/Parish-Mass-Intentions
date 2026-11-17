@@ -14,6 +14,8 @@ type topbarView struct {
 
 	BackupLabel   string
 	BackupPending bool
+
+	Draft *draftNotice
 }
 
 func newTopbarView(setting settings.Setting, state backup.State, now time.Time) topbarView {

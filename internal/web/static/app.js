@@ -1,3 +1,28 @@
+const draftForm = document.querySelector(".panel-form");
+const draftToken = draftForm ? draftForm.dataset.draftToken || newDraftToken() : "";
+let stopDraft = () => {};
+
+function newDraftToken() {
+	if (window.crypto && typeof window.crypto.randomUUID === "function") {
+		return window.crypto.randomUUID();
+	}
+	return Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+
+const leave = (link) => {
+	if (!draftForm || !link.hasAttribute("data-discard")) {
+		window.location.href = link.href;
+		return;
+	}
+
+	stopDraft();
+	fetch("/draft/discard", { method: "POST", body: new URLSearchParams({ draft_token: draftToken }) })
+		.catch(() => {})
+		.finally(() => {
+			window.location.href = link.href;
+		});
+};
+
 document.addEventListener("keydown", (event) => {
 	if (event.key !== "Escape") {
 		return;
@@ -5,9 +30,56 @@ document.addEventListener("keydown", (event) => {
 
 	const close = document.querySelector("[data-close]");
 	if (close) {
-		window.location.href = close.href;
+		leave(close);
 	}
 });
+
+if (draftForm) {
+	const tokenInput = document.createElement("input");
+	tokenInput.type = "hidden";
+	tokenInput.name = "draft_token";
+	tokenInput.value = draftToken;
+	draftForm.append(tokenInput);
+
+	let timer = 0;
+	let dirty = false;
+	stopDraft = () => {
+		clearTimeout(timer);
+		dirty = false;
+	};
+
+	const send = (keepalive) => {
+		clearTimeout(timer);
+		if (!dirty) {
+			return;
+		}
+		dirty = false;
+
+		const data = new URLSearchParams(new FormData(draftForm));
+		if (draftForm.dataset.edit) {
+			data.set("edit", draftForm.dataset.edit);
+		}
+		fetch("/draft", { method: "POST", body: data, keepalive: keepalive === true }).catch(() => {});
+	};
+
+	const later = () => {
+		dirty = true;
+		clearTimeout(timer);
+		timer = setTimeout(send, 400);
+	};
+
+	draftForm.addEventListener("input", later);
+	draftForm.addEventListener("change", later);
+	draftForm.addEventListener("submit", () => stopDraft());
+	window.addEventListener("pagehide", () => send(true));
+
+	for (const link of draftForm.querySelectorAll("[data-discard]")) {
+		link.addEventListener("click", (event) => {
+			event.preventDefault();
+			leave(link);
+		});
+	}
+}
 
 const selectedDay = document.querySelector(".day.is-selected");
 if (selectedDay) {
@@ -60,8 +132,21 @@ if (deceased && gregorian) {
 }
 
 for (const input of document.querySelectorAll("[data-autosubmit]")) {
-	input.addEventListener("change", () => input.form.submit());
+	input.addEventListener("change", () => {
+		try {
+			if (input.id) {
+				sessionStorage.setItem("autosubmit-focus", input.id);
+			}
+		} catch {}
+		input.form.submit();
+	});
 }
+
+try {
+	const id = sessionStorage.getItem("autosubmit-focus");
+	sessionStorage.removeItem("autosubmit-focus");
+	document.getElementById(id ?? "")?.focus();
+} catch {}
 
 const amount = document.getElementById("amount");
 const chips = document.querySelectorAll(".chip[data-amount]");

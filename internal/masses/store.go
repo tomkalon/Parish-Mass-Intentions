@@ -34,7 +34,7 @@ func (massRow) TableName() string {
 }
 
 func Migrate(db *gorm.DB) error {
-	return db.AutoMigrate(&scheduleRow{}, &massRow{})
+	return db.AutoMigrate(&scheduleRow{}, &massRow{}, &loadedWeek{})
 }
 
 func Load(db *gorm.DB) ([]Schedule, error) {

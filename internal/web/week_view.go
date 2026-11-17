@@ -139,6 +139,10 @@ func (v weekView) CalendarURL() string {
 	return calendarURL(v.Week(), v.Start.Year())
 }
 
+func (v weekView) SearchURL() string {
+	return "/search?week=" + v.Week()
+}
+
 func (v weekView) HasDialog() bool {
 	return v.Delete != nil || v.Clear != nil || v.Feast != nil || v.Calendar != nil || v.PaymentsDialog != nil || v.Gregorian != nil
 }

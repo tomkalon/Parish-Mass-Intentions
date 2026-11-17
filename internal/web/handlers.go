@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -24,6 +25,7 @@ import (
 
 	"go-parafia/internal/backup"
 	"go-parafia/internal/calendar"
+	"go-parafia/internal/draft"
 	"go-parafia/internal/gcatholic"
 	"go-parafia/internal/gregorian"
 	"go-parafia/internal/intentions"
@@ -37,7 +39,9 @@ var templateFS embed.FS
 //go:embed static
 var staticFS embed.FS
 
-var weekTemplate = template.Must(template.ParseFS(templateFS, "templates/week.html", "templates/panel.html", "templates/topbar.html"))
+var weekTemplate = template.Must(template.ParseFS(templateFS, "templates/week.html", "templates/panel.html", "templates/topbar.html", "templates/daystats.html"))
+
+var searchTemplate = template.Must(template.ParseFS(templateFS, "templates/search.html", "templates/topbar.html", "templates/daystats.html"))
 
 var printTemplate = template.Must(template.ParseFS(templateFS, "templates/print.html"))
 
@@ -45,7 +49,7 @@ var settingsTemplate = template.Must(template.ParseFS(templateFS, "templates/set
 
 var scheduleTemplate = template.Must(template.ParseFS(templateFS, "templates/schedule.html", "templates/topbar.html"))
 
-var startTemplate = template.Must(template.ParseFS(templateFS, "templates/start.html"))
+var startTemplate = template.Must(template.ParseFS(templateFS, "templates/start.html", "templates/topbar.html"))
 
 type handler struct {
 	now               func() time.Time
@@ -57,13 +61,16 @@ type handler struct {
 	saveFile          func(defaultName string) (string, error)
 	backups           *backup.Backups
 	chooseDir         func(current string) (string, error)
+	drafts            *draft.Store
+	dbWarning         string
 }
 
 type Options struct {
-	DataDir   string
-	SaveFile  func(defaultName string) (string, error)
-	Backups   *backup.Backups
-	ChooseDir func(current string) (string, error)
+	DataDir         string
+	SaveFile        func(defaultName string) (string, error)
+	Backups         *backup.Backups
+	ChooseDir       func(current string) (string, error)
+	DatabaseWarning string
 }
 
 func RegisterRoutes(router chi.Router, db *gorm.DB, opts Options) {
@@ -79,6 +86,8 @@ func RegisterRoutes(router chi.Router, db *gorm.DB, opts Options) {
 		saveFile:  opts.SaveFile,
 		backups:   opts.Backups,
 		chooseDir: opts.ChooseDir,
+		drafts:    draft.NewStore(draftPath(opts.DataDir)),
+		dbWarning: opts.DatabaseWarning,
 	}
 	if h.backups == nil {
 		h.backups, _ = backup.Load(db, "")
@@ -103,7 +112,10 @@ func RegisterRoutes(router chi.Router, db *gorm.DB, opts Options) {
 		r.Post("/settings/import/confirm", h.confirmImport)
 	})
 
+	router.Post("/draft", h.saveDraft)
+	router.Post("/draft/discard", h.discardDraft)
 	router.Get("/", h.home)
+	router.Get("/search", h.search)
 	router.Get("/settings", h.settingsPage)
 	router.Get("/settings/schedules/new", h.scheduleForm)
 	router.Get("/settings/schedules/{id}", h.scheduleForm)
@@ -135,7 +147,17 @@ func (h *handler) start(w http.ResponseWriter, r *http.Request) {
 		ParishName: setting.ParishName,
 		Address:    setting.Address,
 		WeekURL:    weekURL(intentions.NextWeekStart(h.now())),
+		Draft:      h.draftNotice(),
+		Warning:    h.dbWarning,
 	})
+}
+
+func draftPath(dataDir string) string {
+	if dataDir == "" {
+		return ""
+	}
+
+	return filepath.Join(dataDir, draft.FileName)
 }
 
 func (h *handler) week(w http.ResponseWriter, r *http.Request) {
@@ -149,6 +171,16 @@ func (h *handler) week(w http.ResponseWriter, r *http.Request) {
 
 	var state weekState
 	switch {
+	case query.Get("draft") == "1":
+		form, ok := h.restoredForm(w, start)
+		if !ok {
+			return
+		}
+		if form == nil {
+			http.Redirect(w, r, weekURL(start), http.StatusSeeOther)
+			return
+		}
+		state.form = form
 	case query.Get("delete") != "":
 		intention, ok := h.findIntention(w, query.Get("delete"))
 		if !ok {
@@ -363,6 +395,10 @@ func (h *handler) delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
+	err = h.drafts.DiscardEdit(intention.ID)
+	if err != nil {
+		log.Printf("error removing draft of deleted intention %d: %v", intention.ID, err)
+	}
 
 	week := intentions.WeekStart(intention.MassAt).Format(intentions.DateLayout)
 	http.Redirect(w, r, "/?week="+week, http.StatusSeeOther)
@@ -463,7 +499,10 @@ func (h *handler) topbar() topbarView {
 		log.Printf("error loading settings: %v", err)
 	}
 
-	return newTopbarView(setting, h.backups.State(), h.now())
+	topbar := newTopbarView(setting, h.backups.State(), h.now())
+	topbar.Draft = h.draftNotice()
+
+	return topbar
 }
 
 func (h *handler) scheduleForm(w http.ResponseWriter, r *http.Request) {
@@ -753,6 +792,10 @@ func (h *handler) clearWeek(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
+		err = masses.Unmark(tx, start)
+		if err != nil {
+			return err
+		}
 
 		return gregorian.Release(tx, list)
 	})
@@ -815,13 +858,20 @@ func (h *handler) createSlots(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slots := schedule.Slots(start, existing)
-	if len(slots) > 0 {
-		err = h.db.Create(&slots).Error
-		if err != nil {
-			log.Printf("error creating slots for week %s: %v", start.Format(intentions.DateLayout), err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
-			return
+	err = h.db.Transaction(func(tx *gorm.DB) error {
+		if len(slots) > 0 {
+			err := tx.Create(&slots).Error
+			if err != nil {
+				return err
+			}
 		}
+
+		return masses.MarkLoaded(tx, start, schedule.ID)
+	})
+	if err != nil {
+		log.Printf("error creating slots for week %s: %v", start.Format(intentions.DateLayout), err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
 	}
 
 	err = settings.SaveSchedule(h.db, schedule.ID)
@@ -966,6 +1016,9 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 		form.Errors = errs
 		form.EditID = intention.ID
 		form.SeriesID = seriesID
+		if token := r.PostForm.Get("draft_token"); len(token) <= maxDraftToken {
+			form.DraftToken = token
+		}
 
 		h.renderWeek(w, http.StatusUnprocessableEntity, start, weekState{form: &form})
 		return
@@ -1008,6 +1061,7 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
+	h.finishDraft(r.PostForm.Get("draft_token"))
 
 	week := intentions.WeekStart(intention.MassAt).Format(intentions.DateLayout)
 	if copying {
@@ -1095,6 +1149,9 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 	}
 	view.SelectedScheduleID = setting.SelectedScheduleID
 	view.Topbar = newTopbarView(setting, h.backups.State(), h.now())
+	if state.form == nil {
+		view.Topbar.Draft = h.draftNotice()
+	}
 
 	active, err := gregorian.Active(h.db, h.now())
 	if err != nil {
@@ -1121,6 +1178,7 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 			return
 		}
 		state.form.QuickAmounts = quickAmountOptions(setting.QuickAmounts, state.form.Amount)
+		state.form.OtherDraft = h.otherDraft(state.form.DraftToken)
 		view.Form = state.form
 		markSelected(view.Days, state.form.Day, state.form.Time)
 		markEditing(view.Days, state.form.EditID)

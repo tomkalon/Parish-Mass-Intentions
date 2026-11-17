@@ -11,6 +11,9 @@
 	<header class="topbar">
 		{{template "topbar" .Topbar}}
 	</header>
+	{{- with .Topbar.Draft}}
+	{{template "draftbar" .}}
+	{{- end}}
 	<nav class="toolbar" aria-label="Porządek mszy">
 		<a class="button" href="{{.BackURL}}" data-close>← Wróć do ustawień</a>
 	</nav>

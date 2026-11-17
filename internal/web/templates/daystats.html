@@ -1,0 +1,13 @@
+{{define "daystats" -}}
+<span class="day-stats">
+	<span>{{.MassesLabel}}</span><span aria-hidden="true">·</span><span>{{.IntentionsLabel}}</span><span aria-hidden="true">·</span>
+	{{- if .Free}}
+	<span class="day-free">{{.FreeLabel}}</span>
+	{{- else}}
+	<span class="day-full">wszystkie zajęte</span>
+	{{- end}}
+	{{- with .OutsideLabel}}
+	<i class="day-outside">{{.}}</i>
+	{{- end}}
+</span>
+{{- end}}

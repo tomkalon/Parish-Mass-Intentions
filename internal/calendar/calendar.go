@@ -18,11 +18,16 @@ type Day struct {
 
 func FeastsForWeek(db *gorm.DB, start time.Time) (map[string]string, error) {
 	start = start.In(intentions.TimeZone)
-	from := start.Format(intentions.DateLayout)
-	to := start.AddDate(0, 0, 6).Format(intentions.DateLayout)
+
+	return FeastsBetween(db, start, start.AddDate(0, 0, 7))
+}
+
+func FeastsBetween(db *gorm.DB, from, to time.Time) (map[string]string, error) {
+	first := from.In(intentions.TimeZone).Format(intentions.DateLayout)
+	end := to.In(intentions.TimeZone).Format(intentions.DateLayout)
 
 	var days []Day
-	err := db.Where("date BETWEEN ? AND ?", from, to).Find(&days).Error
+	err := db.Where("date >= ? AND date < ?", first, end).Find(&days).Error
 	if err != nil {
 		return nil, err
 	}

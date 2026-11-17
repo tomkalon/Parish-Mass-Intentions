@@ -7,16 +7,37 @@ Działa jako zwykły program dla Windows (`Intencje Mszalne.exe`), z jednym okne
 ## Co potrafi
 
 - **Widok tygodnia** (poniedziałek–niedziela): msze, intencje parafialne i „poza parafią”, numeracja, szybkie dodawanie, edycja i usuwanie.
+- **Podsumowanie dnia** w nagłówku każdego dnia, np. „2 Msze · 3 intencje · 1 wolna (+1 poza parafią)” albo „wszystkie zajęte”. Intencja „poza parafią” jest odprawiana gdzie indziej, więc nie zajmuje Mszy w parafii.
+- **Szukaj Mszy** (lupa w pasku tygodnia): filtry jak w sklepie internetowym, z licznikami:
+  - okres: miesiąc, 3 miesiące, pół roku, rok,
+  - liczba intencji na Mszy: wolne, 1, 2, 3+,
+  - dzień tygodnia i godzina,
+  - pomijanie Mszy z gregorianką.
+
+  Dla tygodni bez wczytanych godzin wyszukiwarka pokazuje Msze „planowane” z wybranego porządku. Kliknięcie Mszy otwiera formularz z ustawionym dniem i godziną.
+- **Kalendarz roczny**: wybór tygodnia z podglądem liczby intencji i dni z Mszami do uzupełnienia.
 - **Porządki mszy**: przycisk „Wczytaj godziny mszy” tworzy puste miejsca na każdą mszę tygodnia według wybranego porządku (np. zwykły, wakacyjny). Porządki można edytować w ustawieniach.
 - **Przypomnienie o mszach bez intencji** nad widokiem tygodnia.
-- **Gregorianki i intencje za zmarłych**: checkboxy w formularzu, ozdobniki w widoku, a na wydruku „+” i „(greg.)”.
+- **Intencje za zmarłych** (na wydruku „+”) i **Msze gregoriańskie**:
+  - pierwsza gregorianka otwiera serię 30 Mszy,
+  - kolejne Msze serii wybiera się w formularzu albo z przypomnienia przy dniu, w którym przypada następna,
+  - widać numer N/30 (także na wydruku „(greg. 14/30)”), przerwy w serii i Msze współdzielone z innymi intencjami,
+  - ofiarę za całą serię wpisuje się raz.
+- **Wpłaty**: kwota przy intencji (tylko w programie, nigdy na wydruku), suma tygodnia, wyróżnianie intencji bez kwoty i podsumowania za tydzień, miesiąc i rok. Szybkie kwoty ustawia się w Ustawieniach.
 - **Święta i wspomnienia dnia**: wpisywane ręcznie albo pobierane przyciskiem „Pobierz święta z GCatholic” (wymaga internetu; rodzaje obchodów do wyboru w ustawieniach).
 - **Wydruk PDF** całego tygodnia: nagłówek z nazwą i adresem parafii, osobna numeracja intencji parafialnych i „poza parafią”. Tydzień zwykle mieści się na jednej stronie A4 (lekko zmniejszony tekst), a gdy intencji jest więcej, przechodzi na kolejną; dzień, który nie zmieściłby się nawet na całej stronie, dzieli się na dwie z dopiskiem „ciąg dalszy”.
 - **Ukrywanie na wydruku**: checkbox „Ukryj na wydruku” w formularzu. Ukryta intencja zostaje w widoku tygodnia (wyszarzona, z oznaczeniem), a w podglądzie wydruku można ją dołączyć checkboxem „Pokaż ukryte intencje”.
+- **Wydruk z miejscami do wpisania** (opcja „Miejsca do wpisania” w podglądzie wydruku), żeby uzupełnić tydzień długopisem:
+  - Msze bez intencji parafialnej dostają wykropkowane linie (1–3 na Mszę),
+  - opcjonalnie dodatkowa linia pod uzupełnionymi Mszami,
+  - dla tygodnia bez wczytanych godzin można dodać godziny z porządku Mszy, więc da się wydrukować zupełnie pusty tydzień,
+  - Msza z ukrytą intencją nigdy nie jest pokazywana jako pusta.
+- **Ochrona przed utratą danych**: każda intencja jest zapisywana do bazy w chwili kliknięcia „Zapisz”. Tekst wpisywany w formularzu program na bieżąco zapisuje jako szkic. Po zaniku prądu albo zawieszeniu się programu przy następnym uruchomieniu pojawia się pasek „Niezapisana intencja – Przywróć / Odrzuć”. Przy starcie program sprawdza też, czy baza nie jest uszkodzona.
 - **Wyczyść tydzień** (z potwierdzeniem).
 - **Automatyczna kopia danych** (np. do Google Drive / OneDrive): w Ustawieniach wybierasz folder, a przycisk „Wykonaj kopię danych” na górnym pasku zapisuje tam plik `intencje-kopia.db` (nadpisywany). Pasek pokazuje, czy od ostatniej kopii coś się zmieniło. Przy zamykaniu programu kopia robi się sama, jeśli są zmiany; pytanie pojawia się tylko, gdy się nie uda. Folder i czas ostatniej kopii są w `kopia.json` obok bazy (import ich nie nadpisuje).
 - **Eksport i import danych** (Ustawienia → Kopia danych): eksport zapisuje całą bazę (intencje, święta, ustawienia, porządki mszy) do jednego pliku `.db` przez okno „Zapisz jako”. Import pokazuje, co jest w pliku, i po potwierdzeniu zastępuje nim obecne dane; wcześniej zapisuje kopię `data-RRRR-MM-DD-GGMMSS.db.bak` w folderze danych (`%AppData%\Go Parafia`). Import takiego pliku `.bak` cofa zamianę.
-- **Ustawienia** (ikona koła zębatego): nazwa i adres parafii, pobieranie świąt, porządki mszy.
+- **Ustawienia** (ikona koła zębatego): nazwa i adres parafii, pobieranie świąt, porządki mszy, szybkie kwoty wpłat.
+- Numer wersji programu widać na ekranie powitalnym.
 
 ## Uruchomienie u użytkownika (Windows)
 
@@ -29,6 +50,8 @@ Dane programu:
 | Co | Gdzie |
 |---|---|
 | baza intencji, ustawień, porządków | `%AppData%\Go Parafia\data.db` |
+| folder i czas automatycznej kopii | `%AppData%\Go Parafia\kopia.json` |
+| szkic niezapisanej intencji | `%AppData%\Go Parafia\szkic-intencji.json` |
 | dziennik błędów | `%AppData%\Go Parafia\go-parafia.log` |
 | dane silnika okna | `%AppData%\Go Parafia\webview\` |
 
@@ -63,19 +86,28 @@ go test ./internal/web -run '^$' -bench LargeParish
 main.go, routes.go          start programu, router
 server.go / desktop.go      serwer HTTP (dev) albo okno Wails (.exe)
 internal/intentions         intencje: model, walidacja, zapytania tygodnia
-internal/masses             porządki mszy: domyślne (schedules.json), baza, sloty
+internal/masses             porządki mszy: domyślne (schedules.json), baza, sloty, Msze w zakresie dat (wyszukiwarka)
+internal/gregorian          serie Mszy gregoriańskich
 internal/calendar           opisy dni (święta, wspomnienia)
 internal/gcatholic          pobieranie i odczyt kalendarza GCatholic (iCal)
 internal/settings           ustawienia parafii
 internal/database           otwarcie bazy, migracje, eksport, import z kopią .bak
 internal/backup             automatyczna kopia do wybranego folderu, śledzenie zmian
-internal/web                strony HTML, formularze, wydruk PDF
+internal/draft              szkic formularza intencji (odzyskiwanie po awarii)
+internal/safefile           zapis plików z wymuszeniem zapisu na dysk
+internal/web                strony HTML, formularze, wyszukiwarka, wydruk PDF
 internal/api                JSON API (/api/intentions)
 ```
 
 ### CI
 
 GitHub Actions przy każdym pushu i pull requeście: formatowanie, `go vet` (także wersji Windows), `go mod tidy`, testy z `-race`, `govulncheck`, `golangci-lint`.
+
+## Licencja
+
+Program jest udostępniony na licencji [MIT](LICENSE).
+
+Czcionki Liberation Serif wbudowane w wydruk PDF mają własną licencję, SIL Open Font License 1.1 ([internal/web/fonts/LICENSE-Liberation.txt](internal/web/fonts/LICENSE-Liberation.txt)).
 
 ## Autor
 

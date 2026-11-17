@@ -38,6 +38,7 @@ func main() {
 		Backups:         backups,
 		ChooseDir:       chooseDirDialog(),
 		DatabaseWarning: warning,
+		Version:         appVersion(winres),
 	}
 
 	err = run(newRouter(db, opts), dir, backups)

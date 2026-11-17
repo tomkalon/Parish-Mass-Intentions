@@ -20,11 +20,11 @@ func ForWeek(db *gorm.DB, start time.Time) ([]Intention, error) {
 }
 
 type DayCount struct {
-	Filled       int
-	Placeholders int
-	Unpaid       int
-	Paid         int
-	Amount       Grosze
+	Filled int
+	Empty  int
+	Unpaid int
+	Paid   int
+	Amount Grosze
 
 	GregorianPaid   int
 	GregorianAmount Grosze
@@ -33,7 +33,7 @@ type DayCount struct {
 func CountByDay(db *gorm.DB, from, to time.Time) (map[string]DayCount, error) {
 	var list []Intention
 	err := inRange(db, from, to).
-		Select("id", "mass_at", "is_placeholder", "is_gregorian", "amount", "series_id").
+		Select("id", "mass_at", "is_placeholder", "is_outside_parish", "is_gregorian", "amount", "series_id").
 		Find(&list).Error
 	if err != nil {
 		return nil, err
@@ -45,12 +45,20 @@ func CountByDay(db *gorm.DB, from, to time.Time) (map[string]DayCount, error) {
 	}
 
 	counts := make(map[string]DayCount)
+	parishAt := make(map[int64]bool)
+	outsideAt := make(map[int64]string)
 	for _, intention := range list {
 		date := intention.MassAt.In(TimeZone).Format(DateLayout)
+		if intention.IsOutsideParish {
+			outsideAt[intention.MassAt.Unix()] = date
+		} else {
+			parishAt[intention.MassAt.Unix()] = true
+		}
+
 		count := counts[date]
 		switch {
 		case intention.IsPlaceholder:
-			count.Placeholders++
+			count.Empty++
 		case intention.Amount > 0:
 			count.Filled++
 			count.Paid++
@@ -66,6 +74,14 @@ func CountByDay(db *gorm.DB, from, to time.Time) (map[string]DayCount, error) {
 			count.Unpaid++
 		}
 		counts[date] = count
+	}
+
+	for at, date := range outsideAt {
+		if !parishAt[at] {
+			count := counts[date]
+			count.Empty++
+			counts[date] = count
+		}
 	}
 
 	return counts, nil
@@ -111,7 +127,7 @@ func Save(db *gorm.DB, intention *Intention) error {
 
 	return db.Transaction(func(tx *gorm.DB) error {
 		err := tx.Save(intention).Error
-		if err != nil {
+		if err != nil || intention.IsOutsideParish {
 			return err
 		}
 

@@ -1340,7 +1340,7 @@ func TestWeekWithCalendarDialog(t *testing.T) {
 		`<a class="calendar-week" href="/?week=2026-11-09" aria-label="Tydzień 9.11 – 15.11.2026: 7 intencji, są msze do uzupełnienia" aria-current="true" autofocus>`,
 		`<span class="calendar-day level-5" title="6 intencji">9</span>`,
 		`<span class="calendar-day level-0 has-empty" title="0 intencji · msze do uzupełnienia">10</span>`,
-		`<span class="calendar-day level-1" title="1 intencja">11</span>`,
+		`<span class="calendar-day level-1 has-empty" title="1 intencja · msze do uzupełnienia">11</span>`,
 		`<span class="calendar-day level-0 is-today" title="0 intencji">2</span>`,
 		`<a class="calendar-week" href="/?week=2025-12-29" aria-label="Tydzień 29.12 – 4.1.2026: 0 intencji">`,
 		`<span class="calendar-day is-out"></span>`,
@@ -2331,6 +2331,24 @@ func TestWeekShowsEmptyMassesNotice(t *testing.T) {
 	want := `<p class="week-notice" role="status"><span>1 msza nie ma uzupełnionej intencji.</span> <a href="#d-2026-11-03">Pokaż</a></p>`
 	if !strings.Contains(body, want) {
 		t.Errorf("body does not contain %q", want)
+	}
+}
+
+func TestWeekShowsOutsideOnlyMassAsEmpty(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+	seedIntention(t, h.db, "2026-11-03 18:00", true, "+ Anna Nowak")
+
+	body := getWeek(t, h, "/?week=2026-11-02").Body.String()
+
+	checkBody(t, body,
+		`<p class="week-notice" role="status"><span>1 msza nie ma uzupełnionej intencji.</span> <a href="#d-2026-11-03">Pokaż</a></p>`,
+		`<li class="intention">`,
+		`<span class="placeholder">do uzupełnienia</span>`,
+		`<a class="action" href="/?day=2026-11-03&amp;new=1&amp;time=18%3A00&amp;week=2026-11-02" aria-label="Uzupełnij intencję z godz. 18:00">Uzupełnij</a>`,
+		`<span class="day-free">1 wolna</span>`,
+	)
+	if strings.Contains(body, `aria-label="Usuń nieuzupełnioną intencję z godz. 18:00"`) {
+		t.Error("a slot that is not stored offers Usuń")
 	}
 }
 

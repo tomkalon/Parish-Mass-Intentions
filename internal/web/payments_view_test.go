@@ -136,7 +136,7 @@ func TestNewPaymentsViewWeek(t *testing.T) {
 	counts := map[string]intentions.DayCount{
 		"2026-11-08": {Filled: 9, Amount: 900000},
 		"2026-11-09": {Filled: 3, Amount: 35000},
-		"2026-11-10": {Filled: 3, Unpaid: 1, Amount: 25000, Placeholders: 2},
+		"2026-11-10": {Filled: 3, Unpaid: 1, Amount: 25000, Empty: 2},
 		"2026-11-15": {Filled: 5, Unpaid: 1, Amount: 50000},
 		"2026-11-16": {Filled: 9, Amount: 900000},
 	}

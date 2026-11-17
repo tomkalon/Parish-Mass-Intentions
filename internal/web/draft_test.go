@@ -375,6 +375,15 @@ func TestDraftRoutesDoNotMarkDataAsChanged(t *testing.T) {
 	}
 }
 
+func TestStartPageShowsVersion(t *testing.T) {
+	h := newTestHandler(t, draftNow)
+
+	checkBody(t, getStart(t, h), `<p class="start-credit">autor: Tomasz Kaliński, Rzezawa</p>`)
+
+	h.version = "1.7.1"
+	checkBody(t, getStart(t, h), `<p class="start-credit">wersja 1.7.1 · autor: Tomasz Kaliński, Rzezawa</p>`)
+}
+
 func TestStartPageShowsDatabaseWarning(t *testing.T) {
 	h := newTestHandler(t, draftNow)
 	h.dbWarning = "Sprawdzenie bazy danych wykryło błąd."

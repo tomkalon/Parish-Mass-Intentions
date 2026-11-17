@@ -98,7 +98,7 @@ func newCalendarWeek(start time.Time, month time.Month, today string, counts map
 		date := day.Format(intentions.DateLayout)
 		count := counts[date]
 		total += count.Filled
-		hasEmpty = hasEmpty || count.Placeholders > 0
+		hasEmpty = hasEmpty || count.Empty > 0
 
 		if day.Month() != month {
 			days = append(days, calendarDay{})
@@ -110,7 +110,7 @@ func newCalendarWeek(start time.Time, month time.Month, today string, counts map
 			Count:    count.Filled,
 			Level:    min(count.Filled, maxCalendarLevel),
 			InMonth:  true,
-			HasEmpty: count.Placeholders > 0,
+			HasEmpty: count.Empty > 0,
 			IsToday:  date == today,
 		})
 	}

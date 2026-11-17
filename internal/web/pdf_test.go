@@ -57,7 +57,7 @@ func TestLayoutWeek(t *testing.T) {
 	})
 	view.ParishName = "Parafia pw. Trójcy Przenajświętszej i św. Leopolda w Rzezawie"
 
-	pages := layoutWeek(view, fakeMeasurer{})
+	pages := layoutWeek(view, pdfOptions{}, fakeMeasurer{})
 
 	if len(pages) != 1 {
 		t.Fatalf("pages = %d, want 1", len(pages))
@@ -109,7 +109,7 @@ func TestLayoutWeekWrapsLongIntentions(t *testing.T) {
 		newIntention(t, 1, "2026-11-02 06:30", false, long),
 	})
 
-	pages := layoutWeek(view, fakeMeasurer{})
+	pages := layoutWeek(view, pdfOptions{}, fakeMeasurer{})
 
 	var lines []pdfRun
 	for _, run := range pages[0].Runs {
@@ -152,14 +152,14 @@ func TestLayoutWeekShrinksBeforeAddingAPage(t *testing.T) {
 
 	for count := 1; count < 300; count++ {
 		view := newWeekView(start, intentionsPerMass(t, count))
-		if header.Height+totalHeight(layoutDays(printableDays(view), pdfStyles[0], m)) <= pageContent {
+		if header.Height+totalHeight(layoutDays(printableDays(view, pdfOptions{}), pdfStyles[0], m)) <= pageContent {
 			continue
 		}
 
-		if header.Height+totalHeight(layoutDays(printableDays(view), smallest, m)) > pageContent {
+		if header.Height+totalHeight(layoutDays(printableDays(view, pdfOptions{}), smallest, m)) > pageContent {
 			t.Fatalf("with %d intentions even the smallest style does not fit, cannot test shrinking", count)
 		}
-		if pages := layoutWeek(view, m); len(pages) != 1 {
+		if pages := layoutWeek(view, pdfOptions{}, m); len(pages) != 1 {
 			t.Errorf("pages = %d, want 1 (the week fits after shrinking)", len(pages))
 		}
 		return
@@ -172,7 +172,7 @@ func TestLayoutWeekKeepsDaysOnOnePage(t *testing.T) {
 	start := time.Date(2026, 11, 2, 0, 0, 0, 0, intentions.TimeZone)
 	view := newWeekView(start, intentionsPerMass(t, 7*15*3))
 
-	pages := layoutWeek(view, fakeMeasurer{})
+	pages := layoutWeek(view, pdfOptions{}, fakeMeasurer{})
 
 	if len(pages) < 2 {
 		t.Fatalf("pages = %d, want at least 2", len(pages))
@@ -205,7 +205,7 @@ func TestWriteWeekPDF(t *testing.T) {
 	})
 
 	var buf bytes.Buffer
-	err := writeWeekPDF(&buf, view)
+	err := writeWeekPDF(&buf, view, pdfOptions{})
 	if err != nil {
 		t.Fatalf("writeWeekPDF: %v", err)
 	}
@@ -228,7 +228,7 @@ func TestLayoutWeekSkipsPlaceholders(t *testing.T) {
 		newIntention(t, 3, "2026-11-03 18:00", false, "+ Jan Kowalski"),
 	})
 
-	texts := pageTexts(layoutWeek(view, fakeMeasurer{})[0])
+	texts := pageTexts(layoutWeek(view, pdfOptions{}, fakeMeasurer{})[0])
 
 	if slices.Contains(texts, "6:30") {
 		t.Error("a mass with only a placeholder is printed")
@@ -256,7 +256,7 @@ func TestLayoutWeekPrintsFeast(t *testing.T) {
 		"2026-11-05": "dzień bez mszy",
 	})
 
-	runs := layoutWeek(view, fakeMeasurer{})[0].Runs
+	runs := layoutWeek(view, pdfOptions{}, fakeMeasurer{})[0].Runs
 	find := func(text string) pdfRun {
 		t.Helper()
 		i := slices.IndexFunc(runs, func(run pdfRun) bool { return run.Text == text })
@@ -361,7 +361,7 @@ func TestLayoutWeekPrintsGregorianMark(t *testing.T) {
 	gregorian.IsDeceased = true
 	gregorian.IsGregorian = true
 
-	texts := pageTexts(layoutWeek(newWeekView(start, []intentions.Intention{gregorian}), fakeMeasurer{})[0])
+	texts := pageTexts(layoutWeek(newWeekView(start, []intentions.Intention{gregorian}), pdfOptions{}, fakeMeasurer{})[0])
 
 	if !slices.Contains(texts, "+ Stanisław Grocholski (greg.)") {
 		t.Errorf("page does not contain the marked gregorian intention: %q", texts)
@@ -391,7 +391,7 @@ func TestLayoutWeekNumbersParishAndOutsideSeparately(t *testing.T) {
 		newIntention(t, 7, "2026-11-03 18:00", true, "Poza G"),
 	})
 
-	runs := layoutWeek(view, fakeMeasurer{})[0].Runs
+	runs := layoutWeek(view, pdfOptions{}, fakeMeasurer{})[0].Runs
 
 	var numbers []string
 	for _, run := range runs {
@@ -491,7 +491,7 @@ func TestLayoutWeekSplitsDayTallerThanAPage(t *testing.T) {
 	}
 	view := newWeekView(start, list)
 
-	pages := layoutWeek(view, fakeMeasurer{})
+	pages := layoutWeek(view, pdfOptions{}, fakeMeasurer{})
 
 	if len(pages) < 2 {
 		t.Fatalf("pages = %d, want at least 2", len(pages))

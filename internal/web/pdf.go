@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"fmt"
 	"io"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -89,7 +90,17 @@ type pdfRun struct {
 
 type pdfRule struct {
 	X1, X2, Y, Width float64
+	Dotted           bool
 }
+
+type pdfOptions struct {
+	showHidden bool
+	blanks     int
+	extra      bool
+	planned    map[string][]time.Time
+}
+
+const blankLineScale = 1.5
 
 type pdfBlock struct {
 	Height float64
@@ -113,7 +124,7 @@ func (p *pdfPage) place(block pdfBlock, top float64) {
 	}
 }
 
-func writeWeekPDF(w io.Writer, view weekView) error {
+func writeWeekPDF(w io.Writer, view weekView, opts pdfOptions) error {
 	pdf, err := newPDFDocument()
 	if err != nil {
 		return err
@@ -122,7 +133,7 @@ func writeWeekPDF(w io.Writer, view weekView) error {
 	pdf.SetInfo(gopdf.PdfInfo{Title: "Intencje mszy świętych – " + weekInWords(view.Start), Creator: "Go Parafia"})
 
 	measurer := &gopdfMeasurer{pdf: pdf}
-	pages := layoutWeek(view, measurer)
+	pages := layoutWeek(view, opts, measurer)
 	if measurer.err != nil {
 		return fmt.Errorf("measuring text: %w", measurer.err)
 	}
@@ -141,6 +152,11 @@ func writeWeekPDF(w io.Writer, view weekView) error {
 			}
 		}
 		for _, rule := range page.Rules {
+			if rule.Dotted {
+				pdf.SetCustomLineType([]float64{rule.Width, 2.2 * rule.Width}, 0)
+			} else {
+				pdf.SetLineType("solid")
+			}
 			pdf.SetLineWidth(rule.Width)
 			pdf.Line(rule.X1, rule.Y, rule.X2, rule.Y)
 		}
@@ -206,9 +222,9 @@ func (m *gopdfMeasurer) width(text string, font pdfFont, size, spacing float64) 
 	return width
 }
 
-func layoutWeek(view weekView, m textMeasurer) []pdfPage {
+func layoutWeek(view weekView, opts pdfOptions, m textMeasurer) []pdfPage {
 	header := layoutHeader(view, m)
-	days := printableDays(view)
+	days := printableDays(view, opts)
 
 	style := pdfStyles[len(pdfStyles)-1]
 	for _, s := range pdfStyles {
@@ -398,10 +414,12 @@ type printedIntention struct {
 	content string
 	number  int
 	outside bool
+	blank   bool
 }
 
 type printedMass struct {
 	time       string
+	sortKey    string
 	numbered   bool
 	intentions []printedIntention
 }
@@ -414,18 +432,50 @@ type printedDay struct {
 	ruleBelow bool
 }
 
-func printableDays(view weekView) []printedDay {
+func printableDays(view weekView, opts pdfOptions) []printedDay {
 	days := make([]printedDay, 0, len(view.Days))
 	for i, day := range view.Days {
+		masses := printableMasses(day.Masses, opts)
+		if opts.blanks > 0 {
+			masses = addPlannedMasses(masses, opts.planned[day.Date], opts.blanks)
+			if len(masses) == 0 && len(day.Masses) == 0 {
+				masses = []printedMass{{intentions: blankLines(opts.blanks)}}
+			}
+		}
+
 		days = append(days, printedDay{
 			date:      view.Start.AddDate(0, 0, i),
 			feast:     day.Feast,
-			masses:    printableMasses(day.Masses),
+			masses:    masses,
 			ruleBelow: i < len(view.Days)-1,
 		})
 	}
 
 	return days
+}
+
+func addPlannedMasses(masses []printedMass, planned []time.Time, blanks int) []printedMass {
+	added := false
+	for _, at := range planned {
+		key := at.Format("15:04")
+		if slices.ContainsFunc(masses, func(m printedMass) bool { return m.sortKey == key }) {
+			continue
+		}
+		masses = append(masses, printedMass{time: clockLabel(at), sortKey: key, intentions: blankLines(blanks)})
+		added = true
+	}
+
+	if added {
+		slices.SortStableFunc(masses, func(a, b printedMass) int {
+			return strings.Compare(a.sortKey, b.sortKey)
+		})
+	}
+
+	return masses
+}
+
+func blankLines(n int) []printedIntention {
+	return slices.Repeat([]printedIntention{{blank: true}}, n)
 }
 
 func (d printedDay) split(n int) (printedDay, printedDay) {
@@ -454,18 +504,29 @@ func (d printedDay) split(n int) (printedDay, printedDay) {
 	return first, rest
 }
 
-func printableMasses(masses []massView) []printedMass {
+func printableMasses(masses []massView, opts pdfOptions) []printedMass {
 	var result []printedMass
 	for _, mass := range masses {
-		parish := printedGroup(mass.Parish, false)
-		outside := printedGroup(mass.Outside, true)
+		parish := printedGroup(mass.Parish, false, opts.showHidden)
+		outside := printedGroup(mass.Outside, true, opts.showHidden)
+		numbered := len(parish) > 1 || len(outside) > 1
+
+		if opts.blanks > 0 {
+			switch {
+			case mass.ParishFilled() == 0:
+				parish = blankLines(opts.blanks)
+			case opts.extra:
+				parish = append(parish, blankLines(1)...)
+			}
+		}
 		if len(parish) == 0 && len(outside) == 0 {
 			continue
 		}
 
 		result = append(result, printedMass{
 			time:       mass.Time,
-			numbered:   len(parish) > 1 || len(outside) > 1,
+			sortKey:    mass.TimeValue,
+			numbered:   numbered,
 			intentions: append(parish, outside...),
 		})
 	}
@@ -473,10 +534,10 @@ func printableMasses(masses []massView) []printedMass {
 	return result
 }
 
-func printedGroup(list []intentionView, outside bool) []printedIntention {
+func printedGroup(list []intentionView, outside, showHidden bool) []printedIntention {
 	var printed []printedIntention
 	for _, intention := range list {
-		if !intention.IsPlaceholder {
+		if !intention.IsPlaceholder && (showHidden || !intention.IsHidden) {
 			printed = append(printed, printedIntention{content: printedContent(intention), outside: outside})
 		}
 	}
@@ -518,6 +579,8 @@ func layoutMasses(block *pdfBlock, masses []printedMass, x, width, top float64, 
 	timeWidth := 46 * px
 	textX := x + timeWidth + 8*px
 	textWidth := x + width - textX
+	blankLine := line * blankLineScale
+	blankBaseline := blankLine - (line - textBaseline)
 
 	y := top
 	for i, mass := range masses {
@@ -525,12 +588,30 @@ func layoutMasses(block *pdfBlock, masses []printedMass, x, width, top float64, 
 			y += 4 * px
 		}
 
-		w := m.width(mass.time, fontBold, style.textSize, 0)
-		block.Runs = append(block.Runs, pdfRun{X: x + timeWidth - w, Baseline: y + textBaseline, Font: fontBold, Size: style.textSize, Text: mass.time})
+		timeBaseline := y + textBaseline
+		if len(mass.intentions) > 0 && mass.intentions[0].blank {
+			timeBaseline = y + blankBaseline
+		}
+		if mass.time == "" {
+			block.Rules = append(block.Rules, pdfRule{X1: x + 8*px, X2: x + timeWidth, Y: timeBaseline, Width: 0.7, Dotted: true})
+		} else {
+			w := m.width(mass.time, fontBold, style.textSize, 0)
+			block.Runs = append(block.Runs, pdfRun{X: x + timeWidth - w, Baseline: timeBaseline, Font: fontBold, Size: style.textSize, Text: mass.time})
+		}
 
 		for n, intention := range mass.intentions {
 			if n > 0 && intention.outside && !mass.intentions[n-1].outside {
 				y += groupGap
+			}
+
+			if intention.blank {
+				lineX := textX
+				if mass.numbered {
+					lineX += 20 * px
+				}
+				block.Rules = append(block.Rules, pdfRule{X1: lineX, X2: x + width, Y: y + blankBaseline, Width: 0.7, Dotted: true})
+				y += blankLine
+				continue
 			}
 
 			contentX, available := textX, textWidth

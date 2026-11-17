@@ -34,3 +34,13 @@ func saveFileDialog() func(string) (string, error) {
 func chooseDirDialog() func(string) (string, error) {
 	return nil
 }
+
+func programPath() string {
+	return ""
+}
+
+func restartProgram() func(string) error {
+	return nil
+}
+
+func waitForPreviousVersion() {}

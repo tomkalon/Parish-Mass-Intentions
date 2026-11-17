@@ -38,6 +38,13 @@ Działa jako zwykły program dla Windows (`Intencje Mszalne.exe`), z jednym okne
 - **Eksport i import danych** (Ustawienia → Kopia danych): eksport zapisuje całą bazę (intencje, święta, ustawienia, porządki mszy) do jednego pliku `.db` przez okno „Zapisz jako”. Import pokazuje, co jest w pliku, i po potwierdzeniu zastępuje nim obecne dane; wcześniej zapisuje kopię `data-RRRR-MM-DD-GGMMSS.db.bak` w folderze danych (`%AppData%\Go Parafia`). Import takiego pliku `.bak` cofa zamianę.
 - **Ustawienia** (ikona koła zębatego): nazwa i adres parafii, pobieranie świąt, porządki mszy, szybkie kwoty wpłat.
 - Numer wersji programu widać na ekranie powitalnym.
+- **Aktualizacje z GitHuba** (Ustawienia → Aktualizacje): „Sprawdź aktualizacje” pokazuje, czy jest nowsza wersja i co się w niej zmieniło. „Pobierz i zainstaluj” wykonuje kolejno:
+  1. zapisuje kopię danych (`data-…-przed-aktualizacja.db.bak` w folderze danych),
+  2. pobiera nowy program i sprawdza jego sumę kontrolną,
+  3. podmienia plik `.exe`,
+  4. uruchamia program ponownie.
+
+  Jeśli Windows nie pozwoli uruchomić nowej wersji, zostaje poprzednia. Program sprawdza też aktualizacje sam przy starcie (gdy jest internet) i wtedy pokazuje informację na ekranie powitalnym.
 
 ## Uruchomienie u użytkownika (Windows)
 
@@ -95,9 +102,27 @@ internal/database           otwarcie bazy, migracje, eksport, import z kopią .b
 internal/backup             automatyczna kopia do wybranego folderu, śledzenie zmian
 internal/draft              szkic formularza intencji (odzyskiwanie po awarii)
 internal/safefile           zapis plików z wymuszeniem zapisu na dysk
+internal/update             sprawdzanie i instalacja nowych wersji z GitHub Releases
 internal/web                strony HTML, formularze, wyszukiwarka, wydruk PDF
 internal/api                JSON API (/api/intentions)
 ```
+
+### Wydanie nowej wersji
+
+1. Podbij wersję w `build/windows/winres.json` (pięć miejsc, np. `1.0.1` i `1.0.1.0`) i scal zmiany do `master`.
+2. Oznacz wydanie tagiem z opisem zmian po polsku. Ten opis program pokaże w Ustawieniach.
+
+   ```bash
+   git tag -a v1.0.1 -m "Poprawki wydruku."
+   git push origin v1.0.1
+   ```
+3. GitHub Actions (`.github/workflows/release.yml`) wykonuje kolejno:
+   1. sprawdza, czy tag zgadza się z wersją w `winres.json`,
+   2. uruchamia testy,
+   3. buduje `.exe`,
+   4. publikuje wydanie z plikami `Intencje-Mszalne.exe` i `SHA256SUMS.txt`.
+
+   Z tego wydania korzysta przycisk „Pobierz i zainstaluj” w programie.
 
 ### CI
 

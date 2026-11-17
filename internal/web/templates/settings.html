@@ -178,6 +178,40 @@
 			{{- end}}
 		</section>
 
+		<section class="settings-section updates" id="aktualizacje" aria-labelledby="updates-title">
+			<h2 class="settings-heading" id="updates-title">Aktualizacje</h2>
+			{{- with .Update}}
+			<p class="update-current">Zainstalowana wersja: <strong>{{.Current}}</strong>{{with .Checked}} · sprawdzono {{.}}{{end}}</p>
+			{{- with .Error}}
+			<p class="update-error" role="alert">{{.}}</p>
+			{{- end}}
+			{{- if .Available}}
+			<div class="update-available">
+				<p class="update-title">Dostępna nowa wersja <strong>{{.Latest}}</strong>{{with .Published}} z {{.}}{{end}}</p>
+				{{- with .Notes}}
+				<p class="update-notes">{{.}}</p>
+				{{- end}}
+				{{- if .CanInstall}}
+				<form method="post" action="/update/install">
+					<input type="hidden" name="week" value="{{$.Week}}">
+					<input type="hidden" name="version" value="{{.Latest}}">
+					<button class="button button-primary" type="submit">Pobierz i zainstaluj</button>
+				</form>
+				<p class="hint">Przed aktualizacją program zapisze kopię danych (plik .bak w folderze danych), a po instalacji uruchomi się ponownie.</p>
+				{{- else}}
+				<p class="hint">Instalacja działa tylko w programie dla Windows.</p>
+				{{- end}}
+			</div>
+			{{- else if .UpToDate}}
+			<p class="update-ok">Masz najnowszą wersję.</p>
+			{{- end}}
+			<form method="post" action="/update/check">
+				<input type="hidden" name="week" value="{{$.Week}}">
+				<button class="button" type="submit">Sprawdź aktualizacje</button>
+			</form>
+			{{- end}}
+		</section>
+
 		<p class="app-credit">Go Parafia · autor: Tomasz Kaliński, Rzezawa</p>
 		<p class="app-prayer">Jeśli korzystasz z tego programu, w ramach wdzięczności pomódl się, proszę, za autora.</p>
 	</main>

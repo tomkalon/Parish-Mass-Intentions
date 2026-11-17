@@ -7,4 +7,5 @@ type startView struct {
 	Draft      *draftNotice
 	Warning    string
 	Version    string
+	Update     string
 }

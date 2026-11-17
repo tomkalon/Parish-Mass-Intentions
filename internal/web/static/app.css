@@ -3237,3 +3237,51 @@ a.series-day:hover {
 	color: var(--muted);
 	text-align: center;
 }
+
+/* Updates */
+
+.updates p {
+	margin: 0 0 12px;
+}
+
+.update-error {
+	padding: 10px 12px;
+	border: 1px solid #E7B7B1;
+	border-radius: var(--radius);
+	background: var(--danger-bg);
+	color: var(--danger-hover);
+}
+
+.update-available {
+	margin-bottom: 16px;
+	padding: 14px 16px;
+	border: 1px solid var(--free);
+	border-radius: var(--radius-card);
+	background: var(--free-bg);
+}
+
+.update-notes {
+	white-space: pre-line;
+	color: var(--ink-2);
+	font-size: 15px;
+}
+
+.update-ok {
+	color: var(--free-ink);
+	font-weight: 600;
+}
+
+.start-update {
+	margin: 20px 0 0;
+}
+
+.start-update a {
+	display: inline-block;
+	padding: 6px 14px;
+	border: 1px solid var(--free);
+	border-radius: var(--radius-pill);
+	background: var(--free-bg);
+	color: var(--free-ink);
+	font-weight: 600;
+	text-decoration: none;
+}

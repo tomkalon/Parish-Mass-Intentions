@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Tag matches the version in winres.json
+        run: |
+          version=$(sed -n 's/.*"ProductVersion": "\(.*\)".*/\1/p' build/windows/winres.json)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match version $version in build/windows/winres.json"
+            exit 1
+          fi
+
+      - name: Tests
+        run: go test ./...
+
+      - name: Build Windows exe
+        run: make windows
+
+      - name: Release files
+        run: |
+          mkdir dist
+          cp "build/bin/Intencje Mszalne.exe" dist/Intencje-Mszalne.exe
+          (cd dist && sha256sum Intencje-Mszalne.exe > SHA256SUMS.txt)
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Intencje Mszalne ${GITHUB_REF_NAME#v}"
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          if [ "$(git cat-file -t "$GITHUB_REF_NAME")" = "tag" ]; then
+            git tag -l --format='%(contents)' "$GITHUB_REF_NAME" > notes.md
+            gh release create "$GITHUB_REF_NAME" dist/* --title "$title" --notes-file notes.md
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* --title "$title" --generate-notes
+          fi

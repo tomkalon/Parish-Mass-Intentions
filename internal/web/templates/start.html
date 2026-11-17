@@ -21,6 +21,9 @@
 			{{- with .Address}}
 			<p class="start-address">{{.}}</p>
 			{{- end}}
+			{{- with .Update}}
+			<p class="start-update"><a href="/settings#aktualizacje">Dostępna nowa wersja {{.}} – zaktualizuj w Ustawieniach</a></p>
+			{{- end}}
 			<nav class="start-actions" aria-label="Start">
 				<a class="button button-primary" href="{{.WeekURL}}">Przejdź do intencji →</a>
 				<a class="button" href="/settings">Ustawienia</a>

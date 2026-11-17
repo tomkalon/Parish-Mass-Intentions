@@ -30,6 +30,7 @@ import (
 	"go-parafia/internal/intentions"
 	"go-parafia/internal/masses"
 	"go-parafia/internal/settings"
+	"go-parafia/internal/update"
 )
 
 var testSchedules = []masses.Schedule{
@@ -77,6 +78,7 @@ func newTestHandler(t *testing.T, now time.Time) *handler {
 		dataDir: dataDir,
 		backups: backups,
 		drafts:  draft.NewStore(filepath.Join(dataDir, draft.FileName)),
+		updater: update.New("1.0.0", "", nil),
 	}
 }
 

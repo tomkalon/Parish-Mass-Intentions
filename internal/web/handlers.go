@@ -31,6 +31,7 @@ import (
 	"go-parafia/internal/intentions"
 	"go-parafia/internal/masses"
 	"go-parafia/internal/settings"
+	"go-parafia/internal/update"
 )
 
 //go:embed templates/*.html
@@ -64,6 +65,7 @@ type handler struct {
 	drafts            *draft.Store
 	dbWarning         string
 	version           string
+	updater           *update.Updater
 }
 
 type Options struct {
@@ -73,6 +75,7 @@ type Options struct {
 	ChooseDir       func(current string) (string, error)
 	DatabaseWarning string
 	Version         string
+	Updater         *update.Updater
 }
 
 func RegisterRoutes(router chi.Router, db *gorm.DB, opts Options) {
@@ -91,6 +94,10 @@ func RegisterRoutes(router chi.Router, db *gorm.DB, opts Options) {
 		drafts:    draft.NewStore(draftPath(opts.DataDir)),
 		dbWarning: opts.DatabaseWarning,
 		version:   opts.Version,
+		updater:   opts.Updater,
+	}
+	if h.updater == nil {
+		h.updater = update.New(opts.Version, "", nil)
 	}
 	if h.backups == nil {
 		h.backups, _ = backup.Load(db, "")
@@ -115,6 +122,8 @@ func RegisterRoutes(router chi.Router, db *gorm.DB, opts Options) {
 		r.Post("/settings/import/confirm", h.confirmImport)
 	})
 
+	router.Post("/update/check", h.checkUpdate)
+	router.Post("/update/install", h.installUpdate)
 	router.Post("/draft", h.saveDraft)
 	router.Post("/draft/discard", h.discardDraft)
 	router.Get("/", h.home)
@@ -153,6 +162,7 @@ func (h *handler) start(w http.ResponseWriter, r *http.Request) {
 		Draft:      h.draftNotice(),
 		Warning:    h.dbWarning,
 		Version:    h.version,
+		Update:     h.availableUpdate(),
 	})
 }
 
@@ -557,6 +567,7 @@ func (h *handler) settingsView(w http.ResponseWriter, setting settings.Setting, 
 	view.BackupDir = state.Dir
 	view.BackupLabel = backupLabel(state, h.now())
 	view.CanChooseDir = h.chooseDir != nil
+	view.Update = newUpdateView(h.updater, h.now())
 
 	return view, true
 }

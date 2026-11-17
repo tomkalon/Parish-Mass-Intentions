@@ -9,8 +9,12 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -19,7 +23,10 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"go-parafia/internal/backup"
+	"go-parafia/internal/update"
 )
+
+const waitPIDEnv = "GO_PARAFIA_WAIT_PID"
 
 func prepareDataDir() (string, error) {
 	config, err := os.UserConfigDir()
@@ -52,6 +59,56 @@ func chooseDirDialog() func(string) (string, error) {
 	return window.chooseDir
 }
 
+func programPath() string {
+	exe, err := os.Executable()
+	if err != nil {
+		log.Printf("error finding the program file: %v", err)
+		return ""
+	}
+	resolved, err := filepath.EvalSymlinks(exe)
+	if err == nil {
+		exe = resolved
+	}
+
+	return exe
+}
+
+func restartProgram() func(string) error {
+	return window.restart
+}
+
+// waitForPreviousVersion lets a freshly installed version wait until the
+// version that installed it has closed, so the single instance lock and the
+// database are free.
+func waitForPreviousVersion() {
+	value := os.Getenv(waitPIDEnv)
+	if value == "" {
+		return
+	}
+	_ = os.Unsetenv(waitPIDEnv)
+
+	pid, err := strconv.Atoi(value)
+	if err != nil {
+		return
+	}
+	previous, err := os.FindProcess(pid)
+	if err != nil {
+		return
+	}
+
+	done := make(chan struct{})
+	go func() {
+		_, _ = previous.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		log.Printf("previous version (pid %d) is still running after 30 s", pid)
+	}
+}
+
 func run(router http.Handler, dataDir string, backups *backup.Backups) error {
 	window.backups = backups
 
@@ -74,16 +131,45 @@ func run(router http.Handler, dataDir string, backups *backup.Backups) error {
 }
 
 type desktopWindow struct {
-	mu      sync.Mutex
-	ctx     context.Context
-	backups *backup.Backups
+	mu       sync.Mutex
+	ctx      context.Context
+	backups  *backup.Backups
+	updating atomic.Bool
 }
 
 func (w *desktopWindow) startup(ctx context.Context) {
 	w.mu.Lock()
-	defer w.mu.Unlock()
-
 	w.ctx = ctx
+	w.mu.Unlock()
+
+	err := update.Cleanup(programPath())
+	if err != nil {
+		log.Printf("error removing files left by the update: %v", err)
+	}
+}
+
+func (w *desktopWindow) restart(exe string) error {
+	cmd := exec.Command(exe)
+	cmd.Env = append(os.Environ(), waitPIDEnv+"="+strconv.Itoa(os.Getpid()))
+	err := cmd.Start()
+	if err != nil {
+		return err
+	}
+	err = cmd.Process.Release()
+	if err != nil {
+		log.Printf("error releasing the new program process: %v", err)
+	}
+
+	w.updating.Store(true)
+	time.AfterFunc(1500*time.Millisecond, func() {
+		ctx, err := w.context()
+		if err != nil {
+			os.Exit(0)
+		}
+		runtime.Quit(ctx)
+	})
+
+	return nil
 }
 
 func (w *desktopWindow) bringToFront(options.SecondInstanceData) {
@@ -136,6 +222,10 @@ func (w *desktopWindow) chooseDir(current string) (string, error) {
 }
 
 func (w *desktopWindow) beforeClose(ctx context.Context) bool {
+	if w.updating.Load() {
+		return false
+	}
+
 	err := w.backups.RunIfPending()
 	if err == nil {
 		return false

@@ -192,7 +192,7 @@ func TestInstallUpdateBrokenDownload(t *testing.T) {
 }
 
 func TestInstallErrorMessage(t *testing.T) {
-	if got := installErrorMessage(fmt.Errorf("wrapped: %w", update.ErrStart)); !strings.HasPrefix(got, "Windows nie pozwolił uruchomić nowej wersji") {
+	if got := installErrorMessage(fmt.Errorf("wrapped: %w", update.ErrStart)); !strings.HasPrefix(got, "Nie udało się uruchomić nowej wersji (Windows mógł ją zablokować)") {
 		t.Errorf("message for ErrStart = %q", got)
 	}
 	if got := installErrorMessage(os.ErrPermission); !strings.Contains(got, "program działa dalej w obecnej wersji") {

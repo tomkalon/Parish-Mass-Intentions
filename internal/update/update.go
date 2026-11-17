@@ -35,7 +35,7 @@ var (
 	ErrMissingAsset  = errors.New("w wydaniu brakuje pliku programu albo sumy kontrolnej")
 	ErrChecksum      = errors.New("pobrany plik jest uszkodzony (niezgodna suma kontrolna)")
 	ErrNotProgram    = errors.New("pobrany plik nie jest programem dla Windows")
-	ErrStart         = errors.New("Windows nie pozwolił uruchomić nowej wersji, więc program został w poprzedniej wersji")
+	ErrStart         = errors.New("nie udało się uruchomić nowej wersji (Windows mógł ją zablokować), więc program został w poprzedniej wersji")
 )
 
 type Release struct {

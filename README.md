@@ -14,7 +14,7 @@ Działa jako zwykły program dla Windows (`Intencje Mszalne.exe`), z jednym okne
   - dzień tygodnia i godzina,
   - pomijanie Mszy z gregorianką.
 
-  Dla tygodni bez wczytanych godzin wyszukiwarka pokazuje Msze „planowane” z wybranego porządku. Wyniki można oglądać jako **listę dni** (kliknięcie Mszy otwiera formularz z ustawionym dniem i godziną) albo jako **kalendarz**:
+  Po zaznaczeniu „Pokaż Msze planowane” wyszukiwarka dokłada dla tygodni bez wczytanych godzin Msze „planowane” z wybranego porządku. Wyniki można oglądać jako **listę dni** (kliknięcie Mszy otwiera formularz z ustawionym dniem i godziną) albo jako **kalendarz**:
   - każda Msza dnia to kreska,
   - dni pasujące do filtrów są obramowane,
   - po kliknięciu dnia widać jego Msze z przyciskami „+ Dodaj”.
@@ -46,6 +46,8 @@ Działa jako zwykły program dla Windows (`Intencje Mszalne.exe`), z jednym okne
   2. pobiera nowy program i sprawdza jego sumę kontrolną,
   3. podmienia plik `.exe`,
   4. uruchamia program ponownie.
+
+  Przez cały czas widać stronę z etapami i paskiem postępu pobierania („Pobieram nową wersję… 12,3 MB z 20,3 MB”). Jeśli coś się nie uda, ta sama strona pokazuje błąd i przycisk „Spróbuj ponownie”.
 
   Jeśli Windows nie pozwoli uruchomić nowej wersji, zostaje poprzednia. Program sprawdza też aktualizacje sam przy starcie (gdy jest internet) i wtedy pokazuje informację na ekranie powitalnym.
 

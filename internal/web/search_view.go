@@ -105,7 +105,6 @@ func parseSearchQuery(query url.Values, now time.Time, selectedSchedule int, sch
 	} else {
 		q.Counts = []int{0}
 		q.SkipGregorian = true
-		q.Planned = true
 	}
 
 	if show, err := strconv.Atoi(query.Get("show")); err == nil {

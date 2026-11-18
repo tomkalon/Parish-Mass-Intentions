@@ -10,7 +10,7 @@ func TestParseSearchQueryCalendar(t *testing.T) {
 	query, _ := url.ParseQuery("view=calendar&day=2026-11-23")
 	q := parseSearchQuery(query, searchNow, 0, searchSchedules)
 
-	if !q.Calendar || q.Day != "2026-11-23" || len(q.Counts) != 1 || !q.Planned {
+	if !q.Calendar || q.Day != "2026-11-23" || len(q.Counts) != 1 || q.Planned || !q.SkipGregorian {
 		t.Errorf("parse = %+v, want calendar view with the default filters and the chosen day", q)
 	}
 

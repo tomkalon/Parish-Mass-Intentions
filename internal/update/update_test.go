@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -355,5 +356,112 @@ func TestChecksumFor(t *testing.T) {
 	}
 	if _, ok := checksumFor([]byte("short  Intencje-Mszalne.exe"), AssetName); ok {
 		t.Error("a malformed checksum was accepted")
+	}
+}
+
+func TestStartRunsInBackground(t *testing.T) {
+	r := &restarts{}
+	u := newTestUpdater(t, newRelease(), r)
+	_, err := u.Check(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	prepared := make(chan struct{})
+	err = u.Start("1.1.0", func() error {
+		close(prepared)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if err := u.Start("1.1.0", nil); !errors.Is(err, ErrInProgress) {
+		t.Errorf("second Start = %v, want ErrInProgress", err)
+	}
+
+	<-prepared
+	deadline := time.Now().Add(5 * time.Second)
+	for u.Progress().Stage != StageRestart && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if p := u.Progress(); p.Stage != StageRestart || p.Done != int64(len(newProgram)) || p.Total != p.Done || !p.Active() {
+		t.Errorf("progress = %+v", p)
+	}
+}
+
+func TestStartReportsBackupFailure(t *testing.T) {
+	u := newTestUpdater(t, newRelease(), &restarts{})
+	_, err := u.Check(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = u.Start("1.1.0", func() error { return errors.New("disk full") })
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.Now().Add(5 * time.Second)
+	for u.Progress().Stage != StageError && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	p := u.Progress()
+	if p.Stage != StageError || p.Err != "Nie udało się zapisać kopii danych przed aktualizacją, więc aktualizacja została przerwana." || p.Active() {
+		t.Errorf("progress = %+v", p)
+	}
+	if got := readFile(t, u.ExePath); got != "MZ stara wersja" {
+		t.Errorf("program changed after a failed backup: %q", got)
+	}
+	if u.Status().Err != p.Err {
+		t.Errorf("status error = %q, want the progress error", u.Status().Err)
+	}
+
+	err = u.Start("1.1.0", nil)
+	if err != nil {
+		t.Errorf("Start after a failure: %v", err)
+	}
+}
+
+func TestMessage(t *testing.T) {
+	if got := Message(fmt.Errorf("wrapped: %w", ErrStart)); got != "Nie udało się uruchomić nowej wersji (Windows mógł ją zablokować), więc program został w poprzedniej wersji." {
+		t.Errorf("Message(ErrStart) = %q", got)
+	}
+	if got := Message(os.ErrPermission); got != "Nie udało się zainstalować aktualizacji. Sprawdź połączenie z internetem i spróbuj ponownie – program działa dalej w obecnej wersji." {
+		t.Errorf("generic message = %q", got)
+	}
+}
+
+func TestInstallDownloadServerError(t *testing.T) {
+	gh := newRelease()
+	srv := gh.server(t)
+	r := &restarts{}
+	u := newTestUpdater(t, gh, r)
+	u.API = srv.URL
+	_, err := u.Check(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.mu.Lock()
+	u.status.Latest.exeURL = srv.URL + "/brak"
+	u.mu.Unlock()
+
+	err = u.Install(context.Background(), "1.1.0")
+	if err == nil || !strings.Contains(err.Error(), "404") {
+		t.Fatalf("Install = %v, want a 404 error", err)
+	}
+	if got := readFile(t, u.ExePath); got != "MZ stara wersja" || exists(u.ExePath+".new") || len(r.calls) > 0 {
+		t.Errorf("failed download changed files or restarted: %q", got)
+	}
+	if p := u.Progress(); p.Stage != StageError || p.Active() {
+		t.Errorf("progress = %+v, want an error", p)
+	}
+}
+
+func TestSetError(t *testing.T) {
+	u := New("1.0.0", "", nil)
+	u.SetError("Coś poszło nie tak.")
+
+	if got := u.Status().Err; got != "Coś poszło nie tak." {
+		t.Errorf("Err = %q", got)
 	}
 }

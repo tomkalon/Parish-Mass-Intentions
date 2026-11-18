@@ -70,6 +70,7 @@ type Updater struct {
 	mu         sync.Mutex
 	status     Status
 	installing bool
+	progress   Progress
 }
 
 func New(current, exePath string, restart func(exePath string) error) *Updater {
@@ -221,34 +222,63 @@ func (u *Updater) open(ctx context.Context, url, accept string) (*http.Response,
 // overwritten) and starts the new program. If the new program cannot be
 // started, the previous one is put back.
 func (u *Updater) Install(ctx context.Context, version string) error {
-	if !u.CanInstall() {
-		return ErrCannotInstall
-	}
-
-	u.mu.Lock()
-	release := u.status.Latest
-	switch {
-	case u.installing:
-		u.mu.Unlock()
-		return ErrInProgress
-	case release == nil || release.Version != version || !Newer(version, u.Current):
-		u.mu.Unlock()
-		return ErrNotAvailable
-	}
-	u.installing = true
-	u.mu.Unlock()
-
-	err := u.install(ctx, *release)
+	release, err := u.begin(version)
 	if err != nil {
-		u.mu.Lock()
-		u.installing = false
-		u.mu.Unlock()
+		return err
+	}
+
+	err = u.run(ctx, release, nil)
+	if err != nil {
+		u.fail(err)
 	}
 
 	return err
 }
 
+func (u *Updater) begin(version string) (Release, error) {
+	if !u.CanInstall() {
+		return Release{}, ErrCannotInstall
+	}
+
+	u.mu.Lock()
+	defer u.mu.Unlock()
+
+	release := u.status.Latest
+	switch {
+	case u.installing:
+		return Release{}, ErrInProgress
+	case release == nil || release.Version != version || !Newer(version, u.Current):
+		return Release{}, ErrNotAvailable
+	}
+	u.installing = true
+	u.progress = Progress{Version: version, Stage: StageBackup}
+
+	return *release, nil
+}
+
+func (u *Updater) run(ctx context.Context, release Release, prepare func() error) error {
+	if prepare != nil {
+		err := prepare()
+		if err != nil {
+			return fmt.Errorf("%w: %w", ErrBackup, err)
+		}
+	}
+
+	return u.install(ctx, release)
+}
+
+func (u *Updater) fail(err error) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+
+	u.installing = false
+	u.progress.Stage = StageError
+	u.progress.Err = Message(err)
+	u.status.Err = u.progress.Err
+}
+
 func (u *Updater) install(ctx context.Context, release Release) error {
+	u.setStage(StageDownload)
 	if release.exeURL == "" || release.sumsURL == "" {
 		return ErrMissingAsset
 	}
@@ -268,6 +298,7 @@ func (u *Updater) install(ctx context.Context, release Release) error {
 		return errors.Join(err, removeIfExists(newPath))
 	}
 
+	u.setStage(StageInstall)
 	oldPath := u.ExePath + ".old"
 	err = removeIfExists(oldPath)
 	if err != nil {
@@ -282,6 +313,7 @@ func (u *Updater) install(ctx context.Context, release Release) error {
 		return errors.Join(fmt.Errorf("putting the new program in place: %w", err), os.Rename(oldPath, u.ExePath))
 	}
 
+	u.setStage(StageRestart)
 	err = u.Restart(u.ExePath)
 	if err != nil {
 		rollback := errors.Join(os.Rename(u.ExePath, newPath), os.Rename(oldPath, u.ExePath), removeIfExists(newPath))
@@ -307,13 +339,15 @@ func (u *Updater) download(ctx context.Context, url, path, wantSum string) error
 		return err
 	}
 
+	u.setDownloadTotal(resp.ContentLength)
 	hash := sha256.New()
 	head := &prefix{size: 2}
-	n, err := io.Copy(io.MultiWriter(f, hash, head), io.LimitReader(resp.Body, maxExeSize+1))
+	n, err := io.Copy(io.MultiWriter(f, hash, head, progressWriter{u}), io.LimitReader(resp.Body, maxExeSize+1))
 	if err == nil {
 		err = f.Sync()
 	}
 	err = errors.Join(err, f.Close())
+	u.setStage(StageVerify)
 	switch {
 	case err != nil:
 		return fmt.Errorf("saving the program: %w", err)

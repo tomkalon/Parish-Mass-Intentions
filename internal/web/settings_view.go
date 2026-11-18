@@ -68,7 +68,8 @@ type settingsView struct {
 	BackupError  string
 	CanChooseDir bool
 
-	Update updateView
+	Update  updateView
+	Version string
 
 	Schedules      []scheduleItem
 	NewScheduleURL string

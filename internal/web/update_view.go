@@ -2,25 +2,22 @@ package web
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
 
 	"go-parafia/internal/database"
 	"go-parafia/internal/intentions"
 	"go-parafia/internal/update"
 )
 
-const (
-	updateCheckTimeout   = 20 * time.Second
-	updateInstallTimeout = 5 * time.Minute
-)
+const updateCheckTimeout = 20 * time.Second
 
 var updatingTemplate = template.Must(template.ParseFS(templateFS, "templates/updating.html"))
 
@@ -34,6 +31,7 @@ type updateView struct {
 	Available  bool
 	UpToDate   bool
 	CanInstall bool
+	Installing string
 }
 
 func newUpdateView(u *update.Updater, now time.Time) updateView {
@@ -43,6 +41,9 @@ func newUpdateView(u *update.Updater, now time.Time) updateView {
 		Error:      status.Err,
 		Available:  status.Available(),
 		CanInstall: u.CanInstall(),
+	}
+	if progress := u.Progress(); progress.Active() {
+		view.Installing = progress.Version
 	}
 	if !status.CheckedAt.IsZero() {
 		view.Checked = backupTime(status.CheckedAt, now)
@@ -76,6 +77,14 @@ func updatesURL(week string) string {
 	return "/settings?week=" + url.QueryEscape(normalizeWeek(week)) + "#aktualizacje"
 }
 
+func progressURL(week string) string {
+	if week == "" {
+		return "/update"
+	}
+
+	return "/update?week=" + url.QueryEscape(normalizeWeek(week))
+}
+
 func (h *handler) checkUpdate(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
 	if err != nil {
@@ -100,54 +109,157 @@ func (h *handler) installUpdate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "nieprawidłowe dane formularza", http.StatusBadRequest)
 		return
 	}
-	back := updatesURL(r.PostForm.Get("week"))
+	week := r.PostForm.Get("week")
 	version := r.PostForm.Get("version")
 
-	if !h.updater.CanInstall() {
-		h.updater.SetError(installErrorMessage(update.ErrCannotInstall))
-		http.Redirect(w, r, back, http.StatusSeeOther)
+	err = h.updater.Start(version, h.backupBeforeUpdate)
+	if err != nil {
+		log.Printf("error starting update %s: %v", version, err)
+		h.updater.SetError(update.Message(err))
+		http.Redirect(w, r, updatesURL(week), http.StatusSeeOther)
 		return
 	}
 
-	backupName := "data-" + h.now().In(intentions.TimeZone).Format("2006-01-02-150405") + "-przed-aktualizacja.db.bak"
-	err = database.Export(h.db, filepath.Join(h.dataDir, backupName))
+	http.Redirect(w, r, progressURL(week), http.StatusSeeOther)
+}
+
+func (h *handler) backupBeforeUpdate() error {
+	name := "data-" + h.now().In(intentions.TimeZone).Format("2006-01-02-150405") + "-przed-aktualizacja.db.bak"
+	err := database.Export(h.db, filepath.Join(h.dataDir, name))
 	if err != nil {
 		log.Printf("error backing up data before the update: %v", err)
-		h.updater.SetError("Nie udało się zapisać kopii danych przed aktualizacją, więc aktualizacja została przerwana.")
-		http.Redirect(w, r, back, http.StatusSeeOther)
-		return
+		return err
 	}
+
 	err = h.backups.RunIfPending()
 	if err != nil {
 		log.Printf("error making backup before the update: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), updateInstallTimeout)
-	defer cancel()
+	return nil
+}
 
-	err = h.updater.Install(ctx, version)
-	if err != nil {
-		log.Printf("error installing update %s: %v", version, err)
-		h.updater.SetError(installErrorMessage(err))
-		http.Redirect(w, r, back, http.StatusSeeOther)
+var updateSteps = []struct {
+	stage string
+	label string
+}{
+	{update.StageBackup, "Kopia danych"},
+	{update.StageDownload, "Pobieranie"},
+	{update.StageVerify, "Sprawdzanie pliku"},
+	{update.StageInstall, "Instalacja"},
+	{update.StageRestart, "Ponowne uruchomienie"},
+}
+
+type progressView struct {
+	Version string `json:"version"`
+	Stage   string `json:"stage"`
+	Label   string `json:"label"`
+	Percent int    `json:"percent"`
+	Error   string `json:"error"`
+	Failed  bool   `json:"failed"`
+	Steps   []step `json:"steps"`
+
+	Week    string `json:"-"`
+	BackURL string `json:"-"`
+}
+
+type step struct {
+	Stage string `json:"stage"`
+	Label string `json:"label"`
+	State string `json:"state"`
+}
+
+func newProgressView(p update.Progress) progressView {
+	view := progressView{
+		Version: p.Version,
+		Stage:   p.Stage,
+		Error:   p.Err,
+		Failed:  p.Stage == update.StageError,
+		Label:   progressLabel(p),
+		Percent: progressPercent(p),
+	}
+
+	current := -1
+	for i, s := range updateSteps {
+		if s.stage == p.Stage {
+			current = i
+		}
+	}
+	for i, s := range updateSteps {
+		state := "todo"
+		switch {
+		case i < current:
+			state = "done"
+		case i == current:
+			state = "current"
+		}
+		view.Steps = append(view.Steps, step{Stage: s.stage, Label: s.label, State: state})
+	}
+
+	return view
+}
+
+func progressLabel(p update.Progress) string {
+	switch p.Stage {
+	case update.StageBackup:
+		return "Zapisuję kopię danych…"
+	case update.StageDownload:
+		if p.Total > 0 {
+			return fmt.Sprintf("Pobieram nową wersję… %s z %s", megabytes(p.Done), megabytes(p.Total))
+		}
+		return "Pobieram nową wersję… " + megabytes(p.Done)
+	case update.StageVerify:
+		return "Sprawdzam pobrany plik…"
+	case update.StageInstall:
+		return "Instaluję nową wersję…"
+	case update.StageRestart:
+		return "Gotowe. Program za chwilę uruchomi się ponownie."
+	case update.StageError:
+		return "Aktualizacja nie powiodła się."
+	default:
+		return ""
+	}
+}
+
+func progressPercent(p update.Progress) int {
+	switch p.Stage {
+	case update.StageDownload:
+		if p.Total > 0 {
+			return int(min(p.Done*100/p.Total, 100))
+		}
+		return 0
+	case update.StageVerify, update.StageInstall, update.StageRestart:
+		return 100
+	default:
+		return 0
+	}
+}
+
+func megabytes(n int64) string {
+	return strings.Replace(fmt.Sprintf("%.1f MB", float64(n)/(1<<20)), ".", ",", 1)
+}
+
+func (h *handler) updateProgress(w http.ResponseWriter, r *http.Request) {
+	week := r.URL.Query().Get("week")
+	progress := h.updater.Progress()
+	if progress.Stage == update.StageIdle {
+		http.Redirect(w, r, updatesURL(week), http.StatusSeeOther)
 		return
 	}
 
-	render(w, http.StatusOK, updatingTemplate, struct{ Version string }{version})
+	view := newProgressView(progress)
+	view.Week = normalizeWeek(week)
+	view.BackURL = updatesURL(week)
+
+	render(w, http.StatusOK, updatingTemplate, view)
 }
 
-func installErrorMessage(err error) string {
-	for _, known := range []error{update.ErrStart, update.ErrChecksum, update.ErrNotProgram, update.ErrMissingAsset, update.ErrNotAvailable, update.ErrInProgress, update.ErrCannotInstall} {
-		if errors.Is(err, known) {
-			return capitalize(known.Error()) + "."
-		}
+func (h *handler) updateStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+
+	err := json.NewEncoder(w).Encode(newProgressView(h.updater.Progress()))
+	if err != nil {
+		log.Printf("error writing update status: %v", err)
 	}
-
-	return "Nie udało się zainstalować aktualizacji. Sprawdź połączenie z internetem i spróbuj ponownie – program działa dalej w obecnej wersji."
-}
-
-func capitalize(text string) string {
-	r, size := utf8.DecodeRuneInString(text)
-
-	return string(unicode.ToUpper(r)) + text[size:]
 }

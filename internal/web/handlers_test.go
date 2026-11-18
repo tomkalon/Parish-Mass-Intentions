@@ -2155,10 +2155,10 @@ func TestSettingsListsSchedules(t *testing.T) {
 		`<section class="settings-section schedules" id="porzadki" aria-labelledby="schedules-title">`,
 		`<p class="schedule-name">Porządek zwykły</p>`,
 		`<p class="schedule-summary">Pn: 6:30, 18:00 · Nd: 7:00, 10:00</p>`,
-		`<a class="action" href="/settings/schedules/1?week=2026-11-02" aria-label="Zmień porządek Porządek zwykły">Zmień</a>`,
-		`<a class="action action-delete" href="/settings?delete_schedule=2&amp;week=2026-11-02" aria-label="Usuń porządek Wakacje">Usuń</a>`,
+		`<a class="link-action" href="/settings/schedules/1?week=2026-11-02" aria-label="Zmień porządek Porządek zwykły">Zmień</a>`,
+		`<a class="link-action is-danger" href="/settings?delete_schedule=2&amp;week=2026-11-02" aria-label="Usuń porządek Wakacje">Usuń</a>`,
 		`<a class="button" href="/settings/schedules/new?week=2026-11-02">+ Dodaj porządek</a>`,
-		`<a class="delete-link" href="/settings?restore=1&amp;week=2026-11-02">Przywróć domyślne</a>`,
+		`<a class="link-action is-danger settings-actions-end" href="/settings?restore=1&amp;week=2026-11-02">Przywróć domyślne</a>`,
 		`<p class="app-credit">Go Parafia · autor: Tomasz Kaliński, Rzezawa</p>`,
 		`<p class="app-prayer">Jeśli korzystasz z tego programu, w ramach wdzięczności pomódl się, proszę, za autora.</p>`,
 	} {
@@ -2278,7 +2278,7 @@ func TestDeleteScheduleWithConfirmation(t *testing.T) {
 
 	body := serveRouter(t, db, http.MethodGet, "/settings?delete_schedule=2&week=2026-11-02", nil).Body.String()
 	for _, want := range []string{
-		`<main class="settings" inert>`,
+		`<main class="settings settings-page" inert>`,
 		`<h2 class="dialog-title" id="dialog-title">Usunąć porządek mszy?</h2>`,
 		`„Wakacje” (Nd: 9:00).`,
 		`<form class="dialog-actions" method="post" action="/settings/schedules/2/delete">`,

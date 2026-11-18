@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"gorm.io/gorm"
+
 	"go-parafia/internal/calendar"
 	"go-parafia/internal/intentions"
 	"go-parafia/internal/masses"
@@ -28,13 +30,20 @@ type searchPeriod struct {
 }
 
 var searchPeriods = []searchPeriod{
-	{ID: "m1", Label: "Najbliższy miesiąc", months: 1},
+	{ID: "m1", Label: "Miesiąc", months: 1},
 	{ID: "m3", Label: "3 miesiące", months: 3},
 	{ID: "m6", Label: "Pół roku", months: 6},
 	{ID: "y1", Label: "Rok", months: 12},
 }
 
-const defaultSearchPeriod = "m3"
+const (
+	defaultSearchPeriod = "m3"
+	customPeriod        = "date"
+	maxSearchMonths     = 24
+	maxSearchText       = 100
+)
+
+var firstSearchDay = time.Date(2000, 1, 1, 0, 0, 0, 0, intentions.TimeZone)
 
 var countLabels = [...]string{"Wolna – bez intencji", "1 intencja", "2 intencje", "3 i więcej"}
 
@@ -58,6 +67,9 @@ type searchQuery struct {
 	Show          int
 	Calendar      bool
 	Day           string
+	Text          string
+	From          string
+	Until         string
 }
 
 func parseSearchQuery(query url.Values, now time.Time, selectedSchedule int, schedules []masses.Schedule) searchQuery {
@@ -72,6 +84,21 @@ func parseSearchQuery(query url.Values, now time.Time, selectedSchedule int, sch
 	}
 	if slices.ContainsFunc(searchPeriods, func(p searchPeriod) bool { return p.ID == query.Get("period") }) {
 		q.Period = query.Get("period")
+	}
+	today := startOfDay(now)
+	if from, err := time.ParseInLocation(intentions.DateLayout, query.Get("from"), intentions.TimeZone); err == nil {
+		from = clampDay(from, firstSearchDay, today.AddDate(0, maxSearchMonths, -1))
+		if !from.Equal(today) {
+			q.From = from.Format(intentions.DateLayout)
+		}
+	}
+	if until, err := time.ParseInLocation(intentions.DateLayout, query.Get("until"), intentions.TimeZone); err == nil && query.Get("period") == customPeriod {
+		start := q.start(today)
+		q.Period = customPeriod
+		q.Until = clampDay(until, start, start.AddDate(0, maxSearchMonths, -1)).Format(intentions.DateLayout)
+	}
+	if text := []rune(strings.TrimSpace(query.Get("q"))); len(text) > 0 {
+		q.Text = string(text[:min(len(text), maxSearchText)])
 	}
 
 	for _, value := range query["n"] {
@@ -169,6 +196,15 @@ func (q searchQuery) values() url.Values {
 			values.Set("day", q.Day)
 		}
 	}
+	if q.From != "" {
+		values.Set("from", q.From)
+	}
+	if q.Until != "" {
+		values.Set("until", q.Until)
+	}
+	if q.Text != "" {
+		values.Set("q", q.Text)
+	}
 
 	return values
 }
@@ -187,14 +223,41 @@ func (q searchQuery) url(edit func(q *searchQuery)) string {
 	return "/search?" + next.values().Encode()
 }
 
-func (q searchQuery) period() searchPeriod {
+func (q searchQuery) start(today time.Time) time.Time {
+	if from, err := time.ParseInLocation(intentions.DateLayout, q.From, intentions.TimeZone); err == nil {
+		return from
+	}
+
+	return today
+}
+
+func (q searchQuery) end(today time.Time) time.Time {
+	if until, err := time.ParseInLocation(intentions.DateLayout, q.Until, intentions.TimeZone); err == nil {
+		return until.AddDate(0, 0, 1)
+	}
+	months := searchPeriods[1].months
 	for _, p := range searchPeriods {
 		if p.ID == q.Period {
-			return p
+			months = p.months
 		}
 	}
 
-	return searchPeriods[1]
+	return q.start(today).AddDate(0, months, 0)
+}
+
+func clampDay(day, first, last time.Time) time.Time {
+	if day.Before(first) {
+		return first
+	}
+	if day.After(last) {
+		return last
+	}
+	return day
+}
+
+func startOfDay(t time.Time) time.Time {
+	t = t.In(intentions.TimeZone)
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, intentions.TimeZone)
 }
 
 func countBucket(parish int) int {
@@ -249,6 +312,26 @@ type searchView struct {
 	CalendarURL string
 	CalMonths   []searchCalMonth
 	Preview     *searchPreview
+
+	CustomPeriod bool
+	Today        string
+	From         string
+	FromMin      string
+	FromMax      string
+	FromLabel    string
+	FromRangeEnd string
+	FromTodayURL string
+	Until        string
+	UntilMin     string
+	UntilMax     string
+	UntilLabel   string
+
+	Text         string
+	TextHint     string
+	TextMode     bool
+	TextFields   []hiddenField
+	TextClearURL string
+	HitSections  []textHitSection
 }
 
 type searchCalMonth struct {
@@ -273,7 +356,6 @@ type searchCalCell struct {
 
 type searchBar struct {
 	Kind string
-	Dim  bool
 }
 
 type searchPreview struct {
@@ -337,20 +419,54 @@ type searchMass struct {
 	Title   string
 }
 
-func newSearchView(q searchQuery, list []masses.Mass, feasts map[string]string, schedules []masses.Schedule, from, to time.Time) searchView {
+func newSearchFrame(q searchQuery, from, to, today time.Time) searchView {
+	last := to.AddDate(0, 0, -1)
 	view := searchView{
 		IsCalendar:    q.Calendar,
 		ListURL:       q.url(func(q *searchQuery) { q.Calendar = false }),
 		CalendarURL:   q.url(func(q *searchQuery) { q.Calendar = true }),
 		BackURL:       "/?week=" + q.Week,
 		Week:          q.Week,
-		RangeText:     "od " + from.Format("2.1.2006") + " do " + to.AddDate(0, 0, -1).Format("2.1.2006"),
+		RangeText:     "od " + from.Format("2.1.2006") + " do " + last.Format("2.1.2006"),
 		SkipGregorian: q.SkipGregorian,
 		Planned:       q.Planned,
 		ClearURL: q.url(func(q *searchQuery) {
 			q.Counts, q.Weekdays, q.Times = nil, nil, nil
 		}),
+		CustomPeriod: q.Period == customPeriod,
+		Today:        today.Format(intentions.DateLayout),
+		From:         from.Format(intentions.DateLayout),
+		FromMin:      firstSearchDay.Format(intentions.DateLayout),
+		FromMax:      today.AddDate(0, maxSearchMonths, -1).Format(intentions.DateLayout),
+		FromLabel:    from.Format("2.1.2006"),
+		Until:        last.Format(intentions.DateLayout),
+		UntilMin:     from.Format(intentions.DateLayout),
+		UntilMax:     from.AddDate(0, maxSearchMonths, -1).Format(intentions.DateLayout),
+		Text:         q.Text,
+		TextFields:   textFields(q),
+		TextClearURL: q.url(func(q *searchQuery) { q.Text = "" }),
 	}
+	if view.CustomPeriod {
+		view.UntilLabel = last.Format("2.1.2006")
+		view.FromRangeEnd = view.Until
+	}
+	if q.From == "" {
+		view.FromLabel = "dziś, " + view.FromLabel
+	} else {
+		view.FromTodayURL = q.url(func(q *searchQuery) { q.From = "" })
+	}
+	if q.Text != "" && !intentions.SearchReady(q.Text) {
+		view.TextHint = "Wpisz co najmniej " + strconv.Itoa(intentions.MinSearchLength) + " znaki, aby szukać w treści intencji."
+	}
+	for _, p := range searchPeriods {
+		view.Periods = append(view.Periods, searchOption{Value: p.ID, Label: p.Label, Selected: p.ID == q.Period})
+	}
+
+	return view
+}
+
+func newSearchView(q searchQuery, list []masses.Mass, feasts map[string]string, schedules []masses.Schedule, from, to, today time.Time) searchView {
+	view := newSearchFrame(q, from, to, today)
 
 	scheduleName := ""
 	for _, s := range schedules {
@@ -359,10 +475,6 @@ func newSearchView(q searchQuery, list []masses.Mass, feasts map[string]string, 
 			scheduleName = s.Name
 		}
 	}
-	for _, p := range searchPeriods {
-		view.Periods = append(view.Periods, searchOption{Value: p.ID, Label: p.Label, Selected: p.ID == q.Period})
-	}
-
 	count := func(skip string, test func(m masses.Mass) bool) int {
 		n := 0
 		for _, m := range list {
@@ -444,7 +556,7 @@ func newSearchView(q searchQuery, list []masses.Mass, feasts map[string]string, 
 	}
 
 	if q.Calendar {
-		view.CalMonths = newSearchCalendar(q, from, to, byDay, matchedByDay)
+		view.CalMonths = newSearchCalendar(q, from, to, today, byDay, matchedByDay)
 		view.Preview = newSearchPreview(q, byDay, matchedDays, feasts)
 		return view
 	}
@@ -567,8 +679,25 @@ func (h *handler) search(w http.ResponseWriter, r *http.Request) {
 	q := parseSearchQuery(r.URL.Query(), h.now(), setting.SelectedScheduleID, schedules)
 
 	now := h.now().In(intentions.TimeZone)
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, intentions.TimeZone)
-	to := today.AddDate(0, q.period().months, 0)
+	today := startOfDay(now)
+	start := q.start(today)
+	to := q.end(today)
+
+	if intentions.SearchReady(q.Text) {
+		found, err := intentions.Search(h.db, q.Text)
+		if err != nil {
+			log.Printf("error searching intentions: %v", err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		view := newSearchFrame(q, start, to, today)
+		addTextSearch(&view, q, found, now)
+		view.Topbar = newTopbarView(setting, h.backups.State(), h.now())
+		view.Topbar.Draft = h.draftNotice()
+		render(w, http.StatusOK, searchTemplate, view)
+		return
+	}
 
 	var plan *masses.Schedule
 	if q.Planned {
@@ -579,30 +708,62 @@ func (h *handler) search(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	list, err := masses.InRange(h.db, now, to, plan)
+	list, err := searchMasses(h.db, start, to, now, plan)
 	if err != nil {
 		log.Printf("error searching masses: %v", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	feasts, err := calendar.FeastsBetween(h.db, today, to)
+	feasts, err := calendar.FeastsBetween(h.db, start, to)
 	if err != nil {
 		log.Printf("error loading feasts: %v", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	view := newSearchView(q, list, feasts, schedules, today, to)
+	view := newSearchView(q, list, feasts, schedules, start, to, today)
 	view.Topbar = newTopbarView(setting, h.backups.State(), h.now())
 	view.Topbar.Draft = h.draftNotice()
 
 	render(w, http.StatusOK, searchTemplate, view)
 }
 
-func newSearchCalendar(q searchQuery, from, to time.Time, byDay, matchedByDay map[string][]masses.Mass) []searchCalMonth {
+func searchMasses(db *gorm.DB, start, to, now time.Time, plan *masses.Schedule) ([]masses.Mass, error) {
+	var list []masses.Mass
+	if start.Before(startOfDay(now)) {
+		past, err := masses.InRange(db, start, minTime(now, to), nil)
+		if err != nil {
+			return nil, err
+		}
+		list = past
+	}
+
+	from := now
+	if start.After(now) {
+		from = start
+	}
+	if from.Before(to) {
+		upcoming, err := masses.InRange(db, from, to, plan)
+		if err != nil {
+			return nil, err
+		}
+		list = append(list, upcoming...)
+	}
+
+	return list, nil
+}
+
+func minTime(a, b time.Time) time.Time {
+	if a.Before(b) {
+		return a
+	}
+	return b
+}
+
+func newSearchCalendar(q searchQuery, from, to, now time.Time, byDay, matchedByDay map[string][]masses.Mass) []searchCalMonth {
 	selected := q.Day
-	today := from.Format(intentions.DateLayout)
+	today := now.Format(intentions.DateLayout)
 	last := to.AddDate(0, 0, -1)
 
 	var months []searchCalMonth
@@ -636,7 +797,7 @@ func newSearchCalendar(q searchQuery, from, to time.Time, byDay, matchedByDay ma
 				if m.Planned {
 					kind = "planned"
 				}
-				cell.Bars = append(cell.Bars, searchBar{Kind: kind, Dim: !slices.ContainsFunc(hits, func(h masses.Mass) bool { return h.At.Equal(m.At) })})
+				cell.Bars = append(cell.Bars, searchBar{Kind: kind})
 			}
 			month.Cells = append(month.Cells, cell)
 		}

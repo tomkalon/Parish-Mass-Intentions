@@ -20,6 +20,7 @@
 	</nav>
 
 	<div class="search">
+		{{- if not .TextMode}}
 		<form class="search-filters{{if .IsCalendar}} is-bars{{end}}" method="get" action="/search" aria-label="Filtry">
 			<input type="hidden" name="week" value="{{.Week}}">
 			{{- if .IsCalendar}}
@@ -28,9 +29,21 @@
 
 			<fieldset class="facet">
 				<legend class="facet-title">Okres</legend>
+				<div class="period-from">
+					<span class="period-label">Od</span>
+					<input class="input until-input" type="date" id="f-from" name="from" value="{{.From}}" min="{{.FromMin}}" max="{{.FromMax}}" aria-label="Początek okresu" data-date-picker="{{.FromLabel}}" data-today="{{.Today}}"{{with .FromRangeEnd}} data-range-end="{{.}}"{{end}} data-picker-note="Wybierz dzień w przeszłości, aby szukać także Mszy, które już były.">
+					{{- with .FromTodayURL}}
+					<a class="link-action period-today" href="{{.}}" title="Zacznij okres od dzisiaj">dziś</a>
+					{{- end}}
+				</div>
+				<p class="period-label period-to">Do</p>
 				{{- range .Periods}}
 				<label class="facet-row"><input type="radio" id="f-period-{{.Value}}" name="period" value="{{.Value}}"{{if .Selected}} checked{{end}} data-autosubmit><span class="facet-label">{{.Label}}</span></label>
 				{{- end}}
+				<label class="facet-row"><input type="radio" id="f-period-date" name="period" value="date"{{if .CustomPeriod}} checked{{end}}><span class="facet-label">Do dnia</span></label>
+				<div class="until">
+					<input class="input until-input" type="date" id="f-until" name="until" value="{{.Until}}" min="{{.UntilMin}}" max="{{.UntilMax}}" aria-label="Koniec okresu" data-date-picker="{{.UntilLabel}}" data-today="{{.Today}}" data-range-start="{{.From}}" data-picker-radio="f-period-date" data-picker-note="Okres może trwać najwyżej 2 lata.">
+				</div>
 				<p class="facet-hint">{{.RangeText}}</p>
 			</fieldset>
 
@@ -80,8 +93,60 @@
 				<noscript><button class="button facet-clear" type="submit">Pokaż wyniki</button></noscript>
 			</fieldset>
 		</form>
+		{{- end}}
 
 		<main class="search-results">
+			<form class="search-text" method="get" action="/search" role="search">
+				{{- range .TextFields}}
+				<input type="hidden" name="{{.Name}}" value="{{.Value}}">
+				{{- end}}
+				<label class="visually-hidden" for="f-q">Szukaj w treści intencji</label>
+				<div class="search-text-field">
+					<svg class="search-text-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+					<input class="input search-text-input" type="search" id="f-q" name="q" value="{{.Text}}" placeholder="Szukaj w treści intencji, np. nazwiska" minlength="3" maxlength="100" autocomplete="off"{{if .TextHint}} aria-describedby="f-q-hint"{{end}}>
+					{{- if .Text}}
+					<a class="search-text-clear" href="{{.TextClearURL}}" aria-label="Wyczyść tekst" title="Wyczyść tekst"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></a>
+					{{- end}}
+				</div>
+				<button class="button" type="submit">Szukaj</button>
+				{{- with .TextHint}}
+				<p class="search-text-hint" id="f-q-hint">{{.}}</p>
+				{{- end}}
+			</form>
+
+			{{- if .TextMode}}
+			<div class="search-summary">
+				<p class="search-total">{{.Total}}</p>
+				<p class="search-subtotal">{{.Subtotal}}</p>
+			</div>
+			{{- if .Empty}}
+			<div class="search-empty">
+				<p class="search-empty-title">Brak intencji z tekstem „{{.Text}}”</p>
+				<p>Sprawdź pisownię albo wpisz krótszy fragment, np. samo nazwisko.</p>
+			</div>
+			{{- end}}
+			{{- range .HitSections}}
+			<section class="text-hits{{if .Past}} is-past{{end}}">
+				<header class="search-month-header">
+					<h2>{{.Title}}</h2>
+					<span>{{.Count}}</span>
+				</header>
+				<ol class="text-hit-list">
+					{{- range .Hits}}
+					<li>
+						<a class="text-hit" href="{{.URL}}">
+							<span class="text-hit-when"><b>{{.Date}}</b><span>{{.Time}}</span></span>
+							<span class="text-hit-body">
+								<span class="text-hit-content{{if .IsOutside}} is-outside{{end}}">{{if .IsOutside}}({{end}}{{range .Parts}}{{if .Mark}}<mark>{{.Text}}</mark>{{else}}{{.Text}}{{end}}{{end}}{{if .IsOutside}}){{end}}</span>
+								{{- if .IsOutside}} <span class="badge badge-outside">poza parafią</span>{{end}}{{template "badges" .}}
+							</span>
+						</a>
+					</li>
+					{{- end}}
+				</ol>
+			</section>
+			{{- end}}
+			{{- else}}
 			<div class="search-summary">
 				<p class="search-total">{{.Total}}</p>
 				{{- with .Subtotal}}
@@ -158,11 +223,11 @@
 						{{- else if .HasMasses}}
 						<a class="scal-cell has-tip{{if .Matches}} is-match{{end}}{{if .Selected}} is-selected{{end}}{{if .IsToday}} is-today{{end}}" href="{{.URL}}" aria-label="{{.Label}}"{{if .Selected}} aria-current="true"{{end}}>
 							<span class="scal-num">{{.Num}}</span>
-							<span class="scal-bars" aria-hidden="true">{{range .Bars}}<span class="scal-bar is-{{.Kind}}{{if .Dim}} is-dim{{end}}"></span>{{end}}</span>
+							<span class="scal-bars" aria-hidden="true">{{range .Bars}}<span class="scal-bar is-{{.Kind}}"></span>{{end}}</span>
 							{{- with .Tip}}{{template "daytip" .}}{{end}}
 						</a>
 						{{- else}}
-						<span class="scal-cell is-none"><span class="scal-num">{{.Num}}</span></span>
+						<span class="scal-cell is-none{{if .IsToday}} is-today{{end}}"><span class="scal-num">{{.Num}}</span></span>
 						{{- end}}
 						{{- end}}
 					</div>
@@ -202,6 +267,8 @@
 				</div>
 				{{- end}}
 			</section>
+			{{- end}}
+
 			{{- end}}
 
 			{{- with .More}}

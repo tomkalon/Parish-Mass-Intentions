@@ -1340,9 +1340,17 @@ func TestWeekWithCalendarDialog(t *testing.T) {
 		`<a class="panel-close" href="/?week=2026-11-09" aria-label="Zamknij kalendarz" data-close>×</a>`,
 		`<h3 class="calendar-month-name">Listopad</h3>`,
 		`<a class="calendar-week" href="/?week=2026-11-09" aria-label="Tydzień 9.11 – 15.11.2026: 7 intencji, są msze do uzupełnienia" aria-current="true" autofocus>`,
-		`<span class="calendar-day level-5" title="6 intencji">9</span>`,
-		`<span class="calendar-day level-0 has-empty" title="0 intencji · msze do uzupełnienia">10</span>`,
-		`<span class="calendar-day level-1 has-empty" title="1 intencja · msze do uzupełnienia">11</span>`,
+		`<span class="calendar-cell has-tip"><span class="calendar-day level-5">9</span><span class="day-tip" aria-hidden="true">
+	<span class="day-tip-title">Poniedziałek 9.11.</span>
+	<span class="day-tip-summary">1 Msza · 6 intencji · wszystkie zajęte</span>
+	<span class="day-tip-row"><b>18:00</b><span class="day-tip-status is-many">6 intencji</span></span>
+</span></span>`,
+		`<span class="calendar-cell has-tip"><span class="calendar-day level-0 has-empty">10</span>`,
+		`<span class="day-tip-summary">1 Msza · 0 intencji · 1 wolna</span>`,
+		`<span class="calendar-cell has-tip"><span class="calendar-day level-1 has-empty">11</span>`,
+		`<span class="day-tip-summary">1 Msza · 0 intencji · 1 wolna <i>(&#43;1 poza parafią)</i></span>
+	<span class="day-tip-row"><b>7:00</b><span class="day-tip-status is-free">wolna <i>(1 poza parafią)</i></span></span>`,
+		`<span class="calendar-day level-0" title="0 intencji">12</span>`,
 		`<span class="calendar-day level-0 is-today" title="0 intencji">2</span>`,
 		`<a class="calendar-week" href="/?week=2025-12-29" aria-label="Tydzień 29.12 – 4.1.2026: 0 intencji">`,
 		`<span class="calendar-day is-out"></span>`,
@@ -1361,7 +1369,8 @@ func TestWeekCalendarForOtherYear(t *testing.T) {
 
 	for _, want := range []string{
 		`<a class="panel-close" href="/?week=2026-11-09" aria-label="Zamknij kalendarz" data-close autofocus>×</a>`,
-		`<span class="calendar-day level-1" title="1 intencja">4</span>`,
+		`<span class="calendar-cell has-tip"><span class="calendar-day level-1">4</span>`,
+		`<span class="day-tip-title">Poniedziałek 4.1.</span>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body does not contain %q", want)

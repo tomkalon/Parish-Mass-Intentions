@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"go-parafia/internal/intentions"
+	"go-parafia/internal/masses"
 )
 
 const maxCalendarLevel = 5
@@ -51,13 +52,14 @@ type calendarDay struct {
 	Day   int
 	Count int
 	Level int
+	Tip   *dayTip
 
 	InMonth  bool
 	HasEmpty bool
 	IsToday  bool
 }
 
-func newCalendarView(year int, current, today time.Time, counts map[string]intentions.DayCount) calendarView {
+func newCalendarView(year int, current, today time.Time, counts map[string]intentions.DayCount, byDay map[string][]masses.Mass) calendarView {
 	week := current.Format(intentions.DateLayout)
 	todayDate := today.In(intentions.TimeZone).Format(intentions.DateLayout)
 
@@ -75,7 +77,7 @@ func newCalendarView(year int, current, today time.Time, counts map[string]inten
 
 		var weeks []calendarWeek
 		for start := intentions.WeekStart(first); start.Before(next); start = start.AddDate(0, 0, 7) {
-			w := newCalendarWeek(start, month, todayDate, counts)
+			w := newCalendarWeek(start, month, todayDate, counts, byDay)
 			w.IsCurrent = start.Equal(current)
 			view.HasCurrent = view.HasCurrent || w.IsCurrent
 			weeks = append(weeks, w)
@@ -87,7 +89,7 @@ func newCalendarView(year int, current, today time.Time, counts map[string]inten
 	return view
 }
 
-func newCalendarWeek(start time.Time, month time.Month, today string, counts map[string]intentions.DayCount) calendarWeek {
+func newCalendarWeek(start time.Time, month time.Month, today string, counts map[string]intentions.DayCount, byDay map[string][]masses.Mass) calendarWeek {
 	end := start.AddDate(0, 0, 6)
 	total := 0
 	hasEmpty := false
@@ -112,6 +114,7 @@ func newCalendarWeek(start time.Time, month time.Month, today string, counts map
 			InMonth:  true,
 			HasEmpty: count.Empty > 0,
 			IsToday:  date == today,
+			Tip:      newDayTip(day, byDay[date]),
 		})
 	}
 

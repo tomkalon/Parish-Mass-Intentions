@@ -56,6 +56,8 @@ type searchQuery struct {
 	Planned       bool
 	ScheduleID    int
 	Show          int
+	Calendar      bool
+	Day           string
 }
 
 func parseSearchQuery(query url.Values, now time.Time, selectedSchedule int, schedules []masses.Schedule) searchQuery {
@@ -93,7 +95,7 @@ func parseSearchQuery(query url.Values, now time.Time, selectedSchedule int, sch
 
 	explicit := false
 	for key := range query {
-		if key != "week" {
+		if key != "week" && key != "view" && key != "day" {
 			explicit = true
 		}
 	}
@@ -108,6 +110,10 @@ func parseSearchQuery(query url.Values, now time.Time, selectedSchedule int, sch
 
 	if show, err := strconv.Atoi(query.Get("show")); err == nil {
 		q.Show = min(max(show, searchPageDays), maxSearchDays)
+	}
+	q.Calendar = query.Get("view") == "calendar"
+	if _, err := time.ParseInLocation(intentions.DateLayout, query.Get("day"), intentions.TimeZone); err == nil && q.Calendar {
+		q.Day = query.Get("day")
 	}
 
 	q.ScheduleID = chooseSchedule(query.Get("schedule"), selectedSchedule, schedules)
@@ -158,6 +164,12 @@ func (q searchQuery) values() url.Values {
 	if q.Show != searchPageDays {
 		values.Set("show", strconv.Itoa(q.Show))
 	}
+	if q.Calendar {
+		values.Set("view", "calendar")
+		if q.Day != "" {
+			values.Set("day", q.Day)
+		}
+	}
 
 	return values
 }
@@ -168,6 +180,7 @@ func (q searchQuery) url(edit func(q *searchQuery)) string {
 	next.Weekdays = slices.Clone(q.Weekdays)
 	next.Times = slices.Clone(q.Times)
 	next.Show = searchPageDays
+	next.Day = ""
 	if edit != nil {
 		edit(&next)
 	}
@@ -231,6 +244,51 @@ type searchView struct {
 	MoreURL  string
 	More     string
 	Empty    bool
+
+	IsCalendar  bool
+	ListURL     string
+	CalendarURL string
+	CalMonths   []searchCalMonth
+	Preview     *searchPreview
+}
+
+type searchCalMonth struct {
+	Name  string
+	Count string
+	Cells []searchCalCell
+}
+
+type searchCalCell struct {
+	Num   int
+	URL   string
+	Label string
+	Tip   *dayTip
+	Bars  []searchBar
+
+	IsOut     bool
+	HasMasses bool
+	Matches   bool
+	Selected  bool
+	IsToday   bool
+}
+
+type searchBar struct {
+	Kind string
+	Dim  bool
+}
+
+type searchPreview struct {
+	Label   string
+	Feast   string
+	WeekURL string
+	Stats   dayStats
+	Rows    []searchPreviewRow
+}
+
+type searchPreviewRow struct {
+	searchMass
+	Note    string
+	Matched bool
 }
 
 type searchOption struct {
@@ -282,6 +340,9 @@ type searchMass struct {
 
 func newSearchView(q searchQuery, list []masses.Mass, feasts map[string]string, schedules []masses.Schedule, from, to time.Time) searchView {
 	view := searchView{
+		IsCalendar:    q.Calendar,
+		ListURL:       q.url(func(q *searchQuery) { q.Calendar = false }),
+		CalendarURL:   q.url(func(q *searchQuery) { q.Calendar = true }),
 		BackURL:       "/?week=" + q.Week,
 		Week:          q.Week,
 		RangeText:     "od " + from.Format("2.1.2006") + " do " + to.AddDate(0, 0, -1).Format("2.1.2006"),
@@ -381,6 +442,12 @@ func newSearchView(q searchQuery, list []masses.Mass, feasts map[string]string, 
 	view.Total = "Znaleziono " + countOf(total, "Mszę", "Msze", "Mszy")
 	if len(matchedDays) > 0 {
 		view.Subtotal = "w " + countOf(len(matchedDays), "dniu", "dniach", "dniach")
+	}
+
+	if q.Calendar {
+		view.CalMonths = newSearchCalendar(q, from, to, byDay, matchedByDay)
+		view.Preview = newSearchPreview(q, byDay, matchedDays, feasts)
+		return view
 	}
 
 	shown := matchedDays[:min(len(matchedDays), q.Show)]
@@ -532,4 +599,88 @@ func (h *handler) search(w http.ResponseWriter, r *http.Request) {
 	view.Topbar.Draft = h.draftNotice()
 
 	render(w, http.StatusOK, searchTemplate, view)
+}
+
+func newSearchCalendar(q searchQuery, from, to time.Time, byDay, matchedByDay map[string][]masses.Mass) []searchCalMonth {
+	selected := q.Day
+	today := from.Format(intentions.DateLayout)
+	last := to.AddDate(0, 0, -1)
+
+	var months []searchCalMonth
+	for first := time.Date(from.Year(), from.Month(), 1, 0, 0, 0, 0, intentions.TimeZone); !first.After(last); first = first.AddDate(0, 1, 0) {
+		month := searchCalMonth{Name: monthNames[first.Month()-1] + " " + strconv.Itoa(first.Year())}
+		for range (int(first.Weekday()) + 6) % 7 {
+			month.Cells = append(month.Cells, searchCalCell{IsOut: true})
+		}
+
+		matches := 0
+		for day := first; day.Month() == first.Month(); day = day.AddDate(0, 0, 1) {
+			date := day.Format(intentions.DateLayout)
+			all, hits := byDay[date], matchedByDay[date]
+			matches += len(hits)
+
+			cell := searchCalCell{
+				Num:       day.Day(),
+				HasMasses: len(all) > 0,
+				Matches:   len(hits) > 0,
+				Selected:  date == selected,
+				IsToday:   date == today,
+				Tip:       newDayTip(day, all),
+				URL: q.url(func(next *searchQuery) {
+					next.Calendar = true
+					next.Day = date
+				}) + "#podglad",
+				Label: weekdayNames[day.Weekday()] + " " + day.Format("2.1") + ": " + countOf(len(all), "Msza", "Msze", "Mszy") + ", pasuje " + strconv.Itoa(len(hits)),
+			}
+			for _, m := range all {
+				kind := countKinds[countBucket(m.Parish)]
+				if m.Planned {
+					kind = "planned"
+				}
+				cell.Bars = append(cell.Bars, searchBar{Kind: kind, Dim: !slices.ContainsFunc(hits, func(h masses.Mass) bool { return h.At.Equal(m.At) })})
+			}
+			month.Cells = append(month.Cells, cell)
+		}
+
+		month.Count = "brak pasujących Mszy"
+		if matches > 0 {
+			month.Count = countOf(matches, "pasująca Msza", "pasujące Msze", "pasujących Mszy")
+		}
+		months = append(months, month)
+	}
+
+	return months
+}
+
+func newSearchPreview(q searchQuery, byDay map[string][]masses.Mass, matchedDays []string, feasts map[string]string) *searchPreview {
+	date := q.Day
+	if len(byDay[date]) == 0 {
+		if len(matchedDays) == 0 {
+			return nil
+		}
+		date = matchedDays[0]
+	}
+
+	all := byDay[date]
+	day := all[0].At
+	week := intentions.WeekStart(day).Format(intentions.DateLayout)
+	preview := &searchPreview{
+		Label:   weekdayNames[day.Weekday()] + " " + day.Format("2.1.2006"),
+		Feast:   feasts[date],
+		WeekURL: "/?week=" + week + "#d-" + date,
+		Stats:   massStats(all),
+	}
+
+	for _, m := range all {
+		row := searchPreviewRow{searchMass: newSearchMass(m, week, date), Matched: q.matches(m, "")}
+		switch {
+		case m.Gregorian:
+			row.Note = "gregorianka – nie dokładać intencji"
+		case row.Matched:
+			row.Note = "pasuje do filtrów"
+		}
+		preview.Rows = append(preview.Rows, row)
+	}
+
+	return preview
 }

@@ -1278,7 +1278,14 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 			return
 		}
 
-		c := newCalendarView(state.calendarYear, start, h.now(), counts)
+		yearMasses, err := masses.InRange(h.db, from, to, nil)
+		if err != nil {
+			log.Printf("error loading masses for %d: %v", state.calendarYear, err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		c := newCalendarView(state.calendarYear, start, h.now(), counts, massesByDay(yearMasses))
 		view.Calendar = &c
 	}
 	if state.payments != nil {

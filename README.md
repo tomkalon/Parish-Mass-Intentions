@@ -14,8 +14,11 @@ Działa jako zwykły program dla Windows (`Intencje Mszalne.exe`), z jednym okne
   - dzień tygodnia i godzina,
   - pomijanie Mszy z gregorianką.
 
-  Dla tygodni bez wczytanych godzin wyszukiwarka pokazuje Msze „planowane” z wybranego porządku. Kliknięcie Mszy otwiera formularz z ustawionym dniem i godziną.
-- **Kalendarz roczny**: wybór tygodnia z podglądem liczby intencji i dni z Mszami do uzupełnienia.
+  Dla tygodni bez wczytanych godzin wyszukiwarka pokazuje Msze „planowane” z wybranego porządku. Wyniki można oglądać jako **listę dni** (kliknięcie Mszy otwiera formularz z ustawionym dniem i godziną) albo jako **kalendarz**:
+  - każda Msza dnia to kreska,
+  - dni pasujące do filtrów są obramowane,
+  - po kliknięciu dnia widać jego Msze z przyciskami „+ Dodaj”.
+- **Kalendarz roczny**: wybór tygodnia z podglądem liczby intencji i dni z Mszami do uzupełnienia. Po najechaniu na dzień (także w kalendarzu wyszukiwarki) pojawia się podpowiedź z Mszami tego dnia, np. „2 Msze · 3 intencje · 1 wolna (+1 poza parafią)”.
 - **Porządki mszy**: przycisk „Wczytaj godziny mszy” tworzy puste miejsca na każdą mszę tygodnia według wybranego porządku (np. zwykły, wakacyjny). Porządki można edytować w ustawieniach.
 - **Przypomnienie o mszach bez intencji** nad widokiem tygodnia.
 - **Intencje za zmarłych** (na wydruku „+”) i **Msze gregoriańskie**:

@@ -11,3 +11,13 @@
 	{{- end}}
 </span>
 {{- end}}
+
+{{define "daytip" -}}
+<span class="day-tip" aria-hidden="true">
+	<span class="day-tip-title">{{.Label}}</span>
+	<span class="day-tip-summary">{{.Summary}}{{with .Outside}} <i>{{.}}</i>{{end}}</span>
+	{{- range .Masses}}
+	<span class="day-tip-row"><b>{{.Time}}</b><span class="day-tip-status is-{{.Kind}}">{{.Status}}{{with .Outside}} <i>{{.}}</i>{{end}}</span></span>
+	{{- end}}
+</span>
+{{- end}}

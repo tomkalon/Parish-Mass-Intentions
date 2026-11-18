@@ -93,3 +93,35 @@ func TestRouterTracksAPIChanges(t *testing.T) {
 		t.Error("creating an intention through the API did not mark the data as changed")
 	}
 }
+
+func TestRouterShowsErrorPageWhenDatabaseFails(t *testing.T) {
+	dir := t.TempDir()
+	db, err := database.Open(filepath.Join(dir, "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	backups, err := backup.Load(db, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := newRouter(db, web.Options{DataDir: dir, Backups: backups})
+
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sqlDB.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/?week=2026-11-23", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+	if !strings.Contains(rec.Body.String(), "<h1>Coś poszło nie tak</h1>") {
+		t.Errorf("body = %q, want the Polish error page", rec.Body.String())
+	}
+}

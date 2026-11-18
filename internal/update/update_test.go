@@ -422,6 +422,30 @@ func TestStartReportsBackupFailure(t *testing.T) {
 	}
 }
 
+func TestStartSurvivesAPanic(t *testing.T) {
+	u := newTestUpdater(t, newRelease(), &restarts{})
+	_, err := u.Check(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = u.Start("1.1.0", func() error { panic("broken backup") })
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.Now().Add(5 * time.Second)
+	for u.Progress().Stage != StageError && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if p := u.Progress(); p.Stage != StageError || p.Active() || p.Err == "" {
+		t.Errorf("progress = %+v, want a failed update", p)
+	}
+	if got := readFile(t, u.ExePath); got != "MZ stara wersja" {
+		t.Errorf("program changed after a panic: %q", got)
+	}
+}
+
 func TestMessage(t *testing.T) {
 	if got := Message(fmt.Errorf("wrapped: %w", ErrStart)); got != "Nie udało się uruchomić nowej wersji (Windows mógł ją zablokować), więc program został w poprzedniej wersji." {
 		t.Errorf("Message(ErrStart) = %q", got)

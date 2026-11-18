@@ -13,6 +13,7 @@ import (
 
 func newRouter(db *gorm.DB, opts web.Options) http.Handler {
 	router := chi.NewRouter()
+	router.Use(web.RecoverPanics)
 	router.Use(middleware.RedirectSlashes)
 
 	router.Route("/api", func(r chi.Router) {

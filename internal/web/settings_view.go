@@ -60,6 +60,7 @@ type settingsView struct {
 	Saved   bool
 	Notice  string
 	DataDir string
+	LogFile string
 
 	ImportError string
 

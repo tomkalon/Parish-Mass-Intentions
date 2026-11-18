@@ -83,6 +83,13 @@ func seedParishYears(b *testing.B, db *gorm.DB, years int) {
 func largeParish(b *testing.B) (http.Handler, *backup.Backups) {
 	b.Helper()
 
+	router, backups, _ := largeParishDB(b)
+	return router, backups
+}
+
+func largeParishDB(b *testing.B) (http.Handler, *backup.Backups, *gorm.DB) {
+	b.Helper()
+
 	dir := b.TempDir()
 	db, err := database.Open(filepath.Join(dir, "data.db"))
 	if err != nil {
@@ -111,7 +118,50 @@ func largeParish(b *testing.B) (http.Handler, *backup.Backups) {
 	router := chi.NewRouter()
 	RegisterRoutes(router, db, Options{DataDir: dir, Backups: backups})
 
-	return router, backups
+	return router, backups, db
+}
+
+func benchPages(b *testing.B, router http.Handler, pages map[string]string) {
+	b.Helper()
+
+	for name, target := range pages {
+		b.Run(name, func(b *testing.B) {
+			for b.Loop() {
+				rec := httptest.NewRecorder()
+				router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+				if rec.Code != http.StatusOK {
+					b.Fatalf("%s: status = %d", target, rec.Code)
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkPagesLargeParish(b *testing.B) {
+	router, _ := largeParish(b)
+	lastYear := time.Now().AddDate(-1, 0, 0).Format(intentions.DateLayout)
+
+	benchPages(b, router, map[string]string{
+		"start":           "/",
+		"pdf":             "/pdf?week=" + benchWeek,
+		"print":           "/print?week=" + benchWeek,
+		"year-calendar":   "/?week=" + benchWeek + "&calendar=2011",
+		"search-calendar": "/search?view=calendar&from=" + lastYear + "&period=y1&n=0&n=1&n=2&n=3",
+		"search-list":     "/search?from=" + lastYear + "&period=y1&n=0&n=1&n=2&n=3&show=400",
+		"text-all":        "/search?q=kowal",
+		"text-none":       "/search?q=nowak",
+		"text-one":        "/search?q=" + url.QueryEscape("w 17 rocznicę"),
+	})
+}
+
+func BenchmarkStartupCheckLargeParish(b *testing.B) {
+	_, _, db := largeParishDB(b)
+
+	for b.Loop() {
+		if err := database.Check(db); err != nil {
+			b.Fatal(err)
+		}
+	}
 }
 
 func BenchmarkWeekPageLargeParish(b *testing.B) {

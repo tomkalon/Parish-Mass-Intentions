@@ -217,6 +217,9 @@
 						{{- with .DataDir}}
 						<p class="hint">Folder danych (tu są kopie .bak sprzed importu i aktualizacji): <code class="path">{{.}}</code></p>
 						{{- end}}
+						{{- with .LogFile}}
+						<p class="hint">Dziennik błędów programu: <code class="path">{{.}}</code></p>
+						{{- end}}
 					</div>
 				</section>
 

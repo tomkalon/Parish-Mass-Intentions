@@ -3,6 +3,9 @@ package update
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log"
+	"runtime/debug"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -50,6 +53,13 @@ func (u *Updater) Start(version string, prepare func() error) error {
 	}
 
 	go func() {
+		defer func() {
+			if p := recover(); p != nil {
+				log.Printf("panic while installing update %s: %v\n%s", version, p, debug.Stack())
+				u.fail(fmt.Errorf("unexpected error: %v", p))
+			}
+		}()
+
 		ctx, cancel := context.WithTimeout(context.Background(), installTimeout)
 		defer cancel()
 

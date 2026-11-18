@@ -66,10 +66,12 @@ type handler struct {
 	dbWarning         string
 	version           string
 	updater           *update.Updater
+	logFile           string
 }
 
 type Options struct {
 	DataDir         string
+	LogFile         string
 	SaveFile        func(defaultName string) (string, error)
 	Backups         *backup.Backups
 	ChooseDir       func(current string) (string, error)
@@ -88,6 +90,7 @@ func RegisterRoutes(router chi.Router, db *gorm.DB, opts Options) {
 			return gcatholic.Fetch(ctx, client, gcatholic.BaseURL, year)
 		},
 		dataDir:   opts.DataDir,
+		logFile:   opts.LogFile,
 		saveFile:  opts.SaveFile,
 		backups:   opts.Backups,
 		chooseDir: opts.ChooseDir,
@@ -244,7 +247,7 @@ func (h *handler) week(w http.ResponseWriter, r *http.Request) {
 		f.Feast, err = calendar.Feast(h.db, day.Format(intentions.DateLayout))
 		if err != nil {
 			log.Printf("error loading feast for %s: %v", day.Format(intentions.DateLayout), err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			serverError(w)
 			return
 		}
 		state.feast = &f
@@ -306,7 +309,7 @@ func (h *handler) printPreview(w http.ResponseWriter, r *http.Request) {
 	list, err := intentions.ForWeek(h.db, start)
 	if err != nil {
 		log.Printf("error loading week intention: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
@@ -327,7 +330,7 @@ func (h *handler) printOptions(w http.ResponseWriter, query url.Values) (printOp
 	schedules, err := masses.Load(h.db)
 	if err != nil {
 		log.Printf("error loading schedules: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return printOptions{}, nil, false
 	}
 
@@ -375,7 +378,7 @@ func (h *handler) pdf(w http.ResponseWriter, r *http.Request) {
 	list, err := intentions.ForWeek(h.db, start)
 	if err != nil {
 		log.Printf("error loading week intention: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
@@ -386,7 +389,7 @@ func (h *handler) pdf(w http.ResponseWriter, r *http.Request) {
 	planned, err := h.plannedForPrint(start, options, schedules)
 	if err != nil {
 		log.Printf("error loading planned masses for week %s: %v", start.Format(intentions.DateLayout), err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 	opts := pdfOptions{showHidden: options.ShowHidden, planned: planned}
@@ -398,21 +401,21 @@ func (h *handler) pdf(w http.ResponseWriter, r *http.Request) {
 	feasts, err := calendar.FeastsForWeek(h.db, start)
 	if err != nil {
 		log.Printf("error loading week feasts: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
 	setting, err := settings.Load(h.db)
 	if err != nil {
 		log.Printf("error loading settings: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
 	steps, err := gregorian.Steps(h.db, seriesIDs(list))
 	if err != nil {
 		log.Printf("error loading gregorian series steps: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
@@ -426,7 +429,7 @@ func (h *handler) pdf(w http.ResponseWriter, r *http.Request) {
 	err = writeWeekPDF(&buf, view, opts)
 	if err != nil {
 		log.Printf("error generating pdf for week %s: %v", start.Format(intentions.DateLayout), err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
@@ -472,7 +475,7 @@ func (h *handler) delete(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		log.Printf("error deleting intention %d: %v", intention.ID, err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 	err = h.drafts.DiscardEdit(intention.ID)
@@ -488,7 +491,7 @@ func (h *handler) settingsPage(w http.ResponseWriter, r *http.Request) {
 	setting, err := settings.Load(h.db)
 	if err != nil {
 		log.Printf("error loading settings: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
@@ -525,7 +528,7 @@ func (h *handler) settingsPage(w http.ResponseWriter, r *http.Request) {
 		}
 		if err != nil {
 			log.Printf("error loading schedule %d: %v", id, err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			serverError(w)
 			return
 		}
 
@@ -557,13 +560,14 @@ func (h *handler) settingsView(w http.ResponseWriter, setting settings.Setting, 
 	schedules, err := masses.Load(h.db)
 	if err != nil {
 		log.Printf("error loading schedules: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return settingsView{}, false
 	}
 
 	view := newSettingsView(setting, schedules, week)
 	view.Topbar = h.topbar()
 	view.DataDir = h.dataDir
+	view.LogFile = h.logFile
 
 	state := h.backups.State()
 	view.BackupDir = state.Dir
@@ -609,7 +613,7 @@ func (h *handler) scheduleForm(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		log.Printf("error loading schedule %d: %v", id, err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
@@ -647,7 +651,7 @@ func (h *handler) saveSchedule(w http.ResponseWriter, r *http.Request) {
 		taken, err := masses.NameTaken(h.db, schedule.Name, id)
 		if err != nil {
 			log.Printf("error checking schedule name: %v", err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			serverError(w)
 			return
 		}
 		if taken {
@@ -664,7 +668,7 @@ func (h *handler) saveSchedule(w http.ResponseWriter, r *http.Request) {
 			return
 		case err != nil:
 			log.Printf("error saving schedule %d: %v", id, err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			serverError(w)
 			return
 		}
 	}
@@ -704,7 +708,7 @@ func (h *handler) deleteSchedule(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		log.Printf("error deleting schedule %d: %v", id, err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
@@ -721,7 +725,7 @@ func (h *handler) restoreSchedules(w http.ResponseWriter, r *http.Request) {
 	err = masses.RestoreDefaults(h.db)
 	if err != nil {
 		log.Printf("error restoring default schedules: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
@@ -752,7 +756,7 @@ func (h *handler) saveSettings(w http.ResponseWriter, r *http.Request) {
 	err = settings.SaveParish(h.db, setting)
 	if err != nil {
 		log.Printf("error saving settings: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
@@ -782,7 +786,7 @@ func (h *handler) importFeasts(w http.ResponseWriter, r *http.Request) {
 	setting, err := settings.Load(h.db)
 	if err != nil {
 		log.Printf("error loading settings: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
@@ -810,7 +814,7 @@ func (h *handler) importFeasts(w http.ResponseWriter, r *http.Request) {
 	err = calendar.AddMissing(h.db, feasts)
 	if err != nil {
 		log.Printf("error saving imported feasts for week %s: %v", start.Format(intentions.DateLayout), err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
@@ -845,7 +849,7 @@ func (h *handler) saveFeast(w http.ResponseWriter, r *http.Request) {
 	err = calendar.SaveFeast(h.db, date, feast)
 	if err != nil {
 		log.Printf("error saving feast for %s: %v", date, err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
@@ -883,7 +887,7 @@ func (h *handler) clearWeek(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		log.Printf("error clearing week %s: %v", start.Format(intentions.DateLayout), err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
@@ -925,7 +929,7 @@ func (h *handler) createSlots(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		log.Printf("error loading schedule %d: %v", id, err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
@@ -935,7 +939,7 @@ func (h *handler) createSlots(w http.ResponseWriter, r *http.Request) {
 	existing, err := intentions.ForWeek(h.db, start)
 	if err != nil {
 		log.Printf("error loading week intention: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
@@ -952,7 +956,7 @@ func (h *handler) createSlots(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		log.Printf("error creating slots for week %s: %v", start.Format(intentions.DateLayout), err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
@@ -979,7 +983,7 @@ func (h *handler) findIntention(w http.ResponseWriter, idParam string) (intentio
 	}
 	if err != nil {
 		log.Printf("error finding intention %d: %v", id, err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return intentions.Intention{}, false
 	}
 
@@ -1028,7 +1032,7 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 			seriesID = 0
 		case err != nil:
 			log.Printf("error loading gregorian series %d: %v", seriesID, err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			serverError(w)
 			return
 		}
 	}
@@ -1074,7 +1078,7 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 	messages, ok := intentions.ValidationMessages(err)
 	if err != nil && !ok {
 		log.Printf("unexpected validation error: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
@@ -1140,7 +1144,7 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 	})
 	if err != nil {
 		log.Printf("error saving intention %d: %v", intention.ID, err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 	h.finishDraft(r.PostForm.Get("draft_token"))
@@ -1199,21 +1203,21 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 	list, err := intentions.ForWeek(h.db, start)
 	if err != nil {
 		log.Printf("error loading week intention: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
 	feasts, err := calendar.FeastsForWeek(h.db, start)
 	if err != nil {
 		log.Printf("error loading week feasts: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
 	schedules, err := masses.Load(h.db)
 	if err != nil {
 		log.Printf("error loading schedules: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
@@ -1238,13 +1242,13 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 	active, err := gregorian.Active(h.db, h.now())
 	if err != nil {
 		log.Printf("error loading gregorian series: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 	steps, err := gregorian.Steps(h.db, seriesIDs(list))
 	if err != nil {
 		log.Printf("error loading gregorian series steps: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 	setSeriesSteps(view.Days, steps)
@@ -1256,7 +1260,7 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 		err = h.prepareSeriesForm(state.form, active)
 		if err != nil {
 			log.Printf("error loading gregorian series for the form: %v", err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			serverError(w)
 			return
 		}
 		state.form.QuickAmounts = quickAmountOptions(setting.QuickAmounts, state.form.Amount)
@@ -1277,14 +1281,14 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 		counts, err := intentions.CountByDay(h.db, from, to)
 		if err != nil {
 			log.Printf("error counting intentions for %d: %v", state.calendarYear, err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			serverError(w)
 			return
 		}
 
 		yearMasses, err := masses.InRange(h.db, from, to, nil)
 		if err != nil {
 			log.Printf("error loading masses for %d: %v", state.calendarYear, err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			serverError(w)
 			return
 		}
 
@@ -1296,7 +1300,7 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 		counts, err := intentions.CountByDay(h.db, from, to)
 		if err != nil {
 			log.Printf("error summing payments from %s to %s: %v", from.Format(intentions.DateLayout), to.Format(intentions.DateLayout), err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			serverError(w)
 			return
 		}
 
@@ -1320,7 +1324,7 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 		}
 		if err != nil {
 			log.Printf("error loading closed gregorian series: %v", err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			serverError(w)
 			return
 		}
 
@@ -1339,7 +1343,7 @@ func render(w http.ResponseWriter, status int, tmpl *template.Template, data any
 	err := tmpl.Execute(&buf, data)
 	if err != nil {
 		log.Printf("error rendering template %s: %v", tmpl.Name(), err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
@@ -1463,7 +1467,7 @@ func (h *handler) stopSeries(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		log.Printf("error stopping gregorian series %d: %v", id, err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 

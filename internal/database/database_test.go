@@ -2,9 +2,11 @@ package database
 
 import (
 	"errors"
+	"log"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -360,5 +362,26 @@ func TestRestoreInvalidFileChangesNothing(t *testing.T) {
 	}
 	if _, err := os.Stat(backup); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("backup created for a rejected file: %v", err)
+	}
+}
+
+func TestOpenLogsSQLErrorsToTheAppLog(t *testing.T) {
+	var buf strings.Builder
+	log.SetOutput(&buf)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+
+	db := openTestDB(t, filepath.Join(t.TempDir(), "data.db"))
+	if err := db.Exec("SELECT * FROM missing_table").Error; err == nil {
+		t.Fatal("query on a missing table succeeded")
+	}
+	if err := db.First(&intentions.Intention{}, 999).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
+		t.Fatalf("First = %v, want record not found", err)
+	}
+
+	if !strings.Contains(buf.String(), "no such table: missing_table") {
+		t.Errorf("log = %q, want the SQL error", buf.String())
+	}
+	if strings.Contains(buf.String(), "record not found") {
+		t.Errorf("log = %q, want no entry for a missing record", buf.String())
 	}
 }

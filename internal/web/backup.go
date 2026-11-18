@@ -48,7 +48,7 @@ func (h *handler) exportData(w http.ResponseWriter, r *http.Request) {
 	path, err := h.saveFile(name)
 	if err != nil {
 		log.Printf("error choosing export file: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 	if path == "" {
@@ -59,7 +59,7 @@ func (h *handler) exportData(w http.ResponseWriter, r *http.Request) {
 	err = database.Export(h.db, path)
 	if err != nil {
 		log.Printf("error exporting data to %s: %v", path, err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
@@ -70,7 +70,7 @@ func (h *handler) downloadExport(w http.ResponseWriter, name string) {
 	tmp, err := os.CreateTemp(h.dataDir, "export-*.db")
 	if err != nil {
 		log.Printf("error creating export file: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 	defer removeFile(tmp.Name())
@@ -78,21 +78,21 @@ func (h *handler) downloadExport(w http.ResponseWriter, name string) {
 	err = tmp.Close()
 	if err != nil {
 		log.Printf("error creating export file: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
 	err = database.Export(h.db, tmp.Name())
 	if err != nil {
 		log.Printf("error exporting data: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
 	file, err := os.Open(tmp.Name())
 	if err != nil {
 		log.Printf("error opening export file: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 	defer func() { _ = file.Close() }()
@@ -127,7 +127,7 @@ func (h *handler) importData(w http.ResponseWriter, r *http.Request) {
 	err = saveUpload(upload, path)
 	if err != nil {
 		log.Printf("error saving import file: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
@@ -140,7 +140,7 @@ func (h *handler) importData(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		log.Printf("error preparing import: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
@@ -181,7 +181,7 @@ func (h *handler) confirmImport(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		log.Printf("error importing data: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
@@ -304,7 +304,7 @@ func (h *handler) setBackupDir(w http.ResponseWriter, r *http.Request) {
 		dir, err = h.chooseDir(h.backups.State().Dir)
 		if err != nil {
 			log.Printf("error choosing backup folder: %v", err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			serverError(w)
 			return
 		}
 		if dir == "" {
@@ -323,7 +323,7 @@ func (h *handler) setBackupDir(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		log.Printf("error saving backup folder: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 

@@ -2,6 +2,7 @@ package web
 
 import (
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -245,5 +246,21 @@ func TestSearchFromPastDay(t *testing.T) {
 	)
 	if strings.Contains(body, `<span class="scal-cell is-none is-today"><span class="scal-num">1</span>`) {
 		t.Error("the first day of the period is marked as today")
+	}
+}
+
+func TestShownTextHitsSpanBothSections(t *testing.T) {
+	at := func(day int) time.Time { return time.Date(2026, 11, day, 18, 0, 0, 0, intentions.TimeZone) }
+	hits := []intentions.Hit{{ID: 1, MassAt: at(1)}, {ID: 2, MassAt: at(5)}, {ID: 3, MassAt: at(20)}, {ID: 4, MassAt: at(25)}}
+
+	upcoming, past := splitTextHits(hits, searchNow)
+	if len(upcoming) != 2 || upcoming[0].ID != 3 || len(past) != 2 || past[0].ID != 2 {
+		t.Fatalf("split = %v / %v, want 3,4 upcoming and 2,1 past", upcoming, past)
+	}
+	if got := shownTextHits(3, upcoming, past); !slices.Equal(got, []int{3, 4, 2}) {
+		t.Errorf("shown = %v, want 3, 4, 2", got)
+	}
+	if got := shownTextHits(10, upcoming, past); !slices.Equal(got, []int{3, 4, 2, 1}) {
+		t.Errorf("shown = %v, want all four", got)
 	}
 }

@@ -133,7 +133,7 @@ func (h *handler) restoredForm(w http.ResponseWriter, start time.Time) (*formVie
 			form.Restored += " Zmieniana intencja została w międzyczasie usunięta, więc zapisze się jako nowa."
 		case err != nil:
 			log.Printf("error loading intention %d for its draft: %v", d.EditID, err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			serverError(w)
 			return nil, false
 		default:
 			form.EditID = intention.ID
@@ -162,7 +162,7 @@ func (h *handler) saveDraft(w http.ResponseWriter, r *http.Request) {
 	err = h.drafts.Save(d)
 	if err != nil {
 		log.Printf("error saving intention draft: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 

@@ -213,7 +213,7 @@ func progressLabel(p update.Progress) string {
 	case update.StageInstall:
 		return "Instaluję nową wersję…"
 	case update.StageRestart:
-		return "Gotowe. Program za chwilę uruchomi się ponownie."
+		return "Uruchamiam nową wersję… Program antywirusowy (np. Avast) może najpierw sprawdzić nowy plik – to potrwa do minuty. Nie zamykaj tego okna."
 	case update.StageError:
 		return "Aktualizacja nie powiodła się."
 	default:

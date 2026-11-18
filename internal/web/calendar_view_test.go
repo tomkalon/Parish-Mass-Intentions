@@ -31,7 +31,7 @@ func TestNewCalendarView(t *testing.T) {
 		"2026-11-10": {Empty: 1},
 	}
 
-	view := newCalendarView(2026, current, today, counts)
+	view := newCalendarView(2026, current, today, counts, nil)
 
 	if view.Year != 2026 || !view.HasCurrent {
 		t.Errorf("Year = %d, HasCurrent = %t, want 2026, true", view.Year, view.HasCurrent)
@@ -92,7 +92,7 @@ func TestNewCalendarView(t *testing.T) {
 func TestNewCalendarViewWeeksAcrossDSTChange(t *testing.T) {
 	current := time.Date(2026, 11, 9, 0, 0, 0, 0, intentions.TimeZone)
 
-	march := newCalendarView(2026, current, current, nil).Months[2]
+	march := newCalendarView(2026, current, current, nil, nil).Months[2]
 
 	want := []string{
 		"/?week=2026-02-23",
@@ -118,7 +118,7 @@ func TestNewCalendarViewWeeksAcrossDSTChange(t *testing.T) {
 func TestNewCalendarViewOtherYearHasNoCurrentWeek(t *testing.T) {
 	current := time.Date(2026, 11, 9, 0, 0, 0, 0, intentions.TimeZone)
 
-	view := newCalendarView(2027, current, current, nil)
+	view := newCalendarView(2027, current, current, nil, nil)
 
 	if view.HasCurrent {
 		t.Error("2027 has the current week of 2026")

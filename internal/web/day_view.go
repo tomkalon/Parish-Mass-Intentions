@@ -64,6 +64,15 @@ func (s dayStats) FreeLabel() string {
 	return countOf(s.Free, "wolna", "wolne", "wolnych")
 }
 
+func (s dayStats) Summary() string {
+	free := "wszystkie zajęte"
+	if s.Free > 0 {
+		free = s.FreeLabel()
+	}
+
+	return s.MassesLabel() + " · " + s.IntentionsLabel() + " · " + free
+}
+
 func (s dayStats) OutsideLabel() string {
 	return outsideLabel(s.Outside, true)
 }

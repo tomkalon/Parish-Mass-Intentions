@@ -22,6 +22,9 @@
 	<div class="search">
 		<form class="search-filters" method="get" action="/search" aria-label="Filtry">
 			<input type="hidden" name="week" value="{{.Week}}">
+			{{- if .IsCalendar}}
+			<input type="hidden" name="view" value="calendar">
+			{{- end}}
 
 			<fieldset class="facet">
 				<legend class="facet-title">Okres</legend>
@@ -82,8 +85,12 @@
 			<div class="search-summary">
 				<p class="search-total">{{.Total}}</p>
 				{{- with .Subtotal}}
-				<p class="search-subtotal">{{.}} · kliknij Mszę, aby dodać intencję</p>
+				<p class="search-subtotal">{{.}} · {{if $.IsCalendar}}kliknij dzień, aby zobaczyć jego Msze{{else}}kliknij Mszę, aby dodać intencję{{end}}</p>
 				{{- end}}
+				<nav class="search-views" aria-label="Widok wyników">
+					<a href="{{.ListURL}}"{{if not .IsCalendar}} aria-current="true"{{end}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Lista dni</a>
+					<a href="{{.CalendarURL}}"{{if .IsCalendar}} aria-current="true"{{end}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>Kalendarz</a>
+				</nav>
 			</div>
 
 			{{- if .Active}}
@@ -108,6 +115,57 @@
 			<div class="search-empty">
 				<p class="search-empty-title">Brak Mszy spełniających warunki</p>
 				<p>Usuń któryś filtr albo wydłuż okres.</p>
+			</div>
+			{{- end}}
+
+			{{- if .IsCalendar}}
+			{{- with .Preview}}
+			<section class="search-preview" id="podglad" aria-label="Podgląd dnia">
+				<div class="search-preview-head">
+					<h2>{{.Label}}</h2>
+					{{- with .Feast}}
+					<span class="search-day-feast">{{.}}</span>
+					{{- end}}
+					<a class="search-preview-week" href="{{.WeekURL}}">Otwórz tydzień →</a>
+				</div>
+				<p class="search-day-meta">{{template "daystats" .Stats}}</p>
+				<ol class="search-preview-rows">
+					{{- range .Rows}}
+					<li class="search-preview-row{{if not .Matched}} is-dim{{end}}">
+						<b>{{.Time}}</b>
+						<span class="search-preview-status is-{{.Kind}}">{{.Status}}</span>
+						<span class="search-preview-note">{{with .Outside}}<i>{{.}}</i> {{end}}{{.Note}}</span>
+						<a class="button-small" href="{{.URL}}" aria-label="Dodaj intencję na godz. {{.Time}}">+ Dodaj</a>
+					</li>
+					{{- end}}
+				</ol>
+			</section>
+			{{- end}}
+			<div class="search-calendar">
+				{{- range .CalMonths}}
+				<section class="scal-month">
+					<header class="scal-month-header">
+						<h2>{{.Name}}</h2>
+						<span>{{.Count}}</span>
+					</header>
+					<div class="scal-weekdays" aria-hidden="true"><span>Pn</span><span>Wt</span><span>Śr</span><span>Cz</span><span>Pt</span><span>So</span><span>Nd</span></div>
+					<div class="scal-grid">
+						{{- range .Cells}}
+						{{- if .IsOut}}
+						<span class="scal-cell is-out"></span>
+						{{- else if .HasMasses}}
+						<a class="scal-cell has-tip{{if .Matches}} is-match{{end}}{{if .Selected}} is-selected{{end}}{{if .IsToday}} is-today{{end}}" href="{{.URL}}" aria-label="{{.Label}}"{{if .Selected}} aria-current="true"{{end}}>
+							<span class="scal-num">{{.Num}}</span>
+							<span class="scal-bars" aria-hidden="true">{{range .Bars}}<span class="scal-bar is-{{.Kind}}{{if .Dim}} is-dim{{end}}"></span>{{end}}</span>
+							{{- with .Tip}}{{template "daytip" .}}{{end}}
+						</a>
+						{{- else}}
+						<span class="scal-cell is-none"><span class="scal-num">{{.Num}}</span></span>
+						{{- end}}
+						{{- end}}
+					</div>
+				</section>
+				{{- end}}
 			</div>
 			{{- end}}
 

@@ -324,7 +324,11 @@
 					<a class="calendar-week" href="{{.URL}}" aria-label="{{.Label}}"{{if .IsCurrent}} aria-current="true" autofocus{{end}}>
 						{{- range .Days}}
 						{{- if .InMonth}}
+						{{- if .Tip}}
+						<span class="calendar-cell has-tip"><span class="calendar-day level-{{.Level}}{{if .HasEmpty}} has-empty{{end}}{{if .IsToday}} is-today{{end}}">{{.Day}}</span>{{template "daytip" .Tip}}</span>
+						{{- else}}
 						<span class="calendar-day level-{{.Level}}{{if .HasEmpty}} has-empty{{end}}{{if .IsToday}} is-today{{end}}" title="{{.Title}}">{{.Day}}</span>
+						{{- end}}
 						{{- else}}
 						<span class="calendar-day is-out"></span>
 						{{- end}}

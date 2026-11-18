@@ -124,6 +124,8 @@ func RegisterRoutes(router chi.Router, db *gorm.DB, opts Options) {
 
 	router.Post("/update/check", h.checkUpdate)
 	router.Post("/update/install", h.installUpdate)
+	router.Get("/update", h.updateProgress)
+	router.Get("/update/status", h.updateStatus)
 	router.Post("/draft", h.saveDraft)
 	router.Post("/draft/discard", h.discardDraft)
 	router.Get("/", h.home)
@@ -568,6 +570,7 @@ func (h *handler) settingsView(w http.ResponseWriter, setting settings.Setting, 
 	view.BackupLabel = backupLabel(state, h.now())
 	view.CanChooseDir = h.chooseDir != nil
 	view.Update = newUpdateView(h.updater, h.now())
+	view.Version = h.version
 
 	return view, true
 }

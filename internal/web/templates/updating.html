@@ -5,14 +5,39 @@
 	<title>Aktualizacja – Go Parafia</title>
 	<link rel="icon" href="/static/logo.svg" type="image/svg+xml">
 	<link rel="stylesheet" href="/static/app.css">
+	<script src="/static/app.js" defer></script>
 </head>
 <body>
-	<main class="start">
+	<main class="start update-progress" data-update-progress="/update/status">
 		<div class="start-content">
 			<img class="start-logo" src="/static/logo.svg" width="88" height="88" alt="">
 			<h1>Aktualizacja</h1>
-			<p class="start-parish" role="status">Pobrano wersję {{.Version}}. Program za chwilę zamknie się i uruchomi ponownie.</p>
-			<p class="start-address">Kopia danych sprzed aktualizacji jest w folderze danych (plik .bak).</p>
+			<p class="start-parish">Wersja {{.Version}}</p>
+
+			<ol class="update-steps">
+				{{- range .Steps}}
+				<li class="is-{{.State}}" data-step="{{.Stage}}">{{.Label}}</li>
+				{{- end}}
+			</ol>
+
+			<div class="update-bar" role="progressbar" aria-label="Postęp aktualizacji" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{.Percent}}">
+				<span class="update-bar-fill" style="width: {{.Percent}}%"></span>
+			</div>
+			<p class="update-label" role="status" aria-live="polite">{{.Label}}</p>
+
+			<div class="update-failed"{{if not .Failed}} hidden{{end}}>
+				<p class="update-error" role="alert" data-update-error>{{.Error}}</p>
+				<div class="update-failed-actions">
+					<form method="post" action="/update/install">
+						<input type="hidden" name="week" value="{{.Week}}">
+						<input type="hidden" name="version" value="{{.Version}}">
+						<button class="button button-primary" type="submit">Spróbuj ponownie</button>
+					</form>
+					<a class="button" href="{{.BackURL}}">Wróć do ustawień</a>
+				</div>
+			</div>
+
+			<p class="update-note"{{if .Failed}} hidden{{end}}>Nie zamykaj programu. Kopia danych sprzed aktualizacji jest w folderze danych (plik .bak).</p>
 		</div>
 	</main>
 </body>

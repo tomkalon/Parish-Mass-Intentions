@@ -337,3 +337,44 @@ if (seriesForm) {
 		refreshShared();
 	});
 }
+
+const updateProgress = document.querySelector("[data-update-progress]");
+if (updateProgress) {
+	const bar = updateProgress.querySelector(".update-bar");
+	const fill = updateProgress.querySelector(".update-bar-fill");
+	const label = updateProgress.querySelector(".update-label");
+	const failed = updateProgress.querySelector(".update-failed");
+	const note = updateProgress.querySelector(".update-note");
+	const error = updateProgress.querySelector("[data-update-error]");
+
+	const show = (status) => {
+		fill.style.width = status.percent + "%";
+		bar.setAttribute("aria-valuenow", String(status.percent));
+		label.textContent = status.label;
+		for (const step of status.steps) {
+			const item = updateProgress.querySelector('[data-step="' + step.stage + '"]');
+			if (item) {
+				item.className = "is-" + step.state;
+			}
+		}
+		failed.hidden = !status.failed;
+		note.hidden = status.failed;
+		error.textContent = status.error;
+	};
+
+	const poll = () => {
+		fetch(updateProgress.dataset.updateProgress, { cache: "no-store" })
+			.then((response) => response.json())
+			.then((status) => {
+				show(status);
+				if (!status.failed && status.stage !== "") {
+					setTimeout(poll, 500);
+				}
+			})
+			.catch(() => setTimeout(poll, 1500));
+	};
+
+	if (failed.hidden) {
+		setTimeout(poll, 500);
+	}
+}

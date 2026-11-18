@@ -357,3 +357,75 @@ func TestChecksumFor(t *testing.T) {
 		t.Error("a malformed checksum was accepted")
 	}
 }
+
+func TestStartRunsInBackground(t *testing.T) {
+	r := &restarts{}
+	u := newTestUpdater(t, newRelease(), r)
+	_, err := u.Check(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	prepared := make(chan struct{})
+	err = u.Start("1.1.0", func() error {
+		close(prepared)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if err := u.Start("1.1.0", nil); !errors.Is(err, ErrInProgress) {
+		t.Errorf("second Start = %v, want ErrInProgress", err)
+	}
+
+	<-prepared
+	deadline := time.Now().Add(5 * time.Second)
+	for u.Progress().Stage != StageRestart && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if p := u.Progress(); p.Stage != StageRestart || p.Done != int64(len(newProgram)) || p.Total != p.Done || !p.Active() {
+		t.Errorf("progress = %+v", p)
+	}
+}
+
+func TestStartReportsBackupFailure(t *testing.T) {
+	u := newTestUpdater(t, newRelease(), &restarts{})
+	_, err := u.Check(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = u.Start("1.1.0", func() error { return errors.New("disk full") })
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.Now().Add(5 * time.Second)
+	for u.Progress().Stage != StageError && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	p := u.Progress()
+	if p.Stage != StageError || p.Err != "Nie udało się zapisać kopii danych przed aktualizacją, więc aktualizacja została przerwana." || p.Active() {
+		t.Errorf("progress = %+v", p)
+	}
+	if got := readFile(t, u.ExePath); got != "MZ stara wersja" {
+		t.Errorf("program changed after a failed backup: %q", got)
+	}
+	if u.Status().Err != p.Err {
+		t.Errorf("status error = %q, want the progress error", u.Status().Err)
+	}
+
+	err = u.Start("1.1.0", nil)
+	if err != nil {
+		t.Errorf("Start after a failure: %v", err)
+	}
+}
+
+func TestMessage(t *testing.T) {
+	if got := Message(fmt.Errorf("wrapped: %w", ErrStart)); got != "Nie udało się uruchomić nowej wersji (Windows mógł ją zablokować), więc program został w poprzedniej wersji." {
+		t.Errorf("Message(ErrStart) = %q", got)
+	}
+	if got := Message(os.ErrPermission); got != "Nie udało się zainstalować aktualizacji. Sprawdź połączenie z internetem i spróbuj ponownie – program działa dalej w obecnej wersji." {
+		t.Errorf("generic message = %q", got)
+	}
+}

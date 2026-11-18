@@ -606,7 +606,7 @@ func TestSetBackupDirByTyping(t *testing.T) {
 	for _, want := range []string{
 		`<p class="notice" role="status">Zapisano folder kopii.</p>`,
 		`Folder: <code class="path">` + folder + `</code> · brak kopii`,
-		`<button class="link-button" type="submit">Wyłącz</button>`,
+		`<button class="link-action is-danger" type="submit">Wyłącz</button>`,
 	} {
 		if !strings.Contains(page, want) {
 			t.Errorf("settings page does not contain %q", want)

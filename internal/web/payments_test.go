@@ -479,12 +479,12 @@ func TestSettingsPageShowsQuickAmounts(t *testing.T) {
 	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
 
 	checkBody(t, getSettings(t, h, "/settings?week=2026-11-02").Body.String(),
-		`<legend>Wpłaty</legend>`,
+		`<h2 class="settings-heading" id="payments-title">Wpłaty</h2>`,
 		`<input class="input" type="text" id="quick_amounts" name="quick_amounts" value="50, 100, 150, 200" autocomplete="off" placeholder="50, 100, 150, 200" maxlength="200" aria-describedby="quick_amounts-hint">`,
 		`Pełne złote, oddzielone przecinkami, najwyżej 6. Puste pole przywraca domyślne: 50, 100, 150, 200.`,
 		`<span class="quick-preview-label">W panelu:</span>
-						<span class="chip chip-preview">50</span>
-						<span class="chip chip-preview">100</span>`,
+								<span class="chip chip-preview">50</span>
+								<span class="chip chip-preview">100</span>`,
 	)
 }
 

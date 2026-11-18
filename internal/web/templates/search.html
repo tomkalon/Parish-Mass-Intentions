@@ -20,7 +20,7 @@
 	</nav>
 
 	<div class="search">
-		<form class="search-filters" method="get" action="/search" aria-label="Filtry">
+		<form class="search-filters{{if .IsCalendar}} is-bars{{end}}" method="get" action="/search" aria-label="Filtry">
 			<input type="hidden" name="week" value="{{.Week}}">
 			{{- if .IsCalendar}}
 			<input type="hidden" name="view" value="calendar">
@@ -67,8 +67,8 @@
 			<fieldset class="facet">
 				<legend class="facet-title">Inne</legend>
 				<label class="facet-row"><input type="checkbox" id="f-skipgreg" name="skipgreg" value="1"{{if .SkipGregorian}} checked{{end}} data-autosubmit><span class="facet-label">Pomijaj Msze z gregorianką</span></label>
-				<label class="facet-row facet-row-top"><input type="checkbox" id="f-planned" name="planned" value="1"{{if .Planned}} checked{{end}} data-autosubmit><span class="facet-label">Msze planowane<span class="facet-sub">tygodnie bez wczytanych godzin</span></span></label>
-				{{- if .Schedules}}
+				<label class="facet-row facet-row-top"><input type="checkbox" id="f-planned" name="planned" value="1"{{if .Planned}} checked{{end}} data-autosubmit><span class="facet-label">Pokaż Msze planowane<span class="facet-sub">godziny z porządku Mszy dla tygodni bez wczytanych godzin</span></span></label>
+				{{- if and .Planned .Schedules}}
 				<label class="facet-select-label" for="f-schedule">według porządku Mszy</label>
 				<select class="select facet-select" id="f-schedule" name="schedule" data-autosubmit>
 					{{- range .Schedules}}
@@ -102,9 +102,11 @@
 			</div>
 			{{- end}}
 
-			<div class="search-legend" aria-hidden="true">
+			<div class="search-legend{{if .IsCalendar}} is-bars{{end}}" aria-hidden="true">
 				<span><span class="facet-swatch is-free"></span>wolna</span>
+				{{- if .Planned}}
 				<span><span class="facet-swatch is-planned"></span>planowana (godziny niewczytane)</span>
+				{{- end}}
 				<span><span class="facet-swatch is-one"></span>1 intencja</span>
 				<span><span class="facet-swatch is-two"></span>2</span>
 				<span><span class="facet-swatch is-many"></span>3+</span>

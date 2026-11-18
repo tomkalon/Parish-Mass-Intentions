@@ -3,6 +3,7 @@ package web
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -56,7 +57,7 @@ func postUpdate(t *testing.T, h *handler, path string, form url.Values) *httptes
 	return rec
 }
 
-func installableUpdater(t *testing.T, api string, restarts *[]string) *update.Updater {
+func installableUpdater(t *testing.T, api string, restarted chan string) *update.Updater {
 	t.Helper()
 
 	exe := filepath.Join(t.TempDir(), "Intencje Mszalne.exe")
@@ -66,12 +67,44 @@ func installableUpdater(t *testing.T, api string, restarts *[]string) *update.Up
 	}
 
 	u := update.New("1.0.0", exe, func(path string) error {
-		*restarts = append(*restarts, path)
+		restarted <- path
 		return nil
 	})
 	u.API = api
 
 	return u
+}
+
+func waitForStage(t *testing.T, u *update.Updater, stages ...string) update.Progress {
+	t.Helper()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		p := u.Progress()
+		for _, stage := range stages {
+			if p.Stage == stage {
+				return p
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("update did not reach %q, progress = %+v", stages, u.Progress())
+
+	return update.Progress{}
+}
+
+func getUpdatePage(t *testing.T, h *handler, target string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, target, nil)
+	rec := httptest.NewRecorder()
+	if strings.HasPrefix(target, "/update/status") {
+		h.updateStatus(rec, req)
+	} else {
+		h.updateProgress(rec, req)
+	}
+
+	return rec
 }
 
 func TestSettingsShowUpdatesSection(t *testing.T) {
@@ -83,8 +116,8 @@ func TestSettingsShowUpdatesSection(t *testing.T) {
 		`<section class="settings-section updates" id="aktualizacje" aria-labelledby="updates-title">`,
 		`Zainstalowana wersja: <strong>1.0.0</strong></p>`,
 		`<form method="post" action="/update/check">
-				<input type="hidden" name="week" value="2026-11-23">
-				<button class="button" type="submit">Sprawdź aktualizacje</button>`,
+							<input type="hidden" name="week" value="2026-11-23">
+							<button class="button" type="submit">Sprawdź aktualizacje</button>`,
 	)
 	if strings.Contains(body, "Masz najnowszą wersję") || strings.Contains(body, "Dostępna nowa wersja") {
 		t.Error("update result shown before checking")
@@ -147,55 +180,128 @@ func TestInstallUpdateInDevelopmentServer(t *testing.T) {
 
 func TestInstallUpdate(t *testing.T) {
 	h := newTestHandler(t, updateNow)
-	var restarts []string
-	h.updater = installableUpdater(t, fakeRelease(t, "v1.1.0", []byte("MZ nowy program")), &restarts)
+	restarted := make(chan string, 1)
+	h.updater = installableUpdater(t, fakeRelease(t, "v1.1.0", []byte("MZ nowy program")), restarted)
 	postUpdate(t, h, "/update/check", url.Values{})
 
 	body := getSettings(t, h, "/settings").Body.String()
 	checkBody(t, body, `<input type="hidden" name="version" value="1.1.0">`, `Pobierz i zainstaluj</button>`)
 
-	rec := postUpdate(t, h, "/update/install", url.Values{"version": {"1.1.0"}})
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	rec := postUpdate(t, h, "/update/install", url.Values{"version": {"1.1.0"}, "week": {"2026-11-23"}})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	checkBody(t, rec.Body.String(), `Pobrano wersję 1.1.0. Program za chwilę zamknie się i uruchomi ponownie.`)
+	if got, want := rec.Header().Get("Location"), "/update?week=2026-11-23"; got != want {
+		t.Errorf("Location = %q, want %q", got, want)
+	}
 
-	if len(restarts) != 1 {
-		t.Errorf("restarts = %q, want one", restarts)
+	select {
+	case path := <-restarted:
+		if path != h.updater.ExePath {
+			t.Errorf("restarted %q, want %q", path, h.updater.ExePath)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the program was not restarted")
 	}
+	p := waitForStage(t, h.updater, update.StageRestart)
+	if p.Done != int64(len("MZ nowy program")) || p.Total != p.Done {
+		t.Errorf("download progress = %d of %d", p.Done, p.Total)
+	}
+
 	data, err := os.ReadFile(h.updater.ExePath)
 	if err != nil || string(data) != "MZ nowy program" {
 		t.Errorf("program after update = %q, %v", data, err)
 	}
-
 	backups, err := filepath.Glob(filepath.Join(h.dataDir, "data-2026-11-21-093000-przed-aktualizacja.db.bak"))
 	if err != nil || len(backups) != 1 {
 		t.Errorf("backup before the update: %v, %v", backups, err)
+	}
+
+	page := getUpdatePage(t, h, "/update?week=2026-11-23")
+	checkBody(t, page.Body.String(),
+		`<main class="start update-progress" data-update-progress="/update/status">`,
+		`<p class="start-parish">Wersja 1.1.0</p>`,
+		`<li class="is-done" data-step="backup">Kopia danych</li>`,
+		`<li class="is-current" data-step="restart">Ponowne uruchomienie</li>`,
+		`aria-valuenow="100"`,
+		`<p class="update-label" role="status" aria-live="polite">Gotowe. Program za chwilę uruchomi się ponownie.</p>`,
+		`<div class="update-failed" hidden>`,
+	)
+
+	status := getUpdatePage(t, h, "/update/status")
+	if got := status.Header().Get("Content-Type"); got != "application/json" {
+		t.Errorf("Content-Type = %q", got)
+	}
+	var got progressView
+	err = json.Unmarshal(status.Body.Bytes(), &got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Stage != "restart" || got.Percent != 100 || got.Failed || len(got.Steps) != 5 || got.Steps[4].State != "current" {
+		t.Errorf("status = %+v", got)
+	}
+
+	checkBody(t, getSettings(t, h, "/settings").Body.String(), `Aktualizacja do wersji 1.1.0 trwa. <a href="/update">Zobacz postęp</a>`)
+	rec = postUpdate(t, h, "/update/install", url.Values{"version": {"1.1.0"}})
+	if got := rec.Header().Get("Location"); got != "/settings#aktualizacje" {
+		t.Errorf("second install: Location = %q, want back to settings", got)
 	}
 }
 
 func TestInstallUpdateBrokenDownload(t *testing.T) {
 	h := newTestHandler(t, updateNow)
-	var restarts []string
-	h.updater = installableUpdater(t, fakeRelease(t, "v1.1.0", []byte("<html>to nie program")), &restarts)
+	restarted := make(chan string, 1)
+	h.updater = installableUpdater(t, fakeRelease(t, "v1.1.0", []byte("<html>to nie program")), restarted)
 	postUpdate(t, h, "/update/check", url.Values{})
 
 	rec := postUpdate(t, h, "/update/install", url.Values{"version": {"1.1.0"}, "week": {"2026-11-23"}})
-
-	if got, want := rec.Header().Get("Location"), "/settings?week=2026-11-23#aktualizacje"; got != want {
+	if got, want := rec.Header().Get("Location"), "/update?week=2026-11-23"; got != want {
 		t.Errorf("Location = %q, want %q", got, want)
 	}
+
+	waitForStage(t, h.updater, update.StageError)
+	page := getUpdatePage(t, h, "/update?week=2026-11-23").Body.String()
+	checkBody(t, page,
+		`<div class="update-failed">`,
+		`<p class="update-error" role="alert" data-update-error>Pobrany plik nie jest programem dla Windows.</p>`,
+		`<input type="hidden" name="version" value="1.1.0">`,
+		`<button class="button button-primary" type="submit">Spróbuj ponownie</button>`,
+		`<a class="button" href="/settings?week=2026-11-23#aktualizacje">Wróć do ustawień</a>`,
+		`<p class="update-note" hidden>`,
+	)
 	checkBody(t, getSettings(t, h, "/settings").Body.String(), `<p class="update-error" role="alert">Pobrany plik nie jest programem dla Windows.</p>`)
-	if len(restarts) != 0 {
+	if len(restarted) != 0 {
 		t.Error("the program was restarted after a failed download")
 	}
 }
 
-func TestInstallErrorMessage(t *testing.T) {
-	if got := installErrorMessage(fmt.Errorf("wrapped: %w", update.ErrStart)); !strings.HasPrefix(got, "Nie udało się uruchomić nowej wersji (Windows mógł ją zablokować)") {
-		t.Errorf("message for ErrStart = %q", got)
+func TestUpdateProgressWithoutUpdateRedirects(t *testing.T) {
+	h := newTestHandler(t, updateNow)
+
+	rec := getUpdatePage(t, h, "/update?week=2026-11-23")
+
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/settings?week=2026-11-23#aktualizacje" {
+		t.Errorf("status = %d, Location = %q", rec.Code, rec.Header().Get("Location"))
 	}
-	if got := installErrorMessage(os.ErrPermission); !strings.Contains(got, "program działa dalej w obecnej wersji") {
-		t.Errorf("generic message = %q", got)
+}
+
+func TestProgressLabels(t *testing.T) {
+	tests := []struct {
+		p       update.Progress
+		label   string
+		percent int
+	}{
+		{update.Progress{Stage: update.StageBackup}, "Zapisuję kopię danych…", 0},
+		{update.Progress{Stage: update.StageDownload, Done: 5 << 20, Total: 20 << 20}, "Pobieram nową wersję… 5,0 MB z 20,0 MB", 25},
+		{update.Progress{Stage: update.StageDownload, Done: 3 << 19}, "Pobieram nową wersję… 1,5 MB", 0},
+		{update.Progress{Stage: update.StageVerify}, "Sprawdzam pobrany plik…", 100},
+		{update.Progress{Stage: update.StageInstall}, "Instaluję nową wersję…", 100},
+		{update.Progress{Stage: update.StageError, Err: "x"}, "Aktualizacja nie powiodła się.", 0},
+	}
+	for _, tt := range tests {
+		view := newProgressView(tt.p)
+		if view.Label != tt.label || view.Percent != tt.percent {
+			t.Errorf("%s: label %q, percent %d; want %q, %d", tt.p.Stage, view.Label, view.Percent, tt.label, tt.percent)
+		}
 	}
 }

@@ -77,7 +77,6 @@ func TestParseSearchQueryDefaults(t *testing.T) {
 			Period:        "m3",
 			Counts:        []int{0},
 			SkipGregorian: true,
-			Planned:       true,
 			ScheduleID:    2,
 			Show:          searchPageDays,
 		}
@@ -124,11 +123,30 @@ func TestParseSearchQueryUnknownPeriodAndNoSchedules(t *testing.T) {
 	}
 }
 
-func TestSearchDefaultsShowFreeMasses(t *testing.T) {
+func TestSearchDefaultsShowFreeLoadedMasses(t *testing.T) {
 	h := newTestHandler(t, searchNow)
 	seedSearchData(t, h)
 
 	body := getSearch(t, h, "/search")
+
+	checkBody(t, body,
+		`<p class="search-total">Znaleziono 1 Mszę</p>`,
+		`<p class="search-subtotal">w 1 dniu · kliknij Mszę, aby dodać intencję</p>`,
+		`<input type="checkbox" id="f-planned" name="planned" value="1" data-autosubmit><span class="facet-label">Pokaż Msze planowane`,
+		`<a class="mass-chip is-free" href="/?day=2026-11-23&amp;new=1&amp;time=06%3A30&amp;week=2026-11-23"`,
+	)
+	for _, unwanted := range []string{`id="f-schedule"`, "planowana", `class="search-day-planned"`} {
+		if strings.Contains(body, unwanted) {
+			t.Errorf("planned Masses are shown by default: body contains %q", unwanted)
+		}
+	}
+}
+
+func TestSearchWithPlannedMasses(t *testing.T) {
+	h := newTestHandler(t, searchNow)
+	seedSearchData(t, h)
+
+	body := getSearch(t, h, "/search?period=m3&n=0&planned=1&skipgreg=1&schedule=1")
 
 	checkBody(t, body,
 		`<title>Szukaj Mszy – Go Parafia</title>`,

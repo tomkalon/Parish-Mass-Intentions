@@ -40,9 +40,9 @@ var templateFS embed.FS
 //go:embed static
 var staticFS embed.FS
 
-var weekTemplate = template.Must(template.ParseFS(templateFS, "templates/week.html", "templates/panel.html", "templates/topbar.html", "templates/daystats.html"))
+var weekTemplate = template.Must(template.ParseFS(templateFS, "templates/week.html", "templates/panel.html", "templates/topbar.html", "templates/daystats.html", "templates/badges.html"))
 
-var searchTemplate = template.Must(template.ParseFS(templateFS, "templates/search.html", "templates/topbar.html", "templates/daystats.html"))
+var searchTemplate = template.Must(template.ParseFS(templateFS, "templates/search.html", "templates/topbar.html", "templates/daystats.html", "templates/badges.html"))
 
 var printTemplate = template.Must(template.ParseFS(templateFS, "templates/print.html"))
 

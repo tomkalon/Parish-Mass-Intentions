@@ -142,6 +142,225 @@ for (const input of document.querySelectorAll("[data-autosubmit]")) {
 	});
 }
 
+const pickerMonths = ["Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec", "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień"];
+const parseDay = (text) => {
+	const [year, month, day] = text.split("-").map(Number);
+	return new Date(year, month - 1, day);
+};
+const isoDay = (date) => date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0");
+const dayLabel = (date) => date.getDate() + "." + (date.getMonth() + 1) + "." + date.getFullYear();
+
+const datePicker = (input) => {
+	const form = input.form;
+	const radio = input.dataset.pickerRadio ? document.getElementById(input.dataset.pickerRadio) : null;
+	const first = parseDay(input.min);
+	const last = parseDay(input.max);
+	const today = input.dataset.today ? parseDay(input.dataset.today) : null;
+	const rangeStart = input.dataset.rangeStart ? parseDay(input.dataset.rangeStart) : null;
+	const rangeEnd = input.dataset.rangeEnd ? parseDay(input.dataset.rangeEnd) : null;
+	const chosen = input.value ? parseDay(input.value) : first;
+	const previous = form.querySelector('input[name="period"]:checked');
+	let shown = new Date(chosen.getFullYear(), chosen.getMonth(), 1);
+	let hover = null;
+
+	const element = (tag, className, text) => {
+		const node = document.createElement(tag);
+		node.className = className;
+		if (text !== undefined) {
+			node.textContent = text;
+		}
+		return node;
+	};
+
+	const button = element("button", "until-button");
+	button.type = "button";
+	button.setAttribute("aria-haspopup", "dialog");
+	button.setAttribute("aria-expanded", "false");
+	button.setAttribute("aria-label", input.getAttribute("aria-label") + ": " + (input.dataset.datePicker || "nie wybrano"));
+	button.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg><span></span>';
+	button.querySelector("span").textContent = input.dataset.datePicker || "wybierz datę";
+	button.classList.toggle("is-empty", !input.dataset.datePicker);
+
+	const pop = element("div", "until-pop");
+	pop.hidden = true;
+	pop.setAttribute("role", "dialog");
+	pop.setAttribute("aria-label", input.getAttribute("aria-label"));
+
+	input.hidden = true;
+	input.after(button, pop);
+
+	const paint = () => {
+		const point = hover || chosen;
+		const from = rangeStart || point;
+		const to = rangeEnd || point;
+		for (const day of pop.querySelectorAll(".until-day[data-date]")) {
+			const date = parseDay(day.dataset.date);
+			day.classList.toggle("is-range", date >= from && date <= to);
+			day.classList.toggle("is-start", date.getTime() === from.getTime());
+			day.classList.toggle("is-end", date.getTime() === to.getTime());
+			day.classList.toggle("is-chosen", date.getTime() === point.getTime());
+		}
+	};
+
+	const render = (focus) => {
+		pop.replaceChildren();
+
+		const firstMonth = new Date(first.getFullYear(), first.getMonth(), 1);
+		const lastMonth = new Date(last.getFullYear(), last.getMonth(), 1);
+		const head = element("div", "until-head");
+		const navs = [
+			["«", "Rok wcześniej", -12],
+			["‹", "Poprzedni miesiąc", -1],
+			["›", "Następny miesiąc", 1],
+			["»", "Rok później", 12],
+		].map(([text, name, months], index) => {
+			const nav = element("button", "until-nav", text);
+			nav.type = "button";
+			nav.setAttribute("aria-label", name);
+			const target = new Date(shown.getFullYear(), shown.getMonth() + months, 1);
+			nav.disabled = months < 0 ? shown <= firstMonth : shown >= lastMonth;
+			nav.addEventListener("click", () => {
+				shown = target < firstMonth ? firstMonth : target > lastMonth ? lastMonth : target;
+				render();
+				const again = pop.querySelectorAll(".until-nav")[index];
+				(again.disabled ? pop.querySelector(".until-day:not(:disabled)") : again)?.focus({ preventScroll: true });
+			});
+			return nav;
+		});
+		head.append(navs[0], navs[1], element("span", "until-title", pickerMonths[shown.getMonth()] + " " + shown.getFullYear()), navs[2], navs[3]);
+
+		const weekdays = element("div", "until-weekdays");
+		for (const name of ["Pn", "Wt", "Śr", "Cz", "Pt", "So", "Nd"]) {
+			weekdays.append(element("span", "", name));
+		}
+
+		const grid = element("div", "until-grid");
+		for (let i = 0; i < (shown.getDay() + 6) % 7; i++) {
+			grid.append(element("span", ""));
+		}
+		for (let date = new Date(shown); date.getMonth() === shown.getMonth(); date.setDate(date.getDate() + 1)) {
+			const day = element("button", "until-day", String(date.getDate()));
+			day.type = "button";
+			day.dataset.date = isoDay(date);
+			day.disabled = date < first || date > last;
+			day.classList.toggle("is-today", today !== null && date.getTime() === today.getTime());
+			day.setAttribute("aria-label", dayLabel(date));
+			grid.append(day);
+		}
+
+		pop.append(head, weekdays, grid);
+		if (input.dataset.pickerNote) {
+			pop.append(element("p", "until-foot", input.dataset.pickerNote));
+		}
+		paint();
+
+		if (focus) {
+			(pop.querySelector('.until-day[data-date="' + isoDay(focus) + '"]:not(:disabled)') || pop.querySelector(".until-day:not(:disabled)"))?.focus({ preventScroll: true });
+		}
+	};
+
+	const open = () => {
+		for (const other of document.querySelectorAll(".until-pop")) {
+			if (other !== pop && !other.hidden) {
+				other.dispatchEvent(new Event("close"));
+			}
+		}
+		shown = new Date(chosen.getFullYear(), chosen.getMonth(), 1);
+		pop.hidden = false;
+		button.setAttribute("aria-expanded", "true");
+		render(chosen);
+	};
+
+	const close = (focusButton) => {
+		if (pop.hidden) {
+			return;
+		}
+		pop.hidden = true;
+		hover = null;
+		button.setAttribute("aria-expanded", "false");
+		if (radio && previous) {
+			previous.checked = true;
+		}
+		if (focusButton) {
+			button.focus();
+		}
+	};
+
+	const pick = (date) => {
+		input.value = isoDay(date);
+		if (radio) {
+			radio.checked = true;
+		}
+		try {
+			sessionStorage.setItem("autosubmit-focus", radio ? radio.id : input.id);
+		} catch {}
+		form.submit();
+	};
+
+	pop.addEventListener("close", () => close(false));
+	button.addEventListener("click", () => (pop.hidden ? open() : close(true)));
+	radio?.addEventListener("change", open);
+
+	pop.addEventListener("click", (event) => {
+		const day = event.target.closest(".until-day");
+		if (day && !day.disabled) {
+			pick(parseDay(day.dataset.date));
+		}
+	});
+	pop.addEventListener("focusin", (event) => {
+		const day = event.target.closest(".until-day");
+		if (day && !day.disabled) {
+			hover = parseDay(day.dataset.date);
+			paint();
+		}
+	});
+	pop.addEventListener("mouseover", (event) => {
+		const day = event.target.closest(".until-day");
+		hover = day && !day.disabled ? parseDay(day.dataset.date) : null;
+		paint();
+	});
+	pop.addEventListener("mouseleave", () => {
+		hover = null;
+		paint();
+	});
+	pop.addEventListener("keydown", (event) => {
+		if (event.key === "Escape") {
+			event.stopPropagation();
+			close(true);
+			return;
+		}
+
+		const steps = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
+		const day = event.target.closest(".until-day");
+		if (!day || !(event.key in steps)) {
+			return;
+		}
+		event.preventDefault();
+		const date = parseDay(day.dataset.date);
+		date.setDate(date.getDate() + steps[event.key]);
+		if (date < first || date > last) {
+			return;
+		}
+		if (date.getMonth() !== shown.getMonth() || date.getFullYear() !== shown.getFullYear()) {
+			shown = new Date(date.getFullYear(), date.getMonth(), 1);
+			render(date);
+			return;
+		}
+		pop.querySelector('.until-day[data-date="' + isoDay(date) + '"]').focus({ preventScroll: true });
+	});
+
+	document.addEventListener("click", (event) => {
+		const path = event.composedPath();
+		if (!pop.hidden && !path.includes(pop) && !path.includes(button) && !(radio && path.includes(radio.closest("label")))) {
+			close(false);
+		}
+	});
+};
+
+for (const input of document.querySelectorAll("[data-date-picker]")) {
+	datePicker(input);
+}
+
 try {
 	const id = sessionStorage.getItem("autosubmit-focus");
 	sessionStorage.removeItem("autosubmit-focus");

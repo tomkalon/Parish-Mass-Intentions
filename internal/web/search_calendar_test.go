@@ -43,7 +43,7 @@ func TestSearchCalendarView(t *testing.T) {
 		`<span class="search-preview-status is-planned">planowana</span>`,
 		`<span class="search-preview-note">pasuje do filtrów</span>`,
 		`<a class="scal-cell has-tip is-match" href="/search?day=2026-11-23&amp;n=0&amp;period=m1&amp;planned=1&amp;schedule=1&amp;skipgreg=1&amp;view=calendar&amp;week=2026-11-23#podglad" aria-label="Poniedziałek 23.11: 2 Msze, pasuje 1">`,
-		`<span class="scal-bars" aria-hidden="true"><span class="scal-bar is-free"></span><span class="scal-bar is-one is-dim"></span></span>`,
+		`<span class="scal-bars" aria-hidden="true"><span class="scal-bar is-free"></span><span class="scal-bar is-one"></span></span>`,
 		`<span class="day-tip-title">Poniedziałek 23.11.</span>`,
 		`<span class="day-tip-summary">2 Msze · 1 intencja · 1 wolna <i>(&#43;1 poza parafią)</i></span>`,
 		`<span class="scal-cell is-none"><span class="scal-num">18</span></span>`,
@@ -54,6 +54,14 @@ func TestSearchCalendarView(t *testing.T) {
 	if strings.Contains(body, `class="search-month"`) {
 		t.Error("the list of days is shown in the calendar view")
 	}
+}
+
+func TestSearchCalendarMarksTodayWithoutMasses(t *testing.T) {
+	h := newTestHandler(t, searchNow)
+	seedSearchData(t, h)
+
+	body := getSearch(t, h, "/search?period=m1&n=0&view=calendar")
+	checkBody(t, body, `<span class="scal-cell is-none is-today"><span class="scal-num">17</span></span>`)
 }
 
 func TestSearchCalendarSelectedDay(t *testing.T) {

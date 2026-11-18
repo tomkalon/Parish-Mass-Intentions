@@ -222,8 +222,8 @@ func TestContinueSeriesRejected(t *testing.T) {
 		},
 		{
 			name:  "series with 30 masses",
-			setup: func(t *testing.T, db *gorm.DB) { seedSeries(t, db, "+ Jan", "2026-10-20 18:00", 30, 0) },
-			day:   "2026-11-20",
+			setup: func(t *testing.T, db *gorm.DB) { seedSeries(t, db, "+ Jan", "2099-10-20 18:00", 30, 0) },
+			day:   "2099-11-20",
 			want:  "Ta seria ma już 30 Mszy.",
 		},
 		{

@@ -12,7 +12,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func newTestDB(t *testing.T) *gorm.DB {
+func newTestDB(t testing.TB) *gorm.DB {
 	t.Helper()
 
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "test.db")), &gorm.Config{})

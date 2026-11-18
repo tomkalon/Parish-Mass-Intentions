@@ -68,6 +68,9 @@ type settingsView struct {
 	BackupLabel  string
 	BackupError  string
 	CanChooseDir bool
+	DailyCopies  string
+	DailyMax     int
+	DailyList    string
 
 	Update  updateView
 	Version string

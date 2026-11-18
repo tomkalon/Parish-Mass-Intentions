@@ -750,3 +750,64 @@ func TestRoutesTrackChanges(t *testing.T) {
 		t.Error("saving an intention did not mark the data as changed")
 	}
 }
+
+func TestSetDailyBackupCopies(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
+
+	if page := getSettings(t, h, "/settings").Body.String(); strings.Contains(page, `action="/settings/backup/days"`) {
+		t.Error("daily copies are offered without a backup folder")
+	}
+
+	folder := t.TempDir()
+	if err := h.backups.SetDir(folder); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"intencje-kopia-2026-10-27.db", "intencje-kopia-2026-10-28.db"} {
+		if err := os.WriteFile(filepath.Join(folder, name), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	page := getSettings(t, h, "/settings").Body.String()
+	for _, want := range []string{
+		`<h3 class="settings-subheading">Kopie dzienne</h3>`,
+		`<input class="input backup-days-input" type="number" id="backup-days" name="days" value="7" min="0" max="90"`,
+		`<p class="hint">Kopie dzienne w folderze: 2 (28.10, 27.10)</p>`,
+		`około minuty po zmianach`,
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("settings page does not contain %q", want)
+		}
+	}
+
+	rec := postForm(t, h.setBackupDays, "/settings/backup/days", url.Values{"week": {"2026-11-02"}, "days": {" 1 "}})
+	if got, want := rec.Header().Get("Location"), "/settings?backup_days=1&week=2026-11-02"; rec.Code != http.StatusSeeOther || got != want {
+		t.Fatalf("response = %d %q, want a redirect to %q", rec.Code, got, want)
+	}
+	if got := h.backups.State().DailyCopies; got != 1 {
+		t.Errorf("daily copies = %d, want 1", got)
+	}
+	page = getSettings(t, h, rec.Header().Get("Location")).Body.String()
+	checkBody(t, page,
+		`<p class="notice" role="status">Zapisano: 1 kopia dzienna.</p>`,
+		`<p class="hint">Kopie dzienne w folderze: 1 (28.10)</p>`,
+	)
+
+	rec = postForm(t, h.setBackupDays, "/settings/backup/days", url.Values{"days": {"0"}})
+	page = getSettings(t, h, rec.Header().Get("Location")).Body.String()
+	checkBody(t, page, `Wyłączono kopie dzienne. Dotychczasowe pliki zostają w folderze kopii.`)
+
+	for _, typed := range []string{"abc", "-1", "91", ""} {
+		rec := postForm(t, h.setBackupDays, "/settings/backup/days", url.Values{"days": {typed}})
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Errorf("days %q: status = %d, want %d", typed, rec.Code, http.StatusUnprocessableEntity)
+		}
+		checkBody(t, rec.Body.String(),
+			`<p>Kopia danych: Liczba kopii dziennych musi być od 0 do 90.</p>`,
+			`name="days" value="`+typed+`"`,
+		)
+	}
+	if got := h.backups.State().DailyCopies; got != 0 {
+		t.Errorf("daily copies = %d after rejected input, want 0", got)
+	}
+}

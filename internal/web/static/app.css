@@ -1696,6 +1696,24 @@ h1 {
 	min-width: 0;
 }
 
+.backup-days-form {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 12px;
+	margin-top: 12px;
+}
+
+.backup-days-label {
+	font-weight: 600;
+}
+
+.backup-days-input {
+	width: 88px;
+	height: 44px;
+	font-variant-numeric: tabular-nums;
+}
+
 .link-button {
 	padding: 0 8px;
 	border: 0;

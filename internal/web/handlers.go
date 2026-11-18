@@ -139,6 +139,7 @@ func RegisterRoutes(router chi.Router, db *gorm.DB, opts Options) {
 	router.Post("/settings/export", h.exportData)
 	router.Post("/settings/import", h.importData)
 	router.Post("/settings/backup/dir", h.setBackupDir)
+	router.Post("/settings/backup/days", h.setBackupDays)
 	router.Post("/backup", h.runBackup)
 	router.Get("/pdf", h.pdf)
 	router.Get("/print", h.printPreview)
@@ -510,6 +511,9 @@ func (h *handler) settingsPage(w http.ResponseWriter, r *http.Request) {
 	if notice := backupDirNotice(query.Get("backup_dir")); notice != "" {
 		view.Notice = notice
 	}
+	if n, err := strconv.Atoi(query.Get("backup_days")); err == nil {
+		view.Notice = backupDaysNotice(n)
+	}
 	view.BackupError = backupErrorMessage(query.Get("backup_error"), view.BackupDir)
 
 	closeURL := settingsURL(view.Week, false) + "#porzadki"
@@ -573,6 +577,9 @@ func (h *handler) settingsView(w http.ResponseWriter, setting settings.Setting, 
 	view.BackupDir = state.Dir
 	view.BackupLabel = backupLabel(state, h.now())
 	view.CanChooseDir = h.chooseDir != nil
+	view.DailyCopies = strconv.Itoa(state.DailyCopies)
+	view.DailyMax = backup.MaxDailyCopies
+	view.DailyList = dailyCopiesLabel(state)
 	view.Update = newUpdateView(h.updater, h.now())
 	view.Version = h.version
 

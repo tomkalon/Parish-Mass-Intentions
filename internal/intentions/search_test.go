@@ -95,7 +95,7 @@ func TestSearch(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Search(%q): %v", query, err)
 		}
-		if got := contents(list); !slices.Equal(got, want) && !(len(got) == 0 && len(want) == 0) {
+		if got := contents(list); !slices.Equal(got, want) {
 			t.Errorf("Search(%q) = %q, want %q", query, got, want)
 		}
 	}

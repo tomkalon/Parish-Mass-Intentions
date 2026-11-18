@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -61,6 +62,7 @@ func loadWithClock(t *testing.T, db *gorm.DB, path string) *Backups {
 	}
 	c := &clock{t: time.Date(2026, 11, 2, 22, 0, 0, 0, intentions.TimeZone)}
 	b.now = c.now
+	b.autoDelay = 0
 
 	return b
 }
@@ -70,8 +72,8 @@ func TestLoadWithoutFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if got := b.State(); got != (State{}) {
-		t.Errorf("state = %+v, want empty", got)
+	if got := b.State(); got != (State{DailyCopies: DefaultDailyCopies}) {
+		t.Errorf("state = %+v, want empty with the default daily copies", got)
 	}
 }
 
@@ -93,8 +95,8 @@ func TestLoadBrokenFileDoesNotBlockStart(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Load: %v", err)
 			}
-			if got := b.State(); got != (State{}) {
-				t.Errorf("state = %+v, want empty", got)
+			if got := b.State(); got != (State{DailyCopies: DefaultDailyCopies}) {
+				t.Errorf("state = %+v, want empty with the default daily copies", got)
 			}
 
 			_, err = os.Stat(path + ".bad")
@@ -213,9 +215,8 @@ func TestRun(t *testing.T) {
 	if err != nil || summary.Intentions != 2 {
 		t.Errorf("backup file: %+v, %v; want both intentions (the file is overwritten)", summary, err)
 	}
-	entries, _ := os.ReadDir(folder)
-	if len(entries) != 1 {
-		t.Errorf("files in the backup folder = %d, want 1", len(entries))
+	if got := fileNames(t, folder); !slices.Equal(got, []string{"intencje-kopia-2026-11-02.db", FileName}) {
+		t.Errorf("files in the backup folder = %q, want the current copy and the copy of the day", got)
 	}
 
 	reloaded, err := Load(db, path)
@@ -332,5 +333,245 @@ func TestTrackChanges(t *testing.T) {
 				t.Errorf("marked as changed = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func fileNames(t *testing.T, dir string) []string {
+	t.Helper()
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, entry := range entries {
+		names = append(names, entry.Name())
+	}
+	slices.Sort(names)
+
+	return names
+}
+
+func backupCount(t *testing.T, path string) int64 {
+	t.Helper()
+
+	summary, err := database.PrepareImport(path)
+	if err != nil {
+		t.Fatalf("reading %s: %v", path, err)
+	}
+	return summary.Intentions
+}
+
+func TestDailyCopiesKeepTheNewestDays(t *testing.T) {
+	db := newTestDB(t)
+	b := loadWithClock(t, db, filepath.Join(t.TempDir(), "kopia.json"))
+	folder := t.TempDir()
+	if err := b.SetDir(folder); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.SetDailyCopies(3); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"intencje-kopia-notatki.db", "intencje-kopia-2026-13-45.db", "inne.txt"} {
+		if err := os.WriteFile(filepath.Join(folder, name), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	day := time.Date(2026, 11, 2, 9, 0, 0, 0, intentions.TimeZone)
+	for i := range 5 {
+		b.now = func() time.Time { return day.AddDate(0, 0, i) }
+		addIntention(t, db, "intencja")
+		if _, err := b.Run(); err != nil {
+			t.Fatalf("Run on day %d: %v", i, err)
+		}
+	}
+
+	want := []string{
+		"inne.txt",
+		"intencje-kopia-2026-11-04.db",
+		"intencje-kopia-2026-11-05.db",
+		"intencje-kopia-2026-11-06.db",
+		"intencje-kopia-2026-13-45.db",
+		"intencje-kopia-notatki.db",
+		FileName,
+	}
+	if got := fileNames(t, folder); !slices.Equal(got, want) {
+		t.Errorf("files = %q, want %q", got, want)
+	}
+	for i, name := range []string{"intencje-kopia-2026-11-04.db", "intencje-kopia-2026-11-05.db", "intencje-kopia-2026-11-06.db", FileName} {
+		if got, want := backupCount(t, filepath.Join(folder, name)), int64(min(3+i, 5)); got != want {
+			t.Errorf("%s has %d intentions, want %d", name, got, want)
+		}
+	}
+
+	days, err := DailyCopies(folder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(days) != 3 || days[0].Format("2006-01-02") != "2026-11-06" || days[2].Format("2006-01-02") != "2026-11-04" {
+		t.Errorf("DailyCopies = %v, want 6, 5 and 4 November", days)
+	}
+}
+
+func TestDailyCopyKeepsTheLastStateOfTheDay(t *testing.T) {
+	db := newTestDB(t)
+	b := loadWithClock(t, db, filepath.Join(t.TempDir(), "kopia.json"))
+	folder := t.TempDir()
+	if err := b.SetDir(folder); err != nil {
+		t.Fatal(err)
+	}
+
+	for range 3 {
+		addIntention(t, db, "intencja")
+		if _, err := b.Run(); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if got := fileNames(t, folder); !slices.Equal(got, []string{"intencje-kopia-2026-11-02.db", FileName}) {
+		t.Errorf("files = %q, want one copy of the day", got)
+	}
+	if got := backupCount(t, filepath.Join(folder, "intencje-kopia-2026-11-02.db")); got != 3 {
+		t.Errorf("copy of the day has %d intentions, want the last state (3)", got)
+	}
+}
+
+func TestNoDailyCopiesWhenSwitchedOff(t *testing.T) {
+	db := newTestDB(t)
+	b := loadWithClock(t, db, filepath.Join(t.TempDir(), "kopia.json"))
+	folder := t.TempDir()
+	if err := b.SetDir(folder); err != nil {
+		t.Fatal(err)
+	}
+	old := filepath.Join(folder, "intencje-kopia-2026-10-01.db")
+	if err := os.WriteFile(old, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.SetDailyCopies(0); err != nil {
+		t.Fatal(err)
+	}
+
+	addIntention(t, db, "intencja")
+	if _, err := b.Run(); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := fileNames(t, folder); !slices.Equal(got, []string{"intencje-kopia-2026-10-01.db", FileName}) {
+		t.Errorf("files = %q, want no new daily copy and the old one kept", got)
+	}
+}
+
+func TestSetDailyCopiesIsSavedAndLimited(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "kopia.json")
+	b, err := Load(nil, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for n, want := range map[int]int{5: 5, 0: 0, -3: 0, 500: MaxDailyCopies} {
+		if err := b.SetDailyCopies(n); err != nil {
+			t.Fatal(err)
+		}
+		reloaded, err := Load(nil, path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := reloaded.State().DailyCopies; got != want {
+			t.Errorf("SetDailyCopies(%d) then Load = %d, want %d", n, got, want)
+		}
+	}
+
+	if err := os.WriteFile(path, []byte(`{"dir": "", "daily_copies": 400}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := Load(nil, path); err != nil || b.State().DailyCopies != MaxDailyCopies {
+		t.Errorf("Load of a too large value = %+v, %v", b.State(), err)
+	}
+	if err := os.WriteFile(path, []byte(`{"dir": ""}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := Load(nil, path); err != nil || b.State().DailyCopies != DefaultDailyCopies {
+		t.Errorf("Load of settings from before daily copies = %+v, %v, want the default", b.State(), err)
+	}
+}
+
+func TestChangesAreBackedUpAutomatically(t *testing.T) {
+	db := newTestDB(t)
+	b := loadWithClock(t, db, filepath.Join(t.TempDir(), "kopia.json"))
+	b.now = time.Now
+	b.autoDelay = 50 * time.Millisecond
+	folder := t.TempDir()
+	if err := b.SetDir(folder); err != nil {
+		t.Fatal(err)
+	}
+
+	addIntention(t, db, "pierwsza")
+	for range 3 {
+		if err := b.MarkChanged(); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	deadline := time.Now().Add(5 * time.Second)
+	for b.Pending() && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if b.Pending() {
+		t.Fatal("changes were not backed up automatically")
+	}
+	if got := backupCount(t, filepath.Join(folder, FileName)); got != 1 {
+		t.Errorf("automatic backup has %d intentions, want 1", got)
+	}
+
+	addIntention(t, db, "druga")
+	if err := b.MarkChanged(); err != nil {
+		t.Fatal(err)
+	}
+	deadline = time.Now().Add(5 * time.Second)
+	for b.Pending() && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := backupCount(t, filepath.Join(folder, FileName)); got != 2 {
+		t.Errorf("second automatic backup has %d intentions, want 2", got)
+	}
+}
+
+func TestNoAutomaticBackupWithoutFolder(t *testing.T) {
+	db := newTestDB(t)
+	b := loadWithClock(t, db, filepath.Join(t.TempDir(), "kopia.json"))
+	b.autoDelay = 10 * time.Millisecond
+
+	if err := b.MarkChanged(); err != nil {
+		t.Fatal(err)
+	}
+
+	b.mu.Lock()
+	timer := b.timer
+	b.mu.Unlock()
+	if timer != nil {
+		t.Error("an automatic backup was planned without a backup folder")
+	}
+}
+
+func TestLoweringDailyCopiesRemovesTheOldest(t *testing.T) {
+	db := newTestDB(t)
+	b := loadWithClock(t, db, filepath.Join(t.TempDir(), "kopia.json"))
+	folder := t.TempDir()
+	if err := b.SetDir(folder); err != nil {
+		t.Fatal(err)
+	}
+	for _, day := range []string{"2026-11-01", "2026-11-02", "2026-11-03", "2026-11-04"} {
+		if err := os.WriteFile(filepath.Join(folder, "intencje-kopia-"+day+".db"), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := b.SetDailyCopies(2); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := fileNames(t, folder); !slices.Equal(got, []string{"intencje-kopia-2026-11-03.db", "intencje-kopia-2026-11-04.db"}) {
+		t.Errorf("files = %q, want the two newest daily copies", got)
 	}
 }

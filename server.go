@@ -44,3 +44,11 @@ func restartProgram() func(string) error {
 }
 
 func waitForPreviousVersion() {}
+
+func logFile(string) string {
+	return ""
+}
+
+func fatal(message string, err error) {
+	log.Fatalf("%s %v", message, err)
+}

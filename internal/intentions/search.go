@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"slices"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -29,6 +30,14 @@ func SearchReady(query string) bool {
 	return utf8.RuneCountInString(Fold(query)) >= MinSearchLength
 }
 
+func foldRune(r rune) rune {
+	r = unicode.ToLower(r)
+	if base, ok := polishBase[r]; ok {
+		return base
+	}
+	return r
+}
+
 func foldRunes(text string) ([]rune, []int) {
 	runes := make([]rune, 0, len(text))
 	offsets := make([]int, 0, len(text))
@@ -43,11 +52,7 @@ func foldRunes(text string) ([]rune, []int) {
 			continue
 		}
 		space = false
-		r = unicode.ToLower(r)
-		if base, ok := polishBase[r]; ok {
-			r = base
-		}
-		runes = append(runes, r)
+		runes = append(runes, foldRune(r))
 		offsets = append(offsets, i)
 	}
 	if n := len(runes); n > 0 && runes[n-1] == ' ' {
@@ -55,6 +60,35 @@ func foldRunes(text string) ([]rune, []int) {
 	}
 
 	return runes, offsets
+}
+
+func foldInto(dst []rune, text string) []rune {
+	space := true
+	for _, r := range text {
+		if unicode.IsSpace(r) {
+			if !space {
+				dst = append(dst, ' ')
+			}
+			space = true
+			continue
+		}
+		space = false
+		dst = append(dst, foldRune(r))
+	}
+	if n := len(dst); n > 0 && dst[n-1] == ' ' {
+		dst = dst[:n-1]
+	}
+
+	return dst
+}
+
+func containsRunes(hay, needle []rune) bool {
+	for i := 0; i+len(needle) <= len(hay); i++ {
+		if equalRunes(hay[i:i+len(needle)], needle) {
+			return true
+		}
+	}
+	return false
 }
 
 func Find(content, query string) [][2]int {
@@ -111,28 +145,65 @@ func globPattern(folded string) string {
 	return pattern.String()
 }
 
-func Search(db *gorm.DB, query string) ([]Intention, error) {
-	folded := Fold(query)
-	if utf8.RuneCountInString(folded) < MinSearchLength {
+type Hit struct {
+	ID     int
+	MassAt time.Time
+}
+
+func Search(db *gorm.DB, query string) ([]Hit, error) {
+	needle := []rune(Fold(query))
+	if len(needle) < MinSearchLength {
 		return nil, nil
 	}
 
-	var candidates []Intention
-	err := db.Where("is_placeholder = ? AND content GLOB ?", false, globPattern(folded)).
-		Find(&candidates).Error
+	rows, err := db.Model(&Intention{}).
+		Select("id", "mass_at", "content").
+		Where("is_placeholder = ? AND content GLOB ?", false, globPattern(string(needle))).
+		Rows()
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = rows.Close() }()
 
-	list := candidates[:0]
-	for _, intention := range candidates {
-		if strings.Contains(Fold(intention.Content), folded) {
-			list = append(list, intention)
+	var hits []Hit
+	var folded []rune
+	for rows.Next() {
+		var hit Hit
+		var content string
+		err := rows.Scan(&hit.ID, &hit.MassAt, &content)
+		if err != nil {
+			return nil, err
+		}
+		folded = foldInto(folded[:0], content)
+		if containsRunes(folded, needle) {
+			hits = append(hits, hit)
 		}
 	}
-	slices.SortFunc(list, func(a, b Intention) int {
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	slices.SortFunc(hits, func(a, b Hit) int {
 		return cmp.Or(a.MassAt.Compare(b.MassAt), cmp.Compare(a.ID, b.ID))
 	})
 
-	return list, nil
+	return hits, nil
+}
+
+func ByIDs(db *gorm.DB, ids []int) (map[int]Intention, error) {
+	result := make(map[int]Intention, len(ids))
+	if len(ids) == 0 {
+		return result, nil
+	}
+
+	var list []Intention
+	err := db.Where("id IN ?", ids).Find(&list).Error
+	if err != nil {
+		return nil, err
+	}
+	for _, intention := range list {
+		result[intention.ID] = intention
+	}
+
+	return result, nil
 }

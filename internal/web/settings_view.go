@@ -60,6 +60,7 @@ type settingsView struct {
 	Saved   bool
 	Notice  string
 	DataDir string
+	LogFile string
 
 	ImportError string
 
@@ -67,6 +68,9 @@ type settingsView struct {
 	BackupLabel  string
 	BackupError  string
 	CanChooseDir bool
+	DailyCopies  string
+	DailyMax     int
+	DailyList    string
 
 	Update  updateView
 	Version string

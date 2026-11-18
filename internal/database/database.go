@@ -3,6 +3,7 @@ package database
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"time"
@@ -24,8 +25,14 @@ var (
 	ErrDamaged     = errors.New("baza danych jest uszkodzona")
 )
 
+var appLogger = logger.New(log.Default(), logger.Config{
+	SlowThreshold:             300 * time.Millisecond,
+	LogLevel:                  logger.Warn,
+	IgnoreRecordNotFoundError: true,
+})
+
 func Open(path string) (*gorm.DB, error) {
-	db, err := gorm.Open(sqlite.Open(dsn(path)), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(dsn(path)), &gorm.Config{Logger: appLogger})
 	if err != nil {
 		return nil, fmt.Errorf("error opening database %s: %w", path, err)
 	}

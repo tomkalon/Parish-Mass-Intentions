@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"go-parafia/internal/backup"
@@ -48,7 +49,7 @@ func (h *handler) exportData(w http.ResponseWriter, r *http.Request) {
 	path, err := h.saveFile(name)
 	if err != nil {
 		log.Printf("error choosing export file: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 	if path == "" {
@@ -59,7 +60,7 @@ func (h *handler) exportData(w http.ResponseWriter, r *http.Request) {
 	err = database.Export(h.db, path)
 	if err != nil {
 		log.Printf("error exporting data to %s: %v", path, err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
@@ -70,7 +71,7 @@ func (h *handler) downloadExport(w http.ResponseWriter, name string) {
 	tmp, err := os.CreateTemp(h.dataDir, "export-*.db")
 	if err != nil {
 		log.Printf("error creating export file: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 	defer removeFile(tmp.Name())
@@ -78,21 +79,21 @@ func (h *handler) downloadExport(w http.ResponseWriter, name string) {
 	err = tmp.Close()
 	if err != nil {
 		log.Printf("error creating export file: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
 	err = database.Export(h.db, tmp.Name())
 	if err != nil {
 		log.Printf("error exporting data: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
 	file, err := os.Open(tmp.Name())
 	if err != nil {
 		log.Printf("error opening export file: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 	defer func() { _ = file.Close() }()
@@ -127,7 +128,7 @@ func (h *handler) importData(w http.ResponseWriter, r *http.Request) {
 	err = saveUpload(upload, path)
 	if err != nil {
 		log.Printf("error saving import file: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
@@ -140,7 +141,7 @@ func (h *handler) importData(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		log.Printf("error preparing import: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
@@ -181,7 +182,7 @@ func (h *handler) confirmImport(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		log.Printf("error importing data: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
@@ -304,7 +305,7 @@ func (h *handler) setBackupDir(w http.ResponseWriter, r *http.Request) {
 		dir, err = h.chooseDir(h.backups.State().Dir)
 		if err != nil {
 			log.Printf("error choosing backup folder: %v", err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			serverError(w)
 			return
 		}
 		if dir == "" {
@@ -323,7 +324,7 @@ func (h *handler) setBackupDir(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		log.Printf("error saving backup folder: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
@@ -332,6 +333,59 @@ func (h *handler) setBackupDir(w http.ResponseWriter, r *http.Request) {
 		state = "off"
 	}
 	http.Redirect(w, r, settingsNoticeURL(week, "backup_dir", state), http.StatusSeeOther)
+}
+
+func (h *handler) setBackupDays(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		http.Error(w, "nieprawidłowe dane formularza", http.StatusBadRequest)
+		return
+	}
+	week := r.PostForm.Get("week")
+	typed := strings.TrimSpace(r.PostForm.Get("days"))
+
+	n, err := strconv.Atoi(typed)
+	if err != nil || n < 0 || n > backup.MaxDailyCopies {
+		h.renderSettingsWith(w, http.StatusUnprocessableEntity, week, func(view *settingsView) {
+			view.BackupError = fmt.Sprintf("Liczba kopii dziennych musi być od 0 do %d.", backup.MaxDailyCopies)
+			view.DailyCopies = typed
+		})
+		return
+	}
+
+	err = h.backups.SetDailyCopies(n)
+	if err != nil {
+		log.Printf("error saving the number of daily backup copies: %v", err)
+		serverError(w)
+		return
+	}
+
+	http.Redirect(w, r, settingsNoticeURL(week, "backup_days", strconv.Itoa(n)), http.StatusSeeOther)
+}
+
+func backupDaysNotice(n int) string {
+	if n == 0 {
+		return "Wyłączono kopie dzienne. Dotychczasowe pliki zostają w folderze kopii."
+	}
+
+	return "Zapisano: " + countOf(n, "kopia dzienna", "kopie dzienne", "kopii dziennych") + "."
+}
+
+func dailyCopiesLabel(state backup.State) string {
+	if state.Dir == "" {
+		return ""
+	}
+	days, err := backup.DailyCopies(state.Dir)
+	if err != nil || len(days) == 0 {
+		return ""
+	}
+
+	labels := make([]string, 0, len(days))
+	for _, day := range days {
+		labels = append(labels, day.Format("2.01"))
+	}
+
+	return strconv.Itoa(len(days)) + " (" + strings.Join(labels, ", ") + ")"
 }
 
 func (h *handler) renderBackupError(w http.ResponseWriter, week, typed, message string) {

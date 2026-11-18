@@ -22,6 +22,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"go-parafia/internal/applog"
 	"go-parafia/internal/backup"
 	"go-parafia/internal/update"
 )
@@ -40,13 +41,17 @@ func prepareDataDir() (string, error) {
 		return "", err
 	}
 
-	logFile, err := os.OpenFile(filepath.Join(dir, "go-parafia.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	_, err = applog.Open(dir)
 	if err != nil {
 		return "", err
 	}
-	log.SetOutput(logFile)
+	shownLogFile = applog.Path(dir)
 
 	return dir, nil
+}
+
+func logFile(dir string) string {
+	return applog.Path(dir)
 }
 
 var window = &desktopWindow{}
@@ -75,38 +80,6 @@ func programPath() string {
 
 func restartProgram() func(string) error {
 	return window.restart
-}
-
-// waitForPreviousVersion lets a freshly installed version wait until the
-// version that installed it has closed, so the single instance lock and the
-// database are free.
-func waitForPreviousVersion() {
-	value := os.Getenv(waitPIDEnv)
-	if value == "" {
-		return
-	}
-	_ = os.Unsetenv(waitPIDEnv)
-
-	pid, err := strconv.Atoi(value)
-	if err != nil {
-		return
-	}
-	previous, err := os.FindProcess(pid)
-	if err != nil {
-		return
-	}
-
-	done := make(chan struct{})
-	go func() {
-		_, _ = previous.Wait()
-		close(done)
-	}()
-
-	select {
-	case <-done:
-	case <-time.After(30 * time.Second):
-		log.Printf("previous version (pid %d) is still running after 30 s", pid)
-	}
 }
 
 func run(router http.Handler, dataDir string, backups *backup.Backups) error {
@@ -155,6 +128,7 @@ func (w *desktopWindow) restart(exe string) error {
 	if err != nil {
 		return err
 	}
+	log.Printf("update: started the new version (pid %d)", cmd.Process.Pid)
 	err = cmd.Process.Release()
 	if err != nil {
 		log.Printf("error releasing the new program process: %v", err)
@@ -162,10 +136,16 @@ func (w *desktopWindow) restart(exe string) error {
 
 	w.updating.Store(true)
 	time.AfterFunc(1500*time.Millisecond, func() {
+		time.AfterFunc(3*time.Second, func() {
+			log.Printf("update: this window did not close, ending the process")
+			terminateSelf()
+		})
+
 		ctx, err := w.context()
 		if err != nil {
-			os.Exit(0)
+			terminateSelf()
 		}
+		log.Printf("update: closing this window")
 		runtime.Quit(ctx)
 	})
 

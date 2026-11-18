@@ -672,7 +672,7 @@ func (h *handler) search(w http.ResponseWriter, r *http.Request) {
 	schedules, err := masses.Load(h.db)
 	if err != nil {
 		log.Printf("error loading schedules: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
@@ -684,15 +684,22 @@ func (h *handler) search(w http.ResponseWriter, r *http.Request) {
 	to := q.end(today)
 
 	if intentions.SearchReady(q.Text) {
-		found, err := intentions.Search(h.db, q.Text)
+		hits, err := intentions.Search(h.db, q.Text)
 		if err != nil {
 			log.Printf("error searching intentions: %v", err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			serverError(w)
+			return
+		}
+		upcoming, past := splitTextHits(hits, now)
+		loaded, err := intentions.ByIDs(h.db, shownTextHits(q.Show, upcoming, past))
+		if err != nil {
+			log.Printf("error loading found intentions: %v", err)
+			serverError(w)
 			return
 		}
 
 		view := newSearchFrame(q, start, to, today)
-		addTextSearch(&view, q, found, now)
+		addTextSearch(&view, q, upcoming, past, loaded)
 		view.Topbar = newTopbarView(setting, h.backups.State(), h.now())
 		view.Topbar.Draft = h.draftNotice()
 		render(w, http.StatusOK, searchTemplate, view)
@@ -711,14 +718,14 @@ func (h *handler) search(w http.ResponseWriter, r *http.Request) {
 	list, err := searchMasses(h.db, start, to, now, plan)
 	if err != nil {
 		log.Printf("error searching masses: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 
 	feasts, err := calendar.FeastsBetween(h.db, start, to)
 	if err != nil {
 		log.Printf("error loading feasts: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		serverError(w)
 		return
 	}
 

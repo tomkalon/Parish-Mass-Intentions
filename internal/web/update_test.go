@@ -224,7 +224,7 @@ func TestInstallUpdate(t *testing.T) {
 		`<li class="is-done" data-step="backup">Kopia danych</li>`,
 		`<li class="is-current" data-step="restart">Ponowne uruchomienie</li>`,
 		`aria-valuenow="100"`,
-		`<p class="update-label" role="status" aria-live="polite">Gotowe. Program za chwilę uruchomi się ponownie.</p>`,
+		`<p class="update-label" role="status" aria-live="polite">Uruchamiam nową wersję… Program antywirusowy (np. Avast) może najpierw sprawdzić nowy plik – to potrwa do minuty. Nie zamykaj tego okna.</p>`,
 		`<div class="update-failed" hidden>`,
 	)
 

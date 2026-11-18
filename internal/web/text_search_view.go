@@ -55,33 +55,54 @@ func textFields(q searchQuery) []hiddenField {
 	return fields
 }
 
-func addTextSearch(view *searchView, q searchQuery, list []intentions.Intention, now time.Time) {
-	view.TextMode = true
-	view.Empty = len(list) == 0
-	view.Total = "Znaleziono " + countOf(len(list), "intencję", "intencje", "intencji")
-	view.Subtotal = "z tekstem „" + q.Text + "” · w całej bazie, także w Mszach, które już były"
-
-	split := len(list)
-	for i, intention := range list {
-		if !intention.MassAt.Before(now) {
+func splitTextHits(hits []intentions.Hit, now time.Time) (upcoming, past []intentions.Hit) {
+	split := len(hits)
+	for i, hit := range hits {
+		if !hit.MassAt.Before(now) {
 			split = i
 			break
 		}
 	}
-	past := slices.Clone(list[:split])
+	past = slices.Clone(hits[:split])
 	slices.Reverse(past)
-	upcoming := list[split:]
+
+	return hits[split:], past
+}
+
+func shownTextHits(show int, upcoming, past []intentions.Hit) []int {
+	ids := make([]int, 0, min(show, len(upcoming)+len(past)))
+	for _, part := range [][]intentions.Hit{upcoming, past} {
+		for _, hit := range part {
+			if len(ids) == show {
+				return ids
+			}
+			ids = append(ids, hit.ID)
+		}
+	}
+
+	return ids
+}
+
+func addTextSearch(view *searchView, q searchQuery, upcoming, past []intentions.Hit, loaded map[int]intentions.Intention) {
+	total := len(upcoming) + len(past)
+	view.TextMode = true
+	view.Empty = total == 0
+	view.Total = "Znaleziono " + countOf(total, "intencję", "intencje", "intencji")
+	view.Subtotal = "z tekstem „" + q.Text + "” · w całej bazie, także w Mszach, które już były"
 
 	left := q.Show
-	add := func(title string, part []intentions.Intention, isPast bool) {
-		if len(part) == 0 {
+	add := func(title string, part []intentions.Hit, isPast bool) {
+		if len(part) == 0 || left == 0 {
 			return
 		}
 		section := textHitSection{Title: title, Count: countOf(len(part), "intencja", "intencje", "intencji"), Past: isPast}
-		for _, intention := range part[:min(len(part), left)] {
-			section.Hits = append(section.Hits, newTextHit(intention, q.Text))
+		shown := part[:min(len(part), left)]
+		left -= len(shown)
+		for _, hit := range shown {
+			if intention, ok := loaded[hit.ID]; ok {
+				section.Hits = append(section.Hits, newTextHit(intention, q.Text))
+			}
 		}
-		left -= len(section.Hits)
 		if len(section.Hits) > 0 {
 			view.HitSections = append(view.HitSections, section)
 		}
@@ -89,7 +110,7 @@ func addTextSearch(view *searchView, q searchQuery, list []intentions.Intention,
 	add("Nadchodzące", upcoming, false)
 	add("Wcześniejsze – Msze, które już były", past, true)
 
-	if rest := len(list) - q.Show; rest > 0 {
+	if rest := total - q.Show; rest > 0 {
 		view.MoreURL = q.url(func(next *searchQuery) {
 			next.Show = min(q.Show+searchPageDays, maxSearchDays)
 		})

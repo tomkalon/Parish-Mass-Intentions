@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 func TestFold(t *testing.T) {
@@ -68,6 +70,34 @@ func TestFind(t *testing.T) {
 	}
 }
 
+func searchContents(t testing.TB, db *gorm.DB, query string) []string {
+	t.Helper()
+
+	hits, err := Search(db, query)
+	if err != nil {
+		t.Fatalf("Search(%q): %v", query, err)
+	}
+	ids := make([]int, 0, len(hits))
+	for _, hit := range hits {
+		ids = append(ids, hit.ID)
+	}
+	loaded, err := ByIDs(db, ids)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var result []string
+	for _, hit := range hits {
+		intention, ok := loaded[hit.ID]
+		if !ok || !intention.MassAt.Equal(hit.MassAt) {
+			t.Fatalf("hit %+v does not match the stored intention %+v", hit, intention)
+		}
+		result = append(result, intention.Content)
+	}
+
+	return result
+}
+
 func TestSearch(t *testing.T) {
 	db := newTestDB(t)
 	createIntention(t, db, "2026-11-23 18:00", "Za + Łukasza Żółtowskiego")
@@ -91,11 +121,7 @@ func TestSearch(t *testing.T) {
 	}
 
 	for query, want := range tests {
-		list, err := Search(db, query)
-		if err != nil {
-			t.Fatalf("Search(%q): %v", query, err)
-		}
-		if got := contents(list); !slices.Equal(got, want) {
+		if got := searchContents(t, db, query); !slices.Equal(got, want) {
 			t.Errorf("Search(%q) = %q, want %q", query, got, want)
 		}
 	}
@@ -109,13 +135,39 @@ func TestSearchPrefilterKeepsEveryMatch(t *testing.T) {
 	}
 
 	for _, word := range words {
-		list, err := Search(db, Fold(word))
-		if err != nil {
-			t.Fatal(err)
+		if got := searchContents(t, db, Fold(word)); !slices.Contains(got, "Za "+word) {
+			t.Errorf("Search(%q) = %q, missing %q", Fold(word), got, "Za "+word)
 		}
-		if !slices.Contains(contents(list), "Za "+word) {
-			t.Errorf("Search(%q) = %q, missing %q", Fold(word), contents(list), "Za "+word)
-		}
+	}
+}
+
+func TestSearchOrdersByMassThenID(t *testing.T) {
+	db := newTestDB(t)
+	createIntention(t, db, "2026-11-23 18:00", "Za + Jana (druga)")
+	createIntention(t, db, "2026-11-20 06:30", "Za + Jana (wcześniej)")
+	createIntention(t, db, "2026-11-23 18:00", "Za + Jana (trzecia)")
+
+	got := searchContents(t, db, "jana")
+	want := []string{"Za + Jana (wcześniej)", "Za + Jana (druga)", "Za + Jana (trzecia)"}
+	if !slices.Equal(got, want) {
+		t.Errorf("order = %q, want %q", got, want)
+	}
+}
+
+func TestByIDs(t *testing.T) {
+	db := newTestDB(t)
+	createIntention(t, db, "2026-11-23 18:00", "Za + Jana")
+	createIntention(t, db, "2026-11-24 18:00", "Za + Annę")
+
+	loaded, err := ByIDs(db, []int{2, 99})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded) != 1 || loaded[2].Content != "Za + Annę" {
+		t.Errorf("ByIDs = %+v, want only intention 2", loaded)
+	}
+	if loaded, err := ByIDs(db, nil); err != nil || len(loaded) != 0 {
+		t.Errorf("ByIDs(nil) = %v, %v", loaded, err)
 	}
 }
 

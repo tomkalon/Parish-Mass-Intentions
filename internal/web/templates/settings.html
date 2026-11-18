@@ -174,7 +174,7 @@
 
 					<div class="settings-sub">
 						<h3 class="settings-subheading">Automatyczna kopia (np. Google Drive, OneDrive)</h3>
-						<p class="hint">Przycisk „Wykonaj kopię danych” na górnym pasku i zamknięcie programu zapisują plik <code class="filename">intencje-kopia.db</code> w wybranym folderze (za każdym razem nadpisywany). Wybierz folder synchronizowany z chmurą, a kopia trafi też do chmury.</p>
+						<p class="hint">Program sam zapisuje plik <code class="filename">intencje-kopia.db</code> w wybranym folderze: około minuty po zmianach, przy zamknięciu programu i po kliknięciu „Wykonaj kopię danych” na górnym pasku. Wybierz folder synchronizowany z chmurą, a kopia trafi też do chmury.</p>
 						<p class="backup-dir">Folder: {{if .BackupDir}}<code class="path">{{.BackupDir}}</code> · {{.BackupLabel}}{{else}}nie wybrano{{end}}</p>
 						<div class="settings-section-actions">
 							{{- if .CanChooseDir}}
@@ -200,6 +200,22 @@
 						</div>
 					</div>
 
+					{{- if .BackupDir}}
+					<div class="settings-sub">
+						<h3 class="settings-subheading">Kopie dzienne</h3>
+						<p class="hint" id="backup-days-hint">Oprócz bieżącej kopii program trzyma jedną kopię z każdego dnia pracy (pliki <code class="filename">intencje-kopia-RRRR-MM-DD.db</code>) i usuwa najstarsze ponad podaną liczbę. 0 – bez kopii dziennych. Aby wrócić do stanu z wybranego dnia, użyj „Importuj dane…” i wskaż jego plik w folderze kopii.</p>
+						<form class="backup-days-form" method="post" action="/settings/backup/days">
+							<input type="hidden" name="week" value="{{.Week}}">
+							<label class="backup-days-label" for="backup-days">Liczba kopii dziennych</label>
+							<input class="input backup-days-input" type="number" id="backup-days" name="days" value="{{.DailyCopies}}" min="0" max="{{.DailyMax}}" step="1" inputmode="numeric" required aria-describedby="backup-days-hint">
+							<button class="button" type="submit">Zapisz</button>
+						</form>
+						{{- with .DailyList}}
+						<p class="hint">Kopie dzienne w folderze: {{.}}</p>
+						{{- end}}
+					</div>
+					{{- end}}
+
 					<div class="settings-sub">
 						<h3 class="settings-subheading">Eksport i import</h3>
 						<p class="hint">Eksport zapisuje w jednym pliku wszystkie dane programu. Import zastępuje nimi obecne dane – przed zamianą program zapyta o potwierdzenie i zachowa kopię obecnych danych (plik .bak).</p>
@@ -216,6 +232,9 @@
 						</div>
 						{{- with .DataDir}}
 						<p class="hint">Folder danych (tu są kopie .bak sprzed importu i aktualizacji): <code class="path">{{.}}</code></p>
+						{{- end}}
+						{{- with .LogFile}}
+						<p class="hint">Dziennik błędów programu: <code class="path">{{.}}</code></p>
 						{{- end}}
 					</div>
 				</section>

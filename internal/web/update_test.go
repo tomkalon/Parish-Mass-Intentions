@@ -305,3 +305,53 @@ func TestProgressLabels(t *testing.T) {
 		}
 	}
 }
+
+func TestInstallUpdateStopsWhenBackupFails(t *testing.T) {
+	h := newTestHandler(t, updateNow)
+	restarted := make(chan string, 1)
+	h.updater = installableUpdater(t, fakeRelease(t, "v1.1.0", []byte("MZ nowy program")), restarted)
+	h.dataDir = filepath.Join(t.TempDir(), "brak-folderu")
+	postUpdate(t, h, "/update/check", url.Values{})
+
+	rec := postUpdate(t, h, "/update/install", url.Values{"version": {"1.1.0"}})
+	if got := rec.Header().Get("Location"); got != "/update" {
+		t.Fatalf("Location = %q, want /update", got)
+	}
+
+	p := waitForStage(t, h.updater, update.StageError)
+	if p.Err != "Nie udało się zapisać kopii danych przed aktualizacją, więc aktualizacja została przerwana." {
+		t.Errorf("error = %q", p.Err)
+	}
+	data, err := os.ReadFile(h.updater.ExePath)
+	if err != nil || string(data) != "MZ 1.0.0" {
+		t.Errorf("program changed although the backup failed: %q, %v", data, err)
+	}
+	if len(restarted) != 0 {
+		t.Error("the program was restarted although the backup failed")
+	}
+}
+
+func TestSettingsLayout(t *testing.T) {
+	h := newTestHandler(t, updateNow)
+	h.version = "1.0.2"
+
+	body := getSettings(t, h, "/settings?week=2026-11-23").Body.String()
+
+	checkBody(t, body,
+		`<main class="settings settings-page">`,
+		`<nav class="settings-nav" aria-label="Sekcje ustawień">`,
+		`<p class="app-credit">Go Parafia 1.0.2 · autor: Tomasz Kaliński, Rzezawa</p>`,
+	)
+	for _, id := range []string{"parafia", "wplaty", "swieta", "porzadki", "kopia", "aktualizacje"} {
+		checkBody(t, body, `<li><a href="#`+id+`">`, `id="`+id+`"`)
+	}
+	if got := strings.Count(body, `<section class="settings-section`); got != 6 {
+		t.Errorf("sections = %d, want 6 cards", got)
+	}
+	if got := strings.Count(body, `<header class="settings-section-head">`); got != 6 {
+		t.Errorf("section headers = %d, want one per card", got)
+	}
+	if strings.Contains(body, "<legend>") {
+		t.Error("settings still use fieldset legends")
+	}
+}

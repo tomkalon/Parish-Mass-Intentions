@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -427,5 +428,40 @@ func TestMessage(t *testing.T) {
 	}
 	if got := Message(os.ErrPermission); got != "Nie udało się zainstalować aktualizacji. Sprawdź połączenie z internetem i spróbuj ponownie – program działa dalej w obecnej wersji." {
 		t.Errorf("generic message = %q", got)
+	}
+}
+
+func TestInstallDownloadServerError(t *testing.T) {
+	gh := newRelease()
+	srv := gh.server(t)
+	r := &restarts{}
+	u := newTestUpdater(t, gh, r)
+	u.API = srv.URL
+	_, err := u.Check(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.mu.Lock()
+	u.status.Latest.exeURL = srv.URL + "/brak"
+	u.mu.Unlock()
+
+	err = u.Install(context.Background(), "1.1.0")
+	if err == nil || !strings.Contains(err.Error(), "404") {
+		t.Fatalf("Install = %v, want a 404 error", err)
+	}
+	if got := readFile(t, u.ExePath); got != "MZ stara wersja" || exists(u.ExePath+".new") || len(r.calls) > 0 {
+		t.Errorf("failed download changed files or restarted: %q", got)
+	}
+	if p := u.Progress(); p.Stage != StageError || p.Active() {
+		t.Errorf("progress = %+v, want an error", p)
+	}
+}
+
+func TestSetError(t *testing.T) {
+	u := New("1.0.0", "", nil)
+	u.SetError("Coś poszło nie tak.")
+
+	if got := u.Status().Err; got != "Coś poszło nie tak." {
+		t.Errorf("Err = %q", got)
 	}
 }

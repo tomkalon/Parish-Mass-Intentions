@@ -44,7 +44,8 @@ type formView struct {
 	Restored   string
 	OtherDraft *draftNotice
 
-	dayIndex int
+	dayIndex    int
+	placeholder bool
 }
 
 func (f formView) Title() string {
@@ -105,6 +106,14 @@ func (f formView) Action() string {
 	}
 
 	return "/intentions"
+}
+
+func (f formView) ReceiptURL() string {
+	if f.EditID == 0 || f.placeholder {
+		return ""
+	}
+
+	return receiptURL(f.EditID)
 }
 
 func (f formView) DeleteURL() string {

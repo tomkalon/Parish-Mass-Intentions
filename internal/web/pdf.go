@@ -92,6 +92,7 @@ type pdfRule struct {
 	X1, X2, Y, Width float64
 	Y2               float64
 	Dotted           bool
+	Dashed           bool
 }
 
 type pdfOptions struct {
@@ -175,9 +176,12 @@ func drawPage(pdf *gopdf.GoPdf, page pdfPage) error {
 		}
 	}
 	for _, rule := range page.Rules {
-		if rule.Dotted {
+		switch {
+		case rule.Dotted:
 			pdf.SetCustomLineType([]float64{rule.Width, 2.2 * rule.Width}, 0)
-		} else {
+		case rule.Dashed:
+			pdf.SetCustomLineType([]float64{4, 3}, 0)
+		default:
 			pdf.SetLineType("solid")
 		}
 		pdf.SetLineWidth(rule.Width)

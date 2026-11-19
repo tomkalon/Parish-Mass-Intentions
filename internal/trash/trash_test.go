@@ -359,11 +359,17 @@ func TestListNewestFirst(t *testing.T) {
 		t.Fatalf("List: %v", err)
 	}
 	var got []string
+	var gotIDs []int64
 	for _, b := range batches {
 		got = append(got, b.Intentions[0].Content)
+		gotIDs = append(gotIDs, b.ID)
 	}
 	if want := []string{"trzecia", "druga", "pierwsza"}; !slices.Equal(got, want) {
 		t.Errorf("order = %q, want %q", got, want)
+	}
+	slices.Reverse(ids)
+	if !slices.Equal(gotIDs, ids) {
+		t.Errorf("batch ids = %v, want %v", gotIDs, ids)
 	}
 }
 

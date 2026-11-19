@@ -27,6 +27,7 @@
 					<li><a href="#wplaty">Wpłaty</a></li>
 					<li><a href="#swieta">Święta z GCatholic</a></li>
 					<li><a href="#porzadki">Porządki Mszy</a></li>
+					<li><a href="#kosz">Kosz</a></li>
 					<li><a href="#kopia">Kopia danych</a></li>
 					<li><a href="#aktualizacje">Aktualizacje</a></li>
 				</ul>
@@ -163,6 +164,32 @@
 					<div class="settings-section-actions">
 						<a class="button" href="{{.NewScheduleURL}}">+ Dodaj porządek</a>
 						<a class="link-action is-danger settings-actions-end" href="{{.RestoreURL}}">Przywróć domyślne</a>
+					</div>
+				</section>
+
+				<section class="settings-section trash" id="kosz" aria-labelledby="trash-title">
+					<header class="settings-section-head">
+						<h2 class="settings-heading" id="trash-title">Kosz</h2>
+						<p class="hint">Usunięte intencje i wyczyszczone tygodnie. Każdą pozycję można przywrócić przez {{.TrashDays}} dni od usunięcia, potem program usuwa ją na stałe.</p>
+					</header>
+					<div class="settings-list">
+						{{- range .Trash}}
+						<form class="trash-row" method="post" action="{{.Action}}">
+							<div>
+								<p class="trash-title">{{.Title}}</p>
+								{{- range .Items}}
+								<p class="trash-item">{{.}}</p>
+								{{- end}}
+								{{- if .More}}
+								<p class="trash-item">i {{.More}} więcej</p>
+								{{- end}}
+								<p class="trash-when">usunięto {{.DeletedAt}}</p>
+							</div>
+							<button class="link-action" type="submit">Przywróć</button>
+						</form>
+						{{- else}}
+						<p class="empty">Kosz jest pusty.</p>
+						{{- end}}
 					</div>
 				</section>
 

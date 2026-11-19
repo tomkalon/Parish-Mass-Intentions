@@ -365,6 +365,20 @@ h1 {
 	text-underline-offset: 3px;
 }
 
+.undo-bar {
+	border-left-color: var(--ink-2);
+	background: var(--surface);
+}
+
+.undo-bar span {
+	flex: 1 1 260px;
+}
+
+.undo-bar .button {
+	min-height: 32px;
+	padding-block: 0;
+}
+
 .schedule-load {
 	flex-wrap: wrap;
 	gap: 8px 10px;
@@ -1647,6 +1661,37 @@ h1 {
 	margin: 2px 0 0;
 	color: var(--muted);
 	font-size: 14px;
+}
+
+.trash-row {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 10px 0;
+	border-top: 1px solid var(--line);
+}
+
+.trash-title {
+	margin: 0;
+	font-size: 16px;
+	font-weight: 600;
+}
+
+.trash-item {
+	margin: 2px 0 0;
+	color: var(--ink-2);
+	font-size: 14px;
+}
+
+.trash-when {
+	margin: 4px 0 0;
+	color: var(--muted);
+	font-size: 13px;
+}
+
+.trash-row .link-action {
+	flex: none;
 }
 
 .schedule-actions {

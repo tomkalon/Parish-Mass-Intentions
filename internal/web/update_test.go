@@ -342,13 +342,13 @@ func TestSettingsLayout(t *testing.T) {
 		`<nav class="settings-nav" aria-label="Sekcje ustawień">`,
 		`<p class="app-credit">Go Parafia 1.0.2 · autor: Tomasz Kaliński, Rzezawa</p>`,
 	)
-	for _, id := range []string{"parafia", "wplaty", "swieta", "porzadki", "kopia", "aktualizacje"} {
+	for _, id := range []string{"parafia", "wplaty", "swieta", "porzadki", "kosz", "kopia", "aktualizacje"} {
 		checkBody(t, body, `<li><a href="#`+id+`">`, `id="`+id+`"`)
 	}
-	if got := strings.Count(body, `<section class="settings-section`); got != 6 {
-		t.Errorf("sections = %d, want 6 cards", got)
+	if got := strings.Count(body, `<section class="settings-section`); got != 7 {
+		t.Errorf("sections = %d, want 7 cards", got)
 	}
-	if got := strings.Count(body, `<header class="settings-section-head">`); got != 6 {
+	if got := strings.Count(body, `<header class="settings-section-head">`); got != 7 {
 		t.Errorf("section headers = %d, want one per card", got)
 	}
 	if strings.Contains(body, "<legend>") {

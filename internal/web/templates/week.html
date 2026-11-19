@@ -123,6 +123,14 @@
 			{{- end}}
 		</div>
 
+		{{- with .Undo}}
+		<form class="week-notice undo-bar" method="post" action="{{.Action}}" role="status">
+			<span>{{.Text}}</span>
+			<button class="button" type="submit" autofocus>Cofnij</button>
+			<a href="/settings#kosz">Kosz</a>
+		</form>
+		{{- end}}
+
 		{{- with .EmptyMasses}}
 		<p class="week-notice" role="status"><span>{{.Text}}</span> <a href="{{.URL}}">Pokaż</a></p>
 		{{- end}}
@@ -246,6 +254,7 @@
 			{{- else}}
 			<p class="dialog-content">{{.Content}}</p>
 			{{- end}}
+			<p class="hint">Intencja trafi do kosza – przez {{$.TrashDays}} dni można ją przywrócić.</p>
 			<form class="dialog-actions" method="post" action="{{.Action}}">
 				<button class="button button-danger" type="submit" autofocus>Usuń</button>
 				<a class="button" href="{{.CloseURL}}" data-close>Anuluj</a>
@@ -280,7 +289,7 @@
 		<div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dialog-title" aria-describedby="dialog-content">
 			<h2 class="dialog-title" id="dialog-title">Wyczyścić tydzień?</h2>
 			<p class="dialog-when">{{$.Range}}</p>
-			<p class="dialog-content" id="dialog-content">Do usunięcia: {{.Count}}{{if .Placeholders}} (w tym {{.Placeholders}} do uzupełnienia){{end}}. Tej operacji nie można cofnąć.</p>
+			<p class="dialog-content" id="dialog-content">Do usunięcia: {{.Count}}{{if .Placeholders}} (w tym {{.Placeholders}} do uzupełnienia){{end}}. Intencje trafią do kosza – przez {{$.TrashDays}} dni można je przywrócić.</p>
 			<form class="dialog-actions" method="post" action="/clear">
 				<input type="hidden" name="week" value="{{$.Week}}">
 				<button class="button button-danger" type="submit">Wyczyść tydzień</button>

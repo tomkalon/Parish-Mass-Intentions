@@ -75,6 +75,8 @@ type settingsView struct {
 	Update  updateView
 	Version string
 
+	Trash []trashRow
+
 	Schedules      []scheduleItem
 	NewScheduleURL string
 	RestoreURL     string

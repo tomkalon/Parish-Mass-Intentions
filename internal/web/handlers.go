@@ -31,6 +31,7 @@ import (
 	"go-parafia/internal/intentions"
 	"go-parafia/internal/masses"
 	"go-parafia/internal/settings"
+	"go-parafia/internal/trash"
 	"go-parafia/internal/update"
 )
 
@@ -114,6 +115,7 @@ func RegisterRoutes(router chi.Router, db *gorm.DB, opts Options) {
 		r.Post("/intentions/{id}/delete", h.delete)
 		r.Post("/slots", h.createSlots)
 		r.Post("/clear", h.clearWeek)
+		r.Post("/trash/{batch}/restore", h.restoreTrash)
 		r.Post("/series/{id}/stop", h.stopSeries)
 		r.Post("/days/{date}", h.saveFeast)
 		r.Post("/feasts/import", h.importFeasts)
@@ -288,6 +290,7 @@ func (h *handler) week(w http.ResponseWriter, r *http.Request) {
 	}
 
 	state.saved, _ = strconv.Atoi(query.Get("saved"))
+	state.undo = h.undoNotice(query.Get("deleted"))
 	state.unpaid = query.Get("unpaid") == "1"
 
 	h.renderWeek(w, http.StatusOK, start, state)
@@ -479,8 +482,14 @@ func (h *handler) delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var batch int64
 	err := h.db.Transaction(func(tx *gorm.DB) error {
-		err := tx.Delete(&intention).Error
+		var err error
+		batch, err = trash.Move(tx, []intentions.Intention{intention}, time.Time{}, h.now())
+		if err != nil {
+			return err
+		}
+		err = tx.Delete(&intention).Error
 		if err != nil {
 			return err
 		}
@@ -497,8 +506,7 @@ func (h *handler) delete(w http.ResponseWriter, r *http.Request) {
 		log.Printf("error removing draft of deleted intention %d: %v", intention.ID, err)
 	}
 
-	week := intentions.WeekStart(intention.MassAt).Format(intentions.DateLayout)
-	http.Redirect(w, r, "/?week="+week, http.StatusSeeOther)
+	http.Redirect(w, r, deletedURL(intentions.WeekStart(intention.MassAt), batch), http.StatusSeeOther)
 }
 
 func (h *handler) settingsPage(w http.ResponseWriter, r *http.Request) {
@@ -568,6 +576,8 @@ func (h *handler) settingsPage(w http.ResponseWriter, r *http.Request) {
 		}
 	case query.Get("import") == "1":
 		h.importDialog(&view, settingsURL(view.Week, false))
+	case query.Get("trash") == "1":
+		view.openTrash(query.Get("restore"))
 	}
 
 	render(w, http.StatusOK, settingsTemplate, view)
@@ -583,6 +593,13 @@ func (h *handler) settingsView(w http.ResponseWriter, setting settings.Setting, 
 
 	view := newSettingsView(setting, schedules, week)
 	view.Topbar = h.topbar()
+
+	batches, err := trash.List(h.db, h.now())
+	if err != nil {
+		log.Printf("error loading the trash: %v", err)
+	}
+	view.Trash = newTrashRows(batches, h.now(), view.Week)
+	view.TrashURL = settingsTrashURL(view.Week, 0)
 	view.DataDir = h.dataDir
 	view.LogFile = h.logFile
 
@@ -889,8 +906,13 @@ func (h *handler) clearWeek(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var batch int64
 	err = h.db.Transaction(func(tx *gorm.DB) error {
 		list, err := intentions.ForWeek(tx, start)
+		if err != nil {
+			return err
+		}
+		batch, err = trash.Move(tx, list, start, h.now())
 		if err != nil {
 			return err
 		}
@@ -911,7 +933,7 @@ func (h *handler) clearWeek(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/?week="+start.Format(intentions.DateLayout), http.StatusSeeOther)
+	http.Redirect(w, r, deletedURL(start, batch), http.StatusSeeOther)
 }
 
 func postedWeekStart(r *http.Request) (time.Time, error) {
@@ -1242,6 +1264,7 @@ type weekState struct {
 	saved        int
 	unpaid       bool
 	importError  string
+	undo         *undoView
 }
 
 func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time, state weekState) {
@@ -1381,6 +1404,7 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 		view.Gregorian = &g
 	}
 	view.ImportError = state.importError
+	view.Undo = state.undo
 	markSaved(view.Days, state.saved)
 
 	render(w, status, weekTemplate, view)

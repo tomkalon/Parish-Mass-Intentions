@@ -18,6 +18,7 @@ import (
 	"go-parafia/internal/masses"
 	"go-parafia/internal/safefile"
 	"go-parafia/internal/settings"
+	"go-parafia/internal/trash"
 )
 
 var (
@@ -68,7 +69,7 @@ func Check(db *gorm.DB) error {
 }
 
 func Migrate(db *gorm.DB) error {
-	err := db.AutoMigrate(&intentions.Intention{}, &settings.Setting{}, &calendar.Day{}, &gregorian.Series{})
+	err := db.AutoMigrate(&intentions.Intention{}, &settings.Setting{}, &calendar.Day{}, &gregorian.Series{}, &trash.Entry{})
 	if err != nil {
 		return err
 	}

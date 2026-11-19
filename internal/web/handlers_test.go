@@ -30,6 +30,7 @@ import (
 	"go-parafia/internal/intentions"
 	"go-parafia/internal/masses"
 	"go-parafia/internal/settings"
+	"go-parafia/internal/trash"
 	"go-parafia/internal/update"
 )
 
@@ -46,7 +47,7 @@ func newTestHandler(t *testing.T, now time.Time) *handler {
 		t.Fatalf("opening test database: %v", err)
 	}
 
-	err = db.AutoMigrate(&intentions.Intention{}, &settings.Setting{}, &calendar.Day{}, &gregorian.Series{})
+	err = db.AutoMigrate(&intentions.Intention{}, &settings.Setting{}, &calendar.Day{}, &gregorian.Series{}, &trash.Entry{})
 	if err != nil {
 		t.Fatalf("migrating test database: %v", err)
 	}
@@ -773,8 +774,8 @@ func TestDeleteIntention(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if got, want := rec.Header().Get("Location"), "/?week=2026-11-09"; got != want {
-		t.Errorf("Location = %q, want %q", got, want)
+	if got, want := rec.Header().Get("Location"), "/?week=2026-11-09&deleted="; !strings.HasPrefix(got, want) {
+		t.Errorf("Location = %q, want it to start with %q", got, want)
 	}
 
 	var left []intentions.Intention
@@ -1292,7 +1293,7 @@ func TestWeekWithClearDialog(t *testing.T) {
 		`<main inert>`,
 		`<h2 class="dialog-title" id="dialog-title">Wyczyścić tydzień?</h2>`,
 		`<p class="dialog-when">2.11.2026 r. – 8.11.2026 r.</p>`,
-		`Do usunięcia: 3 intencje (w tym 1 do uzupełnienia). Tej operacji nie można cofnąć.`,
+		`Do usunięcia: 3 intencje (w tym 1 do uzupełnienia). Intencje trafią do kosza – przez 30 dni można je przywrócić.`,
 		`<form class="dialog-actions" method="post" action="/clear">`,
 		`<input type="hidden" name="week" value="2026-11-02">`,
 		`<a class="button" href="/?week=2026-11-02" data-close autofocus>Anuluj</a>`,
@@ -1432,7 +1433,7 @@ func TestClearWeek(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
 	}
-	if got, want := rec.Header().Get("Location"), "/?week=2026-11-02"; got != want {
+	if got, want := rec.Header().Get("Location"), "/?week=2026-11-02&deleted=1793264400000"; got != want {
 		t.Errorf("Location = %q, want %q", got, want)
 	}
 

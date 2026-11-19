@@ -141,3 +141,13 @@ func InRange(db *gorm.DB, from, to time.Time, planned *Schedule) ([]Mass, error)
 
 	return result, nil
 }
+
+func LoadedSchedule(db *gorm.DB, start time.Time) (int, error) {
+	var rows []loadedWeek
+	err := db.Where("week_start = ?", weekKey(start)).Limit(1).Find(&rows).Error
+	if err != nil || len(rows) == 0 {
+		return 0, err
+	}
+
+	return rows[0].ScheduleID, nil
+}

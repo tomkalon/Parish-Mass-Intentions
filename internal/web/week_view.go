@@ -10,6 +10,7 @@ import (
 )
 
 type weekView struct {
+	Undo      *undoView
 	Start     time.Time
 	Range     string
 	Days      []dayView

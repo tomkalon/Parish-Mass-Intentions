@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="pl">
+<head>
+	<meta charset="utf-8">
+	<title>{{.Title}} – Go Parafia</title>
+	<link rel="icon" href="/static/logo.svg" type="image/svg+xml">
+	<link rel="stylesheet" href="/static/app.css">
+	<script src="/static/app.js" defer></script>
+</head>
+<body class="print-page">
+	<nav class="toolbar" aria-label="{{.Title}}">
+		<a class="button" href="{{.BackURL}}" data-close>← {{.BackLabel}}</a>
+		<span class="print-note">{{.Note}}</span>
+		{{- if .Checks}}
+		<form class="print-options" method="get" action="{{.Action}}">
+			{{- range .Hidden}}
+			<input type="hidden" name="{{.Name}}" value="{{.Value}}">
+			{{- end}}
+			{{- range .Checks}}
+			<label class="checkbox"><input type="checkbox" name="{{.Name}}" value="1"{{if .Checked}} checked{{end}}{{if .Disabled}} disabled{{end}} data-autosubmit> {{.Label}}</label>
+			{{- end}}
+			<noscript><button class="button" type="submit">Odśwież</button></noscript>
+		</form>
+		{{- end}}
+		{{- with .Save}}
+		<form class="print-save" method="post" action="{{.Action}}">
+			{{- range .Hidden}}
+			<input type="hidden" name="{{.Name}}" value="{{.Value}}">
+			{{- end}}
+			<button class="button button-primary" type="submit">Zapisz plik PDF</button>
+		</form>
+		{{- end}}
+	</nav>
+	{{- with .Message}}
+	<p class="print-message" role="status">{{.}}</p>
+	{{- end}}
+	<iframe class="print-preview" src="{{.PDFURL}}" title="Podgląd PDF: {{.Title}}"></iframe>
+</body>
+</html>

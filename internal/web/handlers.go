@@ -142,6 +142,8 @@ func RegisterRoutes(router chi.Router, db *gorm.DB, opts Options) {
 	router.Post("/settings/backup/days", h.setBackupDays)
 	router.Post("/backup", h.runBackup)
 	router.Get("/pdf", h.pdf)
+	router.Get("/register", h.registerPage)
+	router.Get("/register.pdf", h.registerPDF)
 	router.Get("/print", h.printPreview)
 	router.Handle("/static/*", http.FileServerFS(staticFS))
 }
@@ -228,6 +230,10 @@ func (h *handler) week(w http.ResponseWriter, r *http.Request) {
 		f.IsHidden = intention.IsHidden
 		f.Amount = intention.Amount.FormValue()
 		f.SeriesID = intention.SeriesID
+		f.AcceptedOn = intention.AcceptedOn
+		if intention.IsPlaceholder {
+			f.AcceptedOn = h.today()
+		}
 		state.form = &f
 	case query.Get("new") == "1":
 		f := newFormView(start, query.Get("day"), query.Get("time"))
@@ -282,6 +288,10 @@ func (h *handler) week(w http.ResponseWriter, r *http.Request) {
 	state.unpaid = query.Get("unpaid") == "1"
 
 	h.renderWeek(w, http.StatusOK, start, state)
+}
+
+func (h *handler) today() string {
+	return h.now().In(intentions.TimeZone).Format(intentions.DateLayout)
 }
 
 func (h *handler) weekStart(query url.Values) (time.Time, error) {
@@ -1014,6 +1024,7 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 	amountText := r.PostForm.Get("amount")
 	amount, amountErr := intentions.ParseGrosze(amountText)
 	copying := r.PostForm.Get("copy") == "1"
+	acceptedOn := strings.TrimSpace(r.PostForm.Get("accepted"))
 
 	seriesID := intention.SeriesID
 	if intention.ID == 0 {
@@ -1055,6 +1066,9 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 		if step != 1 {
 			content = summary.Series.Content
 			amount, amountErr = 0, nil
+			if len(summary.Masses) > 0 && summary.Masses[0].AcceptedOn != "" {
+				acceptedOn = summary.Masses[0].AcceptedOn
+			}
 		}
 		if other := summary.MassOn(day); other != nil && other.ID != intention.ID {
 			seriesErr = "Ta seria ma już Mszę w tym dniu."
@@ -1071,6 +1085,11 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 		amount = 0
 	}
 
+	today := h.today()
+	if acceptedOn == "" && (intention.ID == 0 || intention.IsPlaceholder) {
+		acceptedOn = today
+	}
+
 	input := intentions.Input{
 		MassAt:          day + " " + massTime,
 		Content:         strings.TrimSpace(content),
@@ -1079,6 +1098,7 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 		IsDeceased:      deceased,
 		IsHidden:        hidden,
 		Amount:          amount,
+		AcceptedOn:      acceptedOn,
 	}
 
 	err = h.validate.Struct(input)
@@ -1090,6 +1110,9 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 	}
 
 	errs := formErrors(day, massTime, messages, amountErr)
+	if _, bad := errs["accepted"]; !bad && acceptedOn > today {
+		errs["accepted"] = "Data przyjęcia nie może być późniejsza niż dzisiaj."
+	}
 	if seriesErr != "" {
 		errs["series"] = seriesErr
 	}
@@ -1106,6 +1129,7 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 		form.IsDeceased = deceased
 		form.IsHidden = hidden
 		form.Amount = amountText
+		form.AcceptedOn = acceptedOn
 		form.Errors = errs
 		form.EditID = intention.ID
 		form.SeriesID = seriesID
@@ -1119,6 +1143,7 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 
 	newSeries := intention.ID == 0 && seriesID == 0 && isGregorian && !copying
 	rename := seriesID > 0 && step == 1 && input.Content != summary.Series.Content
+	syncAccepted := seriesID > 0 && step == 1 && input.AcceptedOn != "" && input.AcceptedOn != intention.AcceptedOn
 
 	err = h.db.Transaction(func(tx *gorm.DB) error {
 		switch {
@@ -1133,6 +1158,12 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 		}
 		if rename {
 			err := gregorian.Rename(tx, seriesID, input.Content)
+			if err != nil {
+				return err
+			}
+		}
+		if syncAccepted {
+			err := gregorian.SetAccepted(tx, seriesID, input.AcceptedOn)
 			if err != nil {
 				return err
 			}
@@ -1188,6 +1219,9 @@ func formErrors(day, massTime string, messages map[string]string, amountErr erro
 		errs["amount"] = intentions.AmountMessage(amountErr)
 	} else if message, ok := messages["amount"]; ok {
 		errs["amount"] = message
+	}
+	if message, ok := messages["accepted_on"]; ok {
+		errs["accepted"] = message
 	}
 
 	return errs
@@ -1264,6 +1298,10 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 	view.SeriesNotices = seriesNotices(active, start)
 
 	if state.form != nil {
+		state.form.Today = h.today()
+		if state.form.EditID == 0 && state.form.AcceptedOn == "" {
+			state.form.AcceptedOn = state.form.Today
+		}
 		err = h.prepareSeriesForm(state.form, active)
 		if err != nil {
 			log.Printf("error loading gregorian series for the form: %v", err)

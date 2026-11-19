@@ -143,6 +143,17 @@
 				<p class="hint" id="amount-once"{{if not .AmountForSeries}} hidden{{end}}>Płatne <strong>jednorazowo</strong> – za wszystkie 30 Mszy. Przy kolejnych Mszach tej serii pola już nie będzie.</p>
 				<p class="hint" id="amount-hint"{{if .ShowSeriesPaid}} hidden{{end}}>Puste pole – intencja bez wpłaty.</p>
 			</div>
+
+			<div class="field accepted" id="accepted-field"{{if .ShowSeriesPaid}} hidden{{end}}>
+				<span class="label" id="accepted-label">Przyjęto</span>
+				<div class="accepted-picker">
+					<input class="input until-input{{if .Errors.accepted}} is-invalid{{end}}" type="date" id="accepted" name="accepted" value="{{.AcceptedOn}}" min="2000-01-01" max="{{.Today}}" aria-label="Data przyjęcia" aria-describedby="{{if .Errors.accepted}}accepted-error {{end}}accepted-hint" data-date-picker="{{.AcceptedLabel}}" data-today="{{.Today}}" data-picker-stay{{if .Errors.accepted}} aria-invalid="true"{{end}}>
+				</div>
+				{{- with .Errors.accepted}}
+				<p class="field-error" id="accepted-error">{{.}}</p>
+				{{- end}}
+				<p class="hint" id="accepted-hint">Dzień przyjęcia intencji w kancelarii – trafia do księgi intencji.</p>
+			</div>
 		</div>
 
 		<footer class="panel-footer">

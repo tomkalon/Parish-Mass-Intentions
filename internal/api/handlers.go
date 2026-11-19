@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
@@ -125,6 +126,7 @@ func (h *intentionHandler) patch(w http.ResponseWriter, r *http.Request) {
 		IsDeceased:      intention.IsDeceased,
 		IsHidden:        intention.IsHidden,
 		Amount:          intention.Amount,
+		AcceptedOn:      intention.AcceptedOn,
 	}
 
 	err := json.NewDecoder(r.Body).Decode(&input)
@@ -192,6 +194,9 @@ func (h *intentionHandler) create(w http.ResponseWriter, r *http.Request) {
 
 	var intention intentions.Intention
 	intention.Apply(input)
+	if intention.AcceptedOn == "" {
+		intention.AcceptedOn = time.Now().In(intentions.TimeZone).Format(intentions.DateLayout)
+	}
 
 	err = intentions.Save(h.db, &intention)
 	if err != nil {

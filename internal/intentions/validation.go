@@ -67,6 +67,9 @@ func validationMessage(fe validator.FieldError) string {
 	case "required":
 		return RequiredMessage
 	case "datetime":
+		if fe.Param() == DateLayout {
+			return "Nieprawidłowy format, oczekiwano RRRR-MM-DD."
+		}
 		return "Nieprawidłowy format, oczekiwano RRRR-MM-DD GG:MM."
 	case "quarter_hour":
 		return "Godzina musi być pełnym kwadransem (:00, :15, :30, :45)."

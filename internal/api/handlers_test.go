@@ -662,3 +662,41 @@ func TestSeriesIsKeptByPutAndPatchAndReleasedOnDelete(t *testing.T) {
 		t.Errorf("amount of the remaining mass = %d, want the offering moved to it (150000)", got)
 	}
 }
+
+func TestCreateSetsAcceptedDate(t *testing.T) {
+	router, db := newTestRouter(t)
+
+	rec := doRequest(t, router, http.MethodPost, "/intentions", `{"mass_at":"2026-11-01 08:00","content":"za śp. Jana"}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+	today := time.Now().In(intentions.TimeZone).Format(intentions.DateLayout)
+	if got := loadIntention(t, db, 1).AcceptedOn; got != today {
+		t.Errorf("accepted_on = %q, want today %q", got, today)
+	}
+
+	rec = doRequest(t, router, http.MethodPost, "/intentions", `{"mass_at":"2026-11-01 08:00","content":"za śp. Anny","accepted_on":"2026-10-20"}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+	if got := loadIntention(t, db, 2).AcceptedOn; got != "2026-10-20" {
+		t.Errorf("accepted_on = %q, want 2026-10-20", got)
+	}
+}
+
+func TestPatchKeepsAcceptedDate(t *testing.T) {
+	router, db := newTestRouter(t)
+	intention := seedIntention(t, db)
+	err := db.Model(&intention).Update("accepted_on", "2026-10-01").Error
+	if err != nil {
+		t.Fatalf("setting accepted_on: %v", err)
+	}
+
+	rec := doRequest(t, router, http.MethodPatch, "/intentions/1", `{"content":"za zdrowie Anny"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := loadIntention(t, db, 1).AcceptedOn; got != "2026-10-01" {
+		t.Errorf("accepted_on = %q, want 2026-10-01", got)
+	}
+}

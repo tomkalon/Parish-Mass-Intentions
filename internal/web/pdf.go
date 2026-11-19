@@ -90,6 +90,7 @@ type pdfRun struct {
 
 type pdfRule struct {
 	X1, X2, Y, Width float64
+	Y2               float64
 	Dotted           bool
 }
 
@@ -120,50 +121,74 @@ func (p *pdfPage) place(block pdfBlock, top float64) {
 	}
 	for _, rule := range block.Rules {
 		rule.Y += top
+		if rule.Y2 != 0 {
+			rule.Y2 += top
+		}
 		p.Rules = append(p.Rules, rule)
 	}
 }
 
 func writeWeekPDF(w io.Writer, view weekView, opts pdfOptions) error {
+	title := "Intencje mszy świętych – " + weekInWords(view.Start)
+
+	return writePDF(w, title, gopdf.PageSizeA4, func(m textMeasurer) []pdfPage {
+		return layoutWeek(view, opts, m)
+	})
+}
+
+func writePDF(w io.Writer, title string, size *gopdf.Rect, layout func(m textMeasurer) []pdfPage) error {
 	pdf, err := newPDFDocument()
 	if err != nil {
 		return err
 	}
 
-	pdf.SetInfo(gopdf.PdfInfo{Title: "Intencje mszy świętych – " + weekInWords(view.Start), Creator: "Go Parafia"})
+	pdf.SetInfo(gopdf.PdfInfo{Title: title, Creator: "Go Parafia"})
 
 	measurer := &gopdfMeasurer{pdf: pdf}
-	pages := layoutWeek(view, opts, measurer)
+	pages := layout(measurer)
 	if measurer.err != nil {
 		return fmt.Errorf("measuring text: %w", measurer.err)
 	}
 
 	for _, page := range pages {
-		pdf.AddPage()
-		for _, run := range page.Runs {
-			err = setPDFFont(pdf, run.Font, run.Size, run.Spacing)
-			if err != nil {
-				return err
-			}
-			pdf.SetXY(run.X, run.Baseline)
-			err = pdf.Text(run.Text)
-			if err != nil {
-				return fmt.Errorf("writing text %q: %w", run.Text, err)
-			}
-		}
-		for _, rule := range page.Rules {
-			if rule.Dotted {
-				pdf.SetCustomLineType([]float64{rule.Width, 2.2 * rule.Width}, 0)
-			} else {
-				pdf.SetLineType("solid")
-			}
-			pdf.SetLineWidth(rule.Width)
-			pdf.Line(rule.X1, rule.Y, rule.X2, rule.Y)
+		pdf.AddPageWithOption(gopdf.PageOption{PageSize: size})
+		err = drawPage(pdf, page)
+		if err != nil {
+			return err
 		}
 	}
 
 	_, err = pdf.WriteTo(w)
 	return err
+}
+
+func drawPage(pdf *gopdf.GoPdf, page pdfPage) error {
+	for _, run := range page.Runs {
+		err := setPDFFont(pdf, run.Font, run.Size, run.Spacing)
+		if err != nil {
+			return err
+		}
+		pdf.SetXY(run.X, run.Baseline)
+		err = pdf.Text(run.Text)
+		if err != nil {
+			return fmt.Errorf("writing text %q: %w", run.Text, err)
+		}
+	}
+	for _, rule := range page.Rules {
+		if rule.Dotted {
+			pdf.SetCustomLineType([]float64{rule.Width, 2.2 * rule.Width}, 0)
+		} else {
+			pdf.SetLineType("solid")
+		}
+		pdf.SetLineWidth(rule.Width)
+		y2 := rule.Y
+		if rule.Y2 != 0 {
+			y2 = rule.Y2
+		}
+		pdf.Line(rule.X1, rule.Y, rule.X2, y2)
+	}
+
+	return nil
 }
 
 func newPDFDocument() (*gopdf.GoPdf, error) {
@@ -716,9 +741,13 @@ func smallCaps(text string, font pdfFont, size, spacing, x, baseline float64, m 
 }
 
 func centered(text string, font pdfFont, size, spacing, baseline float64, m textMeasurer) pdfRun {
-	width := m.width(text, font, size, spacing)
+	return centeredIn(text, font, size, spacing, baseline, marginSide, contentWidth, m)
+}
 
-	return pdfRun{X: marginSide + (contentWidth-width)/2, Baseline: baseline, Font: font, Size: size, Spacing: spacing, Text: text}
+func centeredIn(text string, font pdfFont, size, spacing, baseline, left, width float64, m textMeasurer) pdfRun {
+	textWidth := m.width(text, font, size, spacing)
+
+	return pdfRun{X: left + (width-textWidth)/2, Baseline: baseline, Font: font, Size: size, Spacing: spacing, Text: text}
 }
 
 func baseline(size, lineHeight float64) float64 {

@@ -121,6 +121,7 @@ func (h *handler) restoredForm(w http.ResponseWriter, start time.Time) (*formVie
 	form.IsHidden = d.Hidden
 	form.Amount = d.Amount
 	form.SeriesID = d.SeriesID
+	form.AcceptedOn = d.Accepted
 	form.DraftToken = d.Token
 	form.Restored = "Przywrócono niezapisaną intencję z " + backupTime(d.SavedAt, h.now()) + ". Sprawdź ją i kliknij „Zapisz”."
 
@@ -188,6 +189,7 @@ func draftFromForm(form url.Values) (draft.Draft, bool) {
 		Hidden:    form.Get("hidden") == "on",
 		Amount:    form.Get("amount"),
 		SeriesID:  positiveInt(form.Get("series")),
+		Accepted:  form.Get("accepted"),
 	}, true
 }
 

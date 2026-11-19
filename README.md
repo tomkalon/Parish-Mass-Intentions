@@ -27,6 +27,8 @@ Działa jako zwykły program dla Windows (`Intencje Mszalne.exe`), z jednym okne
   - widać numer N/30 (także na wydruku „(greg. 14/30)”), przerwy w serii i Msze współdzielone z innymi intencjami,
   - ofiarę za całą serię wpisuje się raz.
 - **Wpłaty**: kwota przy intencji (tylko w programie, nigdy na wydruku), suma tygodnia, wyróżnianie intencji bez kwoty i podsumowania za tydzień, miesiąc i rok. Szybkie kwoty ustawia się w Ustawieniach.
+- **Data przyjęcia**: pole „Przyjęto” w formularzu intencji (domyślnie dzisiaj, wybór z kalendarza). Wszystkie Msze serii gregoriańskiej mają datę przyjęcia pierwszej Mszy.
+- **Księga intencji** (kan. 958 KPK): przycisk „Księga intencji (PDF)” w oknie „Wpłaty” drukuje wszystkie intencje tygodnia, miesiąca albo roku. Kolumny: Lp., data przyjęcia, termin Mszy, intencja, ofiara i puste miejsce na podpis celebransa. A4 poziomo, na końcu liczba intencji i suma ofiar. Księga obejmuje też intencje ukryte na wydruku.
 - **Święta i wspomnienia dnia**: wpisywane ręcznie albo pobierane przyciskiem „Pobierz święta z GCatholic” (wymaga internetu; rodzaje obchodów do wyboru w ustawieniach).
 - **Wydruk PDF** całego tygodnia: nagłówek z nazwą i adresem parafii, osobna numeracja intencji parafialnych i „poza parafią”. Tydzień zwykle mieści się na jednej stronie A4 (lekko zmniejszony tekst), a gdy intencji jest więcej, przechodzi na kolejną; dzień, który nie zmieściłby się nawet na całej stronie, dzieli się na dwie z dopiskiem „ciąg dalszy”.
 - **Ukrywanie na wydruku**: checkbox „Ukryj na wydruku” w formularzu. Ukryta intencja zostaje w widoku tygodnia (wyszarzona, z oznaczeniem), a w podglądzie wydruku można ją dołączyć checkboxem „Pokaż ukryte intencje”.

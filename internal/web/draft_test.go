@@ -430,3 +430,13 @@ func TestDraftFromForm(t *testing.T) {
 		t.Error("edit id not parsed")
 	}
 }
+
+func TestRestoreDraftKeepsAcceptedDate(t *testing.T) {
+	h := newTestHandler(t, draftNow)
+	form := draftValues("tok-1")
+	form.Set("accepted", "2026-10-05")
+	postDraft(t, h, form)
+
+	body := getWeek(t, h, "/?week=2026-11-30&draft=1").Body.String()
+	checkBody(t, body, `name="accepted" value="2026-10-05"`, `data-date-picker="5.10.2026"`)
+}

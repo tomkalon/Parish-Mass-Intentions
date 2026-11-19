@@ -158,7 +158,7 @@ const datePicker = (input) => {
 	const today = input.dataset.today ? parseDay(input.dataset.today) : null;
 	const rangeStart = input.dataset.rangeStart ? parseDay(input.dataset.rangeStart) : null;
 	const rangeEnd = input.dataset.rangeEnd ? parseDay(input.dataset.rangeEnd) : null;
-	const chosen = input.value ? parseDay(input.value) : first;
+	let chosen = input.value ? parseDay(input.value) : input.hasAttribute("data-picker-stay") ? last : first;
 	const previous = form.querySelector('input[name="period"]:checked');
 	let shown = new Date(chosen.getFullYear(), chosen.getMonth(), 1);
 	let hover = null;
@@ -288,6 +288,16 @@ const datePicker = (input) => {
 
 	const pick = (date) => {
 		input.value = isoDay(date);
+		if (input.hasAttribute("data-picker-stay")) {
+			chosen = date;
+			input.dataset.datePicker = dayLabel(date);
+			button.querySelector("span").textContent = dayLabel(date);
+			button.classList.remove("is-empty");
+			button.setAttribute("aria-label", input.getAttribute("aria-label") + ": " + dayLabel(date));
+			close(true);
+			input.dispatchEvent(new Event("change", { bubbles: true }));
+			return;
+		}
 		if (radio) {
 			radio.checked = true;
 		}
@@ -403,6 +413,7 @@ if (seriesForm) {
 	const newHint = document.getElementById("series-new-hint");
 	const paid = document.getElementById("series-paid");
 	const amountRow = document.getElementById("amount-row");
+	const acceptedField = document.getElementById("accepted-field");
 	const once = document.getElementById("amount-once");
 	const amountHint = document.getElementById("amount-hint");
 	const amountLabel = seriesForm.querySelector('label[for="amount"]');
@@ -511,6 +522,9 @@ if (seriesForm) {
 		}
 		contentHint.hidden = !series;
 		paid.hidden = !series;
+		if (acceptedField) {
+			acceptedField.hidden = Boolean(series);
+		}
 		amountRow.hidden = Boolean(series);
 		amountHint.hidden = Boolean(series);
 		once.hidden = !starts;

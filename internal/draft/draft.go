@@ -33,6 +33,7 @@ type Draft struct {
 	Hidden    bool      `json:"hidden,omitempty"`
 	Amount    string    `json:"amount,omitempty"`
 	SeriesID  int       `json:"series_id,omitempty"`
+	Accepted  string    `json:"accepted_on,omitempty"`
 }
 
 func (d Draft) Empty() bool {

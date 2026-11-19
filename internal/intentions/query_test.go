@@ -410,3 +410,22 @@ func TestCountByDayCountsOldGregorianWithAmount(t *testing.T) {
 		t.Errorf("CountByDay() = %+v, want %+v", got["2026-11-09"], want)
 	}
 }
+
+func TestForRangeSkipsPlaceholders(t *testing.T) {
+	db := newTestDB(t)
+	createIntention(t, db, "2026-11-30 18:00", "przed")
+	createIntention(t, db, "2026-12-02 18:00", "B")
+	createIntention(t, db, "2026-12-01 07:00", "A")
+	createPlaceholder(t, db, "2026-12-03 18:00")
+	createIntention(t, db, "2027-01-01 00:00", "po")
+
+	from := time.Date(2026, 12, 1, 0, 0, 0, 0, TimeZone)
+	list, err := ForRange(db, from, from.AddDate(0, 1, 0))
+	if err != nil {
+		t.Fatalf("ForRange: %v", err)
+	}
+
+	if got, want := contents(list), []string{"A", "B"}; !slices.Equal(got, want) {
+		t.Errorf("contents = %q, want %q", got, want)
+	}
+}

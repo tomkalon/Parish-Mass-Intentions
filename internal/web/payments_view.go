@@ -87,6 +87,7 @@ type paymentsView struct {
 	CloseURL    string
 	OpenWeekURL string
 	UnpaidURL   string
+	RegisterURL string
 
 	Week          string
 	Month         string
@@ -176,6 +177,7 @@ func newPaymentsView(p paymentsQuery, current, today time.Time, counts map[strin
 		MonthTabURL:   paymentsURL(week, paymentsMonth, ""),
 		YearTabURL:    paymentsURL(week, paymentsYear, ""),
 		CloseURL:      weekURL(current),
+		RegisterURL:   registerURL(week, p.tab, p.period()),
 		Week:          week,
 		WithGregorian: p.withGregorian,
 	}

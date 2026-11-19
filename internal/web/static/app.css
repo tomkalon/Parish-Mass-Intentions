@@ -2425,6 +2425,18 @@ h1 {
 	flex: none;
 }
 
+.payments-register {
+	display: flex;
+	justify-content: flex-end;
+	margin-top: 14px;
+	padding-top: 14px;
+	border-top: 1px solid var(--line);
+}
+
+.payments-register .button {
+	gap: 8px;
+}
+
 /* Gregorian series */
 
 .series-step {
@@ -4263,4 +4275,39 @@ a.scal-cell.is-selected:hover {
 	.update-bar-fill {
 		transition: none;
 	}
+}
+
+/* PDF preview pages */
+
+.print-message {
+	margin: 0;
+	padding: 8px 16px;
+	background: var(--surface);
+	color: var(--ink-2);
+	font-size: 14px;
+}
+
+.print-save {
+	margin-left: auto;
+}
+
+.print-options + .print-save {
+	margin-left: 0;
+}
+
+/* Panel: accepted date */
+
+.accepted {
+	padding-top: 14px;
+	border-top: 1px solid var(--line);
+}
+
+.accepted-picker {
+	position: relative;
+	display: flex;
+}
+
+.accepted .until-pop {
+	top: auto;
+	bottom: calc(100% + 2px);
 }

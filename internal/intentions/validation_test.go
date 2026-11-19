@@ -43,6 +43,11 @@ func TestValidationMessages(t *testing.T) {
 			want:  map[string]string{"amount": "Kwota musi wynosić od 0 do 99\u00a0999,99\u00a0zł (w groszach: od 0 do 9999999)."},
 		},
 		{
+			name:  "accepted date in a wrong format",
+			input: Input{MassAt: "2026-11-02 18:00", Content: "za śp. Jana", AcceptedOn: "19.11.2026"},
+			want:  map[string]string{"accepted_on": "Nieprawidłowy format, oczekiwano RRRR-MM-DD."},
+		},
+		{
 			name:  "amount too large",
 			input: Input{MassAt: "2026-11-02 18:00", Content: "za śp. Jana", Amount: MaxAmount + 1},
 			want:  map[string]string{"amount": "Kwota musi wynosić od 0 do 99\u00a0999,99\u00a0zł (w groszach: od 0 do 9999999)."},

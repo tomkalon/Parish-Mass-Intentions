@@ -13,6 +13,7 @@ type Intention struct {
 	IsHidden        bool      `json:"is_hidden" gorm:"not null;default:false"`
 	Amount          Grosze    `json:"amount" gorm:"not null;default:0"`
 	SeriesID        int       `json:"series_id" gorm:"index:idx_intentions_series_mass,priority:1;not null;default:0"`
+	AcceptedOn      string    `json:"accepted_on" gorm:"not null;default:''"`
 }
 
 type Input struct {
@@ -23,6 +24,7 @@ type Input struct {
 	IsDeceased      bool   `json:"is_deceased"`
 	IsHidden        bool   `json:"is_hidden"`
 	Amount          Grosze `json:"amount" validate:"amount"`
+	AcceptedOn      string `json:"accepted_on" validate:"omitempty,datetime=2006-01-02"`
 }
 
 func (i *Intention) Apply(input Input) {
@@ -33,5 +35,8 @@ func (i *Intention) Apply(input Input) {
 	i.IsDeceased = input.IsDeceased || input.IsGregorian
 	i.IsHidden = input.IsHidden
 	i.Amount = input.Amount
+	if input.AcceptedOn != "" {
+		i.AcceptedOn = input.AcceptedOn
+	}
 	i.IsPlaceholder = false
 }

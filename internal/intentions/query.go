@@ -19,6 +19,19 @@ func ForWeek(db *gorm.DB, start time.Time) ([]Intention, error) {
 	return list, nil
 }
 
+func ForRange(db *gorm.DB, from, to time.Time) ([]Intention, error) {
+	var list []Intention
+	err := inRange(db, from, to).
+		Where("is_placeholder = ?", false).
+		Order("mass_at, id").
+		Find(&list).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return list, nil
+}
+
 type DayCount struct {
 	Filled int
 	Empty  int

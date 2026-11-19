@@ -56,3 +56,17 @@ func TestApplyCopiesAmount(t *testing.T) {
 		t.Errorf("Amount = %d after Apply without an amount, want 0", intention.Amount)
 	}
 }
+
+func TestApplyKeepsAcceptedDateWhenInputHasNone(t *testing.T) {
+	intention := Intention{AcceptedOn: "2026-10-01"}
+
+	intention.Apply(Input{MassAt: "2026-11-02 18:00", Content: "+ Jan Kowalski"})
+	if intention.AcceptedOn != "2026-10-01" {
+		t.Errorf("AcceptedOn = %q, want 2026-10-01", intention.AcceptedOn)
+	}
+
+	intention.Apply(Input{MassAt: "2026-11-02 18:00", Content: "+ Jan Kowalski", AcceptedOn: "2026-11-19"})
+	if intention.AcceptedOn != "2026-11-19" {
+		t.Errorf("AcceptedOn = %q, want 2026-11-19", intention.AcceptedOn)
+	}
+}

@@ -27,6 +27,8 @@ type formView struct {
 	IsDeceased      bool
 	IsHidden        bool
 	Amount          string
+	AcceptedOn      string
+	Today           string
 	QuickAmounts    []quickAmount
 	Errors          map[string]string
 	EditID          int
@@ -78,6 +80,15 @@ func (f formView) ShowSeriesPaid() bool {
 
 func (f formView) AmountForSeries() bool {
 	return f.StartsSeries() || (f.SeriesID > 0 && f.SeriesStep == 1)
+}
+
+func (f formView) AcceptedLabel() string {
+	day, err := time.ParseInLocation(intentions.DateLayout, f.AcceptedOn, intentions.TimeZone)
+	if err != nil {
+		return ""
+	}
+
+	return day.Format("2.1.2006")
 }
 
 func (f formView) AmountLabel() string {

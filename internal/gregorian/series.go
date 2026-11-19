@@ -34,9 +34,10 @@ const (
 )
 
 type Mass struct {
-	ID     int
-	MassAt time.Time
-	Amount intentions.Grosze
+	ID         int
+	MassAt     time.Time
+	Amount     intentions.Grosze
+	AcceptedOn string
 }
 
 func (m Mass) Date() string {
@@ -286,6 +287,10 @@ func Stop(db *gorm.DB, id int, now time.Time) error {
 	return nil
 }
 
+func SetAccepted(db *gorm.DB, id int, acceptedOn string) error {
+	return db.Model(&intentions.Intention{}).Where("series_id = ?", id).Update("accepted_on", acceptedOn).Error
+}
+
 func Rename(db *gorm.DB, id int, content string) error {
 	return db.Transaction(func(tx *gorm.DB) error {
 		err := tx.Model(&Series{}).Where("id = ?", id).Update("content", content).Error
@@ -408,7 +413,7 @@ func loadMasses(db *gorm.DB, ids []int) (map[int][]Mass, error) {
 	}
 
 	var list []intentions.Intention
-	err := db.Select("id", "series_id", "mass_at", "amount").
+	err := db.Select("id", "series_id", "mass_at", "amount", "accepted_on").
 		Where("series_id IN ?", ids).
 		Order("mass_at, id").
 		Find(&list).Error
@@ -418,9 +423,10 @@ func loadMasses(db *gorm.DB, ids []int) (map[int][]Mass, error) {
 
 	for _, intention := range list {
 		masses[intention.SeriesID] = append(masses[intention.SeriesID], Mass{
-			ID:     intention.ID,
-			MassAt: intention.MassAt.In(intentions.TimeZone),
-			Amount: intention.Amount,
+			ID:         intention.ID,
+			MassAt:     intention.MassAt.In(intentions.TimeZone),
+			Amount:     intention.Amount,
+			AcceptedOn: intention.AcceptedOn,
 		})
 	}
 

@@ -2,6 +2,7 @@ package web
 
 import (
 	"strconv"
+	"strings"
 	"time"
 
 	"go-parafia/internal/intentions"
@@ -32,7 +33,8 @@ type calendarView struct {
 	CloseURL string
 	Months   []calendarMonth
 
-	HasCurrent bool
+	HasCurrent   bool
+	YearPrintURL string
 }
 
 type calendarMonth struct {
@@ -144,4 +146,15 @@ func calendarRange(year int) (time.Time, time.Time) {
 
 func calendarURL(week string, year int) string {
 	return "/?week=" + week + "&calendar=" + strconv.Itoa(year)
+}
+
+func yearHasIntentions(year int, counts map[string]intentions.DayCount) bool {
+	prefix := strconv.Itoa(year) + "-"
+	for date, count := range counts {
+		if count.Filled > 0 && strings.HasPrefix(date, prefix) {
+			return true
+		}
+	}
+
+	return false
 }

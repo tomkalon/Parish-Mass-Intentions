@@ -252,9 +252,10 @@ func (m *gopdfMeasurer) width(text string, font pdfFont, size, spacing float64) 
 }
 
 func layoutWeek(view weekView, opts pdfOptions, m textMeasurer) []pdfPage {
-	header := layoutHeader(view, m)
-	days := printableDays(view, opts)
+	return layoutPrintedDays(layoutHeader(view, m), printableDays(view, opts), m)
+}
 
+func layoutPrintedDays(header pdfBlock, days []printedDay, m textMeasurer) []pdfPage {
 	style := pdfStyles[len(pdfStyles)-1]
 	for _, s := range pdfStyles {
 		if header.Height+totalHeight(layoutDays(days, s, m)) <= pageContent {
@@ -349,6 +350,10 @@ func splitDay(day printedDay, available float64, style pdfStyle, m textMeasurer)
 }
 
 func layoutHeader(view weekView, m textMeasurer) pdfBlock {
+	return layoutHeaderRange(view, weekInWords(view.Start), m)
+}
+
+func layoutHeaderRange(view weekView, rangeText string, m textMeasurer) pdfBlock {
 	var block pdfBlock
 	y := 0.0
 
@@ -371,7 +376,7 @@ func layoutHeader(view weekView, m textMeasurer) pdfBlock {
 	y += titleSize * 1.3
 
 	rangeSize := 26 * px
-	block.Runs = append(block.Runs, centered(weekInWords(view.Start), fontRegular, rangeSize, 0, y+baseline(rangeSize, 1.2), m))
+	block.Runs = append(block.Runs, centered(rangeText, fontRegular, rangeSize, 0, y+baseline(rangeSize, 1.2), m))
 	y += rangeSize*1.2 + 12*px
 
 	block.Rules = append(block.Rules,
@@ -759,9 +764,13 @@ func baseline(size, lineHeight float64) float64 {
 }
 
 func weekInWords(start time.Time) string {
-	end := start.AddDate(0, 0, 6)
+	return rangeInWords(start, start.AddDate(0, 0, 6))
+}
 
+func rangeInWords(start, end time.Time) string {
 	switch {
+	case start.Equal(end):
+		return fmt.Sprintf("%s %d", dateInWords(start), start.Year())
 	case start.Year() != end.Year():
 		return fmt.Sprintf("%s %d – %s %d", dateInWords(start), start.Year(), dateInWords(end), end.Year())
 	case start.Month() != end.Month():

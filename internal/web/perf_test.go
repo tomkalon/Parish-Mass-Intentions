@@ -248,3 +248,12 @@ func BenchmarkSearchYearLargeParish(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkPrintLargeParish(b *testing.B) {
+	router, _ := largeParish(b)
+
+	benchPages(b, router, map[string]string{
+		"year":     "/pdf/year?year=2025",
+		"register": "/register.pdf?week=2025-06-02&payments=year&year=2025",
+	})
+}

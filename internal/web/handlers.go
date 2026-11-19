@@ -146,6 +146,9 @@ func RegisterRoutes(router chi.Router, db *gorm.DB, opts Options) {
 	router.Get("/pdf", h.pdf)
 	router.Get("/intentions/{id}/receipt", h.receiptPage)
 	router.Get("/intentions/{id}/receipt.pdf", h.receiptPDF)
+	router.Get("/print/year", h.yearPrintPage)
+	router.Get("/pdf/year", h.yearPDF)
+	router.Post("/print/year/save", h.saveYearPDF)
 	router.Get("/register", h.registerPage)
 	router.Get("/register.pdf", h.registerPDF)
 	router.Get("/print", h.printPreview)
@@ -1365,6 +1368,9 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 		}
 
 		c := newCalendarView(state.calendarYear, start, h.now(), counts, massesByDay(yearMasses))
+		if state.calendarYear < h.now().In(intentions.TimeZone).Year() && yearHasIntentions(state.calendarYear, counts) {
+			c.YearPrintURL = yearPrintURL(state.calendarYear, start.Format(intentions.DateLayout))
+		}
 		view.Calendar = &c
 	}
 	if state.payments != nil {

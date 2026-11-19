@@ -18,7 +18,7 @@
 		<a class="button" href="{{.BackURL}}" data-close>{{if .Week}}← Wróć do tygodnia{{else}}← Wróć{{end}}</a>
 	</nav>
 
-	<main class="settings settings-page"{{if .Dialog}} inert{{end}}>
+	<main class="settings settings-page"{{if or .Dialog .TrashOpen}} inert{{end}}>
 		<div class="settings-layout">
 			<nav class="settings-nav" aria-label="Sekcje ustawień">
 				<h1>Ustawienia</h1>
@@ -172,25 +172,12 @@
 						<h2 class="settings-heading" id="trash-title">Kosz</h2>
 						<p class="hint">Usunięte intencje i wyczyszczone tygodnie. Każdą pozycję można przywrócić przez {{.TrashDays}} dni od usunięcia, potem program usuwa ją na stałe.</p>
 					</header>
-					<div class="settings-list">
-						{{- range .Trash}}
-						<form class="trash-row" method="post" action="{{.Action}}">
-							<div>
-								<p class="trash-title">{{.Title}}</p>
-								{{- range .Items}}
-								<p class="trash-item">{{.}}</p>
-								{{- end}}
-								{{- if .More}}
-								<p class="trash-item">i {{.More}} więcej</p>
-								{{- end}}
-								<p class="trash-when">usunięto {{.DeletedAt}}</p>
-							</div>
-							<button class="link-action" type="submit">Przywróć</button>
-						</form>
-						{{- else}}
-						<p class="empty">Kosz jest pusty.</p>
-						{{- end}}
+					<p class="trash-count">{{.TrashCount}}</p>
+					{{- if .Trash}}
+					<div class="settings-section-actions">
+						<a class="button" href="{{.TrashURL}}">Otwórz kosz…</a>
 					</div>
+					{{- end}}
 				</section>
 
 				<section class="settings-section backup" id="kopia" aria-labelledby="backup-title">
@@ -315,6 +302,37 @@
 		</div>
 	</main>
 
+	{{- if and .TrashOpen (not .Dialog)}}
+	<div class="dialog-backdrop">
+		<div class="dialog dialog-trash" role="dialog" aria-modal="true" aria-labelledby="trash-dialog-title">
+			<div class="trash-dialog-head">
+				<h2 class="dialog-title" id="trash-dialog-title">Kosz</h2>
+				<a class="panel-close" href="{{.TrashCloseURL}}" aria-label="Zamknij kosz" data-close>×</a>
+			</div>
+			<p class="hint">Przywrócona intencja wraca na swoje miejsce w tygodniu. Pozycje starsze niż {{.TrashDays}} dni program usuwa na stałe.</p>
+			<div class="trash-list">
+				{{- range .Trash}}
+				<div class="trash-row">
+					<div>
+						<p class="trash-title">{{.Title}}</p>
+						{{- range .Items}}
+						<p class="trash-item">{{.}}</p>
+						{{- end}}
+						{{- if .More}}
+						<p class="trash-item">i {{.More}} więcej</p>
+						{{- end}}
+						<p class="trash-when">usunięto {{.DeletedAt}}</p>
+					</div>
+					<a class="link-action" href="{{.ConfirmURL}}">Przywróć…</a>
+				</div>
+				{{- else}}
+				<p class="empty">Kosz jest pusty.</p>
+				{{- end}}
+			</div>
+		</div>
+	</div>
+	{{- end}}
+
 	{{- with .Dialog}}
 	<div class="dialog-backdrop">
 		<div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dialog-title" aria-describedby="dialog-content">
@@ -322,7 +340,7 @@
 			<p class="dialog-content" id="dialog-content">{{.Text}}</p>
 			<form class="dialog-actions" method="post" action="{{.Action}}">
 				<input type="hidden" name="week" value="{{.Week}}">
-				<button class="button button-danger" type="submit">{{.Button}}</button>
+				<button class="button {{if .Safe}}button-primary{{else}}button-danger{{end}}" type="submit">{{.Button}}</button>
 				<a class="button" href="{{.CloseURL}}" data-close autofocus>Anuluj</a>
 			</form>
 		</div>

@@ -576,6 +576,8 @@ func (h *handler) settingsPage(w http.ResponseWriter, r *http.Request) {
 		}
 	case query.Get("import") == "1":
 		h.importDialog(&view, settingsURL(view.Week, false))
+	case query.Get("trash") == "1":
+		view.openTrash(query.Get("restore"))
 	}
 
 	render(w, http.StatusOK, settingsTemplate, view)
@@ -596,7 +598,8 @@ func (h *handler) settingsView(w http.ResponseWriter, setting settings.Setting, 
 	if err != nil {
 		log.Printf("error loading the trash: %v", err)
 	}
-	view.Trash = newTrashRows(batches, h.now())
+	view.Trash = newTrashRows(batches, h.now(), view.Week)
+	view.TrashURL = settingsTrashURL(view.Week, 0)
 	view.DataDir = h.dataDir
 	view.LogFile = h.logFile
 

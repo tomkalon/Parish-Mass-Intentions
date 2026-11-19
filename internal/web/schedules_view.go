@@ -32,6 +32,7 @@ type settingsDialog struct {
 	Button   string
 	Week     string
 	CloseURL string
+	Safe     bool
 }
 
 func scheduleItems(schedules []masses.Schedule, week string) []scheduleItem {

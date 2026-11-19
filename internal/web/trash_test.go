@@ -156,7 +156,10 @@ func TestSettingsListTrash(t *testing.T) {
 	h := newTestHandler(t, trashNow)
 
 	body := getSettings(t, h, "/settings").Body.String()
-	checkBody(t, body, `<li><a href="#kosz">Kosz</a></li>`, `<p class="empty">Kosz jest pusty.</p>`)
+	checkBody(t, body, `<li><a href="#kosz">Kosz</a></li>`, `<p class="trash-count">Kosz jest pusty.</p>`)
+	if strings.Contains(body, "Otwórz kosz") {
+		t.Error("empty trash offers a button")
+	}
 
 	single := newIntention(t, 0, "2026-12-01 18:00", false, "+ Jan Kowalski")
 	h.db.Create(&single)
@@ -169,22 +172,44 @@ func TestSettingsListTrash(t *testing.T) {
 	rec = postClear(t, h, url.Values{"week": {"2026-11-30"}})
 	weekBatch := batchFrom(t, rec.Header().Get("Location"))
 
-	body = getSettings(t, h, "/settings").Body.String()
+	body = getSettings(t, h, "/settings?week=2026-11-30").Body.String()
 	checkBody(t, body,
-		`<form class="trash-row" method="post" action="/trash/`+singleBatch+`/restore">`,
+		`<p class="trash-count">W koszu: 2 pozycje.</p>`,
+		`<a class="button" href="/settings?trash=1&amp;week=2026-11-30">Otwórz kosz…</a>`,
+	)
+	if strings.Contains(body, "trash-row") || strings.Contains(body, "/restore") {
+		t.Error("trash items are listed without opening the trash")
+	}
+
+	body = getSettings(t, h, "/settings?trash=1&week=2026-11-30").Body.String()
+	checkBody(t, body,
+		`<main class="settings settings-page" inert>`,
+		`<div class="dialog dialog-trash" role="dialog" aria-modal="true" aria-labelledby="trash-dialog-title">`,
+		`<a class="panel-close" href="/settings?week=2026-11-30#kosz" aria-label="Zamknij kosz" data-close>×</a>`,
 		`<p class="trash-title">Wtorek 1.12.2026, 18:00 – &#43; Jan Kowalski</p>`,
-		`<form class="trash-row" method="post" action="/trash/`+weekBatch+`/restore">`,
 		`<p class="trash-title">Wyczyszczony tydzień 30 listopada – 6 grudnia 2026</p>`,
 		`<p class="trash-item">Wtorek 1.12.2026, 7:00 – Intencja 1</p>`,
 		`<p class="trash-item">i 2 więcej</p>`,
 		`<p class="trash-when">usunięto dziś, 14:32</p>`,
-		`przez 30 dni od usunięcia`,
+		`<a class="link-action" href="/settings?restore=`+singleBatch+`&amp;trash=1&amp;week=2026-11-30">Przywróć…</a>`,
 	)
 	if strings.Index(body, weekBatch) > strings.Index(body, singleBatch) {
 		t.Error("newest deletion is not listed first")
 	}
-	if strings.Contains(body, "Kosz jest pusty.") {
-		t.Error("trash shown as empty")
+	if strings.Contains(body, `action="/trash/`) {
+		t.Error("the trash list restores without a confirmation")
+	}
+
+	body = getSettings(t, h, "/settings?trash=1&week=2026-11-30&restore="+weekBatch).Body.String()
+	checkBody(t, body,
+		`<h2 class="dialog-title" id="dialog-title">Przywrócić z kosza?</h2>`,
+		`Wyczyszczony tydzień 30 listopada – 6 grudnia 2026 (razem z: Wtorek 1.12.2026, 7:00 – Intencja 1`,
+		`<form class="dialog-actions" method="post" action="/trash/`+weekBatch+`/restore">`,
+		`<button class="button button-primary" type="submit">Przywróć</button>`,
+		`<a class="button" href="/settings?trash=1&amp;week=2026-11-30" data-close autofocus>Anuluj</a>`,
+	)
+	if strings.Contains(body, "dialog-trash") {
+		t.Error("the trash list stays open under the confirmation")
 	}
 }
 

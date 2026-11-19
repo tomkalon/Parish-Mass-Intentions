@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -79,19 +80,74 @@ func (h *handler) undoNotice(param string) *undoView {
 }
 
 type trashRow struct {
-	DeletedAt string
-	Title     string
-	Items     []string
-	More      int
-	Action    string
+	ID         int64
+	DeletedAt  string
+	Title      string
+	Items      []string
+	More       int
+	Action     string
+	ConfirmURL string
 }
 
 const trashRowItems = 3
 
-func newTrashRows(batches []trash.Batch, now time.Time) []trashRow {
+func settingsTrashURL(week string, restore int64) string {
+	query := url.Values{"trash": {"1"}}
+	if week != "" {
+		query.Set("week", week)
+	}
+	if restore > 0 {
+		query.Set("restore", strconv.FormatInt(restore, 10))
+	}
+
+	return "/settings?" + query.Encode()
+}
+
+func (v settingsView) TrashCount() string {
+	if len(v.Trash) == 0 {
+		return "Kosz jest pusty."
+	}
+
+	return "W koszu: " + countOf(len(v.Trash), "pozycja", "pozycje", "pozycji") + "."
+}
+
+func (v *settingsView) openTrash(restore string) {
+	v.TrashOpen = true
+	v.TrashCloseURL = settingsURL(v.Week, false) + "#kosz"
+
+	id, err := strconv.ParseInt(restore, 10, 64)
+	if err != nil {
+		return
+	}
+	for _, row := range v.Trash {
+		if row.ID != id {
+			continue
+		}
+
+		text := row.Title
+		if len(row.Items)+row.More > 0 {
+			text += " (razem z: " + strings.Join(row.Items, "; ")
+			if row.More > 0 {
+				text += " i " + strconv.Itoa(row.More) + " więcej"
+			}
+			text += ")"
+		}
+		v.Dialog = &settingsDialog{
+			Title:    "Przywrócić z kosza?",
+			Text:     text + ". Usunięto " + row.DeletedAt + ".",
+			Action:   row.Action,
+			Button:   "Przywróć",
+			Week:     v.Week,
+			CloseURL: settingsTrashURL(v.Week, 0),
+			Safe:     true,
+		}
+	}
+}
+
+func newTrashRows(batches []trash.Batch, now time.Time, week string) []trashRow {
 	rows := make([]trashRow, 0, len(batches))
 	for _, b := range batches {
-		row := trashRow{DeletedAt: backupTime(b.TrashedAt, now), Action: restoreURL(b.ID)}
+		row := trashRow{ID: b.ID, DeletedAt: backupTime(b.TrashedAt, now), Action: restoreURL(b.ID), ConfirmURL: settingsTrashURL(week, b.ID)}
 
 		if b.Week != "" {
 			start, err := time.ParseInLocation(intentions.DateLayout, b.Week, intentions.TimeZone)

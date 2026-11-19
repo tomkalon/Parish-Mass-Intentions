@@ -4311,3 +4311,13 @@ a.scal-cell.is-selected:hover {
 	top: auto;
 	bottom: calc(100% + 2px);
 }
+
+.panel-receipt {
+	margin: 0;
+	padding-top: 14px;
+	border-top: 1px solid var(--line);
+}
+
+.panel-receipt .button {
+	gap: 8px;
+}

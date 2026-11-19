@@ -138,6 +138,7 @@ func (h *handler) restoredForm(w http.ResponseWriter, start time.Time) (*formVie
 			return nil, false
 		default:
 			form.EditID = intention.ID
+			form.placeholder = intention.IsPlaceholder
 			form.SeriesID = intention.SeriesID
 		}
 	}

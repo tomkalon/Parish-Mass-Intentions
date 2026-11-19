@@ -142,6 +142,8 @@ func RegisterRoutes(router chi.Router, db *gorm.DB, opts Options) {
 	router.Post("/settings/backup/days", h.setBackupDays)
 	router.Post("/backup", h.runBackup)
 	router.Get("/pdf", h.pdf)
+	router.Get("/intentions/{id}/receipt", h.receiptPage)
+	router.Get("/intentions/{id}/receipt.pdf", h.receiptPDF)
 	router.Get("/register", h.registerPage)
 	router.Get("/register.pdf", h.registerPDF)
 	router.Get("/print", h.printPreview)
@@ -231,6 +233,7 @@ func (h *handler) week(w http.ResponseWriter, r *http.Request) {
 		f.Amount = intention.Amount.FormValue()
 		f.SeriesID = intention.SeriesID
 		f.AcceptedOn = intention.AcceptedOn
+		f.placeholder = intention.IsPlaceholder
 		if intention.IsPlaceholder {
 			f.AcceptedOn = h.today()
 		}
@@ -1132,6 +1135,7 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 		form.AcceptedOn = acceptedOn
 		form.Errors = errs
 		form.EditID = intention.ID
+		form.placeholder = intention.IsPlaceholder
 		form.SeriesID = seriesID
 		if token := r.PostForm.Get("draft_token"); len(token) <= maxDraftToken {
 			form.DraftToken = token

@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"time"
 
+	"go-parafia/internal/calendar"
 	"go-parafia/internal/intentions"
 )
 
@@ -38,4 +39,20 @@ func feastURL(week, date string) string {
 	query.Set("feast", date)
 
 	return "/?" + query.Encode()
+}
+
+type feastImportView struct {
+	Title string
+}
+
+func newFeastImportView(last calendar.FeastImport, now time.Time) *feastImportView {
+	when := backupTime(last.ImportedAt, now)
+	title := "Święta pobrane z GCatholic " + when + ". "
+	if last.Added > 0 {
+		title += "Dopisano opisy do " + countOf(last.Added, "dnia", "dni", "dni") + "."
+	} else {
+		title += "Nic nie dopisano – dni miały już opisy albo GCatholic nie ma dla nich obchodów."
+	}
+
+	return &feastImportView{Title: title + " Kliknij, aby pobrać ponownie – uzupełni tylko puste dni."}
 }

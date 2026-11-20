@@ -10,12 +10,13 @@ import (
 )
 
 type weekView struct {
-	Undo      *undoView
-	Start     time.Time
-	Range     string
-	Days      []dayView
-	Schedules []masses.Schedule
-	Topbar    topbarView
+	Undo        *undoView
+	FeastImport *feastImportView
+	Start       time.Time
+	Range       string
+	Days        []dayView
+	Schedules   []masses.Schedule
+	Topbar      topbarView
 
 	SelectedScheduleID int
 	ParishName         string

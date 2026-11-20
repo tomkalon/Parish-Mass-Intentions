@@ -69,7 +69,7 @@ func Check(db *gorm.DB) error {
 }
 
 func Migrate(db *gorm.DB) error {
-	err := db.AutoMigrate(&intentions.Intention{}, &settings.Setting{}, &calendar.Day{}, &gregorian.Series{}, &trash.Entry{})
+	err := db.AutoMigrate(&intentions.Intention{}, &settings.Setting{}, &calendar.Day{}, &calendar.FeastImport{}, &gregorian.Series{}, &trash.Entry{})
 	if err != nil {
 		return err
 	}

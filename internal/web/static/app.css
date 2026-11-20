@@ -341,6 +341,47 @@ h1 {
 	cursor: pointer;
 }
 
+.button.feast-done svg {
+	color: var(--free);
+}
+
+.week-actions .button-icon {
+	padding: 0 8px;
+}
+
+.week-actions .button.is-busy .spinner {
+	width: 18px;
+	height: 18px;
+}
+
+.button.is-busy {
+	justify-content: center;
+	gap: 8px;
+	cursor: progress;
+}
+
+.spinner {
+	flex: none;
+	width: 14px;
+	height: 14px;
+	border: 2px solid currentColor;
+	border-right-color: transparent;
+	border-radius: 50%;
+	animation: spin .8s linear infinite;
+}
+
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.spinner {
+		animation-duration: 2s;
+	}
+}
+
 .week-alert {
 	margin: 0 0 20px;
 }

@@ -47,7 +47,7 @@ func Feast(db *gorm.DB, date string) (string, error) {
 	return day.Feast, err
 }
 
-func AddMissing(db *gorm.DB, feasts map[string]string) error {
+func AddMissing(db *gorm.DB, feasts map[string]string) (int, error) {
 	var days []Day
 	for _, date := range slices.Sorted(maps.Keys(feasts)) {
 		if feasts[date] != "" {
@@ -55,10 +55,12 @@ func AddMissing(db *gorm.DB, feasts map[string]string) error {
 		}
 	}
 	if len(days) == 0 {
-		return nil
+		return 0, nil
 	}
 
-	return db.Clauses(clause.OnConflict{DoNothing: true}).Create(&days).Error
+	result := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&days)
+
+	return int(result.RowsAffected), result.Error
 }
 
 func SaveFeast(db *gorm.DB, date, feast string) error {
@@ -67,4 +69,26 @@ func SaveFeast(db *gorm.DB, date, feast string) error {
 	}
 
 	return db.Save(&Day{Date: date, Feast: feast}).Error
+}
+
+type FeastImport struct {
+	WeekStart  string    `gorm:"primaryKey"`
+	ImportedAt time.Time `gorm:"not null"`
+	Added      int       `gorm:"not null;default:0"`
+}
+
+func MarkImported(db *gorm.DB, start time.Time, added int, now time.Time) error {
+	row := FeastImport{WeekStart: start.In(intentions.TimeZone).Format(intentions.DateLayout), ImportedAt: now.In(intentions.TimeZone), Added: added}
+
+	return db.Clauses(clause.OnConflict{UpdateAll: true}).Create(&row).Error
+}
+
+func LastImport(db *gorm.DB, start time.Time) (FeastImport, bool, error) {
+	var rows []FeastImport
+	err := db.Where("week_start = ?", start.In(intentions.TimeZone).Format(intentions.DateLayout)).Limit(1).Find(&rows).Error
+	if err != nil || len(rows) == 0 {
+		return FeastImport{}, false, err
+	}
+
+	return rows[0], true, nil
 }

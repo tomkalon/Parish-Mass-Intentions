@@ -47,7 +47,7 @@ func newTestHandler(t *testing.T, now time.Time) *handler {
 		t.Fatalf("opening test database: %v", err)
 	}
 
-	err = db.AutoMigrate(&intentions.Intention{}, &settings.Setting{}, &calendar.Day{}, &gregorian.Series{}, &trash.Entry{})
+	err = db.AutoMigrate(&intentions.Intention{}, &settings.Setting{}, &calendar.Day{}, &calendar.FeastImport{}, &gregorian.Series{}, &trash.Entry{})
 	if err != nil {
 		t.Fatalf("migrating test database: %v", err)
 	}
@@ -1854,12 +1854,14 @@ func TestImportFeastsRoute(t *testing.T) {
 func TestWeekShowsImportButton(t *testing.T) {
 	body := getWeek(t, newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone)), "/").Body.String()
 
-	want := `<form method="post" action="/feasts/import">
+	checkBody(t, body,
+		`<form method="post" action="/feasts/import" data-busy="Pobieram święta z GCatholic…">
 				<input type="hidden" name="week" value="2026-11-02">
-				<button class="button" type="submit" title="Pobierz wspomnienia i święta z GCatholic.org (wymaga internetu)">Pobierz święta</button>`
-	if !strings.Contains(body, want) {
-		t.Errorf("body does not contain %q", want)
-	}
+				<button class="button button-icon" type="submit" title="Pobierz wspomnienia i święta z GCatholic.org (wymaga internetu)">`,
+		`<span class="visually-hidden">Pobierz święta</span>`,
+		`<button class="button button-icon" type="submit" title="Wczytaj godziny Mszy z wybranego porządku na ten tydzień">`,
+		`<span class="visually-hidden">Wczytaj godziny Mszy</span>`,
+	)
 	if strings.Contains(body, "week-alert") {
 		t.Error("week view shows the import error without an import")
 	}
@@ -2969,5 +2971,58 @@ func TestWeekPDFSkipsHiddenIntentions(t *testing.T) {
 	}
 	if got := getPDF(t, withHidden, "/pdf?week=2026-11-02&hidden=1").Body.Bytes(); bytes.Equal(got, want) {
 		t.Error("PDF with hidden=1 is the same as without the hidden intention, want it printed")
+	}
+}
+
+func TestImportFeastsMarksTheWeek(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 11, 19, 14, 32, 0, 0, intentions.TimeZone))
+	err := calendar.SaveFeast(h.db, "2026-11-04", "odpust parafialny")
+	if err != nil {
+		t.Fatalf("saving feast: %v", err)
+	}
+	h.fetchCelebrations = fakeCelebrations(map[int][]gcatholic.Celebration{2026: {
+		{Date: "2026-11-03", Rank: "w", Name: "Św. Marcina de Porres, zakonnika"},
+		{Date: "2026-11-04", Rank: "W", Name: "Św. Karola Boromeusza, biskupa"},
+		{Date: "2026-11-08", Name: "XXXII Niedziela Zwykła"},
+	}}, nil)
+
+	body := getWeek(t, h, "/?week=2026-11-02").Body.String()
+	checkBody(t, body, `<form method="post" action="/feasts/import" data-busy="Pobieram święta z GCatholic…">`)
+	if strings.Contains(body, "feast-done") {
+		t.Error("week shows a feast import that never happened")
+	}
+
+	if rec := postImport(t, h, "2026-11-05"); rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+
+	body = getWeek(t, h, "/?week=2026-11-02").Body.String()
+	checkBody(t, body,
+		`<button class="button button-icon feast-done" type="submit" title="Święta pobrane z GCatholic dziś, 14:32. Dopisano opisy do 2 dni. Kliknij, aby pobrać ponownie – uzupełni tylko puste dni.">`,
+		`<span class="visually-hidden">Święta pobrane – pobierz ponownie</span>`,
+	)
+	if other := getWeek(t, h, "/?week=2026-11-09").Body.String(); strings.Contains(other, "feast-done") {
+		t.Error("the marker leaks into another week")
+	}
+
+	h.now = func() time.Time { return time.Date(2026, 11, 20, 9, 5, 0, 0, intentions.TimeZone) }
+	if rec := postImport(t, h, "2026-11-02"); rec.Code != http.StatusSeeOther {
+		t.Fatalf("second import: status = %d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	body = getWeek(t, h, "/?week=2026-11-02").Body.String()
+	checkBody(t, body, `Święta pobrane z GCatholic dziś, 9:05. Nic nie dopisano`)
+}
+
+func TestFailedFeastImportLeavesNoMarker(t *testing.T) {
+	h := newTestHandler(t, time.Date(2026, 11, 19, 14, 32, 0, 0, intentions.TimeZone))
+	h.fetchCelebrations = func(context.Context, int) ([]gcatholic.Celebration, error) {
+		return nil, errors.New("no network")
+	}
+
+	if rec := postImport(t, h, "2026-11-05"); rec.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadGateway)
+	}
+	if body := getWeek(t, h, "/?week=2026-11-02").Body.String(); strings.Contains(body, "feast-done") {
+		t.Error("failed import marked the week")
 	}
 }

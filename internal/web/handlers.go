@@ -851,7 +851,14 @@ func (h *handler) importFeasts(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	err = calendar.AddMissing(h.db, feasts)
+	err = h.db.Transaction(func(tx *gorm.DB) error {
+		added, err := calendar.AddMissing(tx, feasts)
+		if err != nil {
+			return err
+		}
+
+		return calendar.MarkImported(tx, start, added, h.now())
+	})
 	if err != nil {
 		log.Printf("error saving imported feasts for week %s: %v", start.Format(intentions.DateLayout), err)
 		serverError(w)
@@ -1294,6 +1301,11 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 
 	view := newWeekView(start, list)
 	setFeasts(view.Days, feasts)
+	if last, ok, err := calendar.LastImport(h.db, start); err != nil {
+		log.Printf("error loading the feast import of week %s: %v", start.Format(intentions.DateLayout), err)
+	} else if ok {
+		view.FeastImport = newFeastImportView(last, h.now())
+	}
 	upcoming := intentions.NextWeekStart(h.now())
 	view.IsUpcoming = start.Equal(upcoming)
 	view.Relation = newWeekRelation(start, h.now())

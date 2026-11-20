@@ -111,12 +111,25 @@
 					<option value="{{.ID}}"{{if eq .ID $.SelectedScheduleID}} selected{{end}}>{{.Name}}</option>
 					{{- end}}
 				</select>
-				<button class="button" type="submit" title="Wczytaj godziny mszy z wybranego porządku na ten tydzień">Wczytaj godziny</button>
+				<button class="button button-icon" type="submit" title="Wczytaj godziny Mszy z wybranego porządku na ten tydzień">
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+					<span class="visually-hidden">Wczytaj godziny Mszy</span>
+				</button>
 			</form>
 			{{- end}}
-			<form method="post" action="/feasts/import">
+			<form method="post" action="/feasts/import" data-busy="Pobieram święta z GCatholic…">
 				<input type="hidden" name="week" value="{{.Week}}">
-				<button class="button" type="submit" title="Pobierz wspomnienia i święta z GCatholic.org (wymaga internetu)">Pobierz święta</button>
+				{{- with .FeastImport}}
+				<button class="button button-icon feast-done" type="submit" title="{{.Title}}">
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4M8.5 15l2.5 2.5 4.5-4.5"/></svg>
+					<span class="visually-hidden">Święta pobrane – pobierz ponownie</span>
+				</button>
+				{{- else}}
+				<button class="button button-icon" type="submit" title="Pobierz wspomnienia i święta z GCatholic.org (wymaga internetu)">
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4M12 12.5v5M9.5 15l2.5 2.5 2.5-2.5"/></svg>
+					<span class="visually-hidden">Pobierz święta</span>
+				</button>
+				{{- end}}
 			</form>
 			{{- if not .IsEmpty}}
 			<a class="delete-link" href="{{.ClearURL}}">Wyczyść tydzień</a>

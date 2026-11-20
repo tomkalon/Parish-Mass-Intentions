@@ -142,6 +142,49 @@ for (const input of document.querySelectorAll("[data-autosubmit]")) {
 	});
 }
 
+const busyForms = document.querySelectorAll("form[data-busy]");
+for (const form of busyForms) {
+	form.addEventListener("submit", () => {
+		const button = form.querySelector('button[type="submit"]');
+		if (!button || button.disabled) {
+			return;
+		}
+		button.dataset.label = button.innerHTML;
+		button.style.minWidth = button.offsetWidth + "px";
+		button.disabled = true;
+		button.classList.add("is-busy");
+		button.setAttribute("aria-busy", "true");
+		const spinner = document.createElement("span");
+		spinner.className = "spinner";
+		spinner.setAttribute("aria-hidden", "true");
+		if (button.classList.contains("button-icon")) {
+			const label = document.createElement("span");
+			label.className = "visually-hidden";
+			label.textContent = form.dataset.busy;
+			button.dataset.title = button.title;
+			button.title = form.dataset.busy;
+			button.replaceChildren(spinner, label);
+		} else {
+			button.replaceChildren(spinner, form.dataset.busy);
+		}
+	});
+}
+window.addEventListener("pageshow", (event) => {
+	if (!event.persisted) {
+		return;
+	}
+	for (const button of document.querySelectorAll("form[data-busy] button.is-busy")) {
+		button.innerHTML = button.dataset.label;
+		if (button.dataset.title) {
+			button.title = button.dataset.title;
+		}
+		button.style.minWidth = "";
+		button.disabled = false;
+		button.classList.remove("is-busy");
+		button.removeAttribute("aria-busy");
+	}
+});
+
 const pickerMonths = ["Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec", "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień"];
 const parseDay = (text) => {
 	const [year, month, day] = text.split("-").map(Number);

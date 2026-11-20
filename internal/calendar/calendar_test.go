@@ -20,7 +20,7 @@ func newTestDB(t *testing.T) *gorm.DB {
 		t.Fatalf("opening test database: %v", err)
 	}
 
-	err = db.AutoMigrate(&Day{})
+	err = db.AutoMigrate(&Day{}, &FeastImport{})
 	if err != nil {
 		t.Fatalf("migrating test database: %v", err)
 	}
@@ -174,7 +174,7 @@ func TestAddMissingKeepsExistingEntries(t *testing.T) {
 	db := newTestDB(t)
 	saveFeast(t, db, "2026-11-04", "odpust parafialny")
 
-	err := AddMissing(db, map[string]string{
+	_, err := AddMissing(db, map[string]string{
 		"2026-11-03": "Wtorek XXXI tygodnia zwykłego",
 		"2026-11-04": "wspomnienie św. Karola Boromeusza, biskupa",
 		"2026-11-05": "",
@@ -200,9 +200,56 @@ func TestAddMissingNothingToAdd(t *testing.T) {
 	db := newTestDB(t)
 
 	for _, feasts := range []map[string]string{nil, {"2026-11-05": ""}} {
-		err := AddMissing(db, feasts)
+		_, err := AddMissing(db, feasts)
 		if err != nil {
 			t.Errorf("AddMissing(%q): %v", feasts, err)
 		}
+	}
+}
+
+func TestAddMissingCountsAddedDays(t *testing.T) {
+	db := newTestDB(t)
+	err := SaveFeast(db, "2026-11-04", "odpust parafialny")
+	if err != nil {
+		t.Fatalf("saving feast: %v", err)
+	}
+
+	added, err := AddMissing(db, map[string]string{"2026-11-03": "a", "2026-11-04": "b", "2026-11-05": ""})
+	if err != nil || added != 1 {
+		t.Errorf("AddMissing = %d, %v, want 1, nil", added, err)
+	}
+	added, err = AddMissing(db, map[string]string{"2026-11-03": "a"})
+	if err != nil || added != 0 {
+		t.Errorf("second AddMissing = %d, %v, want 0, nil", added, err)
+	}
+}
+
+func TestMarkImported(t *testing.T) {
+	db := newTestDB(t)
+	start := time.Date(2026, 11, 2, 0, 0, 0, 0, intentions.TimeZone)
+
+	_, ok, err := LastImport(db, start)
+	if err != nil || ok {
+		t.Fatalf("LastImport before any import = %v, %v, want false, nil", ok, err)
+	}
+
+	first := time.Date(2026, 11, 19, 14, 32, 0, 0, intentions.TimeZone)
+	second := first.Add(time.Hour)
+	for _, step := range []struct {
+		at    time.Time
+		added int
+	}{{first, 3}, {second, 0}} {
+		err = MarkImported(db, start, step.added, step.at)
+		if err != nil {
+			t.Fatalf("MarkImported: %v", err)
+		}
+	}
+
+	last, ok, err := LastImport(db, start)
+	if err != nil || !ok || !last.ImportedAt.Equal(second) || last.Added != 0 || last.WeekStart != "2026-11-02" {
+		t.Errorf("LastImport = %+v, %v, %v, want the second import", last, ok, err)
+	}
+	if _, ok, _ := LastImport(db, start.AddDate(0, 0, 7)); ok {
+		t.Error("another week reports an import")
 	}
 }

@@ -15,6 +15,7 @@
 	--danger: #A8231B;
 	--danger-hover: #8A1C16;
 	--danger-bg: #FBEDEA;
+	--danger-line: #E5B7B1;
 	--danger-field: #FFF7F6;
 	--selected-day: #FFF8EE;
 	--selected-mass: #F8EFE2;
@@ -316,7 +317,8 @@ h1 {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
-	gap: 8px 16px;
+	gap: 8px 14px;
+	container: week-actions / inline-size;
 	margin: 0 0 20px;
 	padding: 8px 12px;
 	border: 1px solid var(--line);
@@ -330,7 +332,7 @@ h1 {
 }
 
 .week-actions > form + form {
-	padding-left: 16px;
+	padding-left: 14px;
 	border-left: 1px solid var(--line);
 }
 
@@ -341,17 +343,118 @@ h1 {
 	cursor: pointer;
 }
 
-.button.feast-done svg {
+.bar-action {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	gap: 8px;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius);
+	background: none;
+	color: var(--ink-2);
+	font: 600 12px/1.25 var(--font-ui);
+	text-align: left;
+	cursor: pointer;
+}
+
+.bar-action-icon {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 36px;
+	height: 36px;
+	border: 1px solid var(--line-strong);
+	border-radius: var(--radius);
+	background: var(--surface);
+	color: var(--ink);
+}
+
+.bar-action-icon svg {
+	display: block;
+}
+
+.bar-action:hover {
+	color: var(--ink);
+}
+
+.bar-action:hover .bar-action-icon {
+	background: var(--hover);
+}
+
+.bar-action:focus-visible {
+	outline-offset: 3px;
+}
+
+.bar-action.feast-done .bar-action-icon {
 	color: var(--free);
 }
 
-.week-actions .button-icon {
-	padding: 0 8px;
+.bar-action.feast-done .bar-action-text {
+	color: var(--free-ink);
 }
 
-.week-actions .button.is-busy .spinner {
+.bar-action-text {
+	white-space: nowrap;
+}
+
+.bar-action.is-busy .bar-action-icon,
+.bar-action.is-busy .bar-action-text {
+	color: var(--ink-2);
+}
+
+.bar-action.is-busy .bar-action-text {
+	white-space: normal;
+}
+
+@container week-actions (max-width: 850px) {
+	.bar-action-text {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+	}
+}
+
+.bar-action-note {
+	color: var(--muted);
+	font-weight: 400;
+}
+
+.bar-action.is-busy {
+	cursor: progress;
+}
+
+.bar-action.is-busy .spinner {
 	width: 18px;
 	height: 18px;
+}
+
+.button-soft-danger {
+	gap: 7px;
+	border-color: var(--danger-line);
+	background: transparent;
+	color: var(--danger);
+}
+
+.button-soft-danger:hover {
+	border-color: var(--danger);
+	background: var(--danger-bg);
+	color: var(--danger-hover);
+}
+
+.button-soft-danger:focus-visible {
+	outline-color: var(--danger);
+}
+
+.week-clear {
+	margin-left: auto;
+}
+
+.week-actions .week-clear {
+	padding: 0 12px 0 10px;
+	font-size: 14px;
 }
 
 .button.is-busy {
@@ -516,7 +619,29 @@ h1 {
 }
 
 .toolbar-print {
+	gap: 8px;
 	margin-left: auto;
+	padding: 0 16px 0 13px;
+}
+
+.toolbar-print svg {
+	display: block;
+	color: var(--accent);
+}
+
+@media (max-width: 1319px) {
+	.has-panel .toolbar-print {
+		padding: 0 11px;
+	}
+
+	.has-panel .toolbar-print-label {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
 }
 
 .button-icon {

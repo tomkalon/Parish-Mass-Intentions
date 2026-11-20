@@ -157,13 +157,14 @@ for (const form of busyForms) {
 		const spinner = document.createElement("span");
 		spinner.className = "spinner";
 		spinner.setAttribute("aria-hidden", "true");
-		if (button.classList.contains("button-icon")) {
-			const label = document.createElement("span");
-			label.className = "visually-hidden";
-			label.textContent = form.dataset.busy;
+		const icon = button.querySelector(".bar-action-icon");
+		const text = button.querySelector(".bar-action-text");
+		if (icon && text) {
+			text.style.width = text.offsetWidth + "px";
 			button.dataset.title = button.title;
 			button.title = form.dataset.busy;
-			button.replaceChildren(spinner, label);
+			icon.replaceChildren(spinner);
+			text.textContent = form.dataset.busy;
 		} else {
 			button.replaceChildren(spinner, form.dataset.busy);
 		}

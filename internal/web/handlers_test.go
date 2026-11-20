@@ -160,7 +160,8 @@ func TestWeekSelectedByQuery(t *testing.T) {
 		"Niedziela 15.11.",
 		"W tym tygodniu nie ma jeszcze żadnych intencji.",
 		`<a class="button button-primary button-large" href="/?new=1&amp;week=2026-11-09">+ Dodaj intencję</a>`,
-		`<a class="button toolbar-print" href="/print?week=2026-11-09">Drukuj / PDF</a>`,
+		`<a class="button toolbar-print" href="/print?week=2026-11-09" title="Wydruk tego tygodnia">`,
+		`<span class="toolbar-print-label">Drukuj</span>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body does not contain %q", want)
@@ -1267,7 +1268,7 @@ func TestWeekWithoutSettingsTable(t *testing.T) {
 
 func TestWeekShowsClearLink(t *testing.T) {
 	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
-	link := `<a class="delete-link" href="/?clear=1&amp;week=2026-11-02">Wyczyść tydzień</a>`
+	link := `<a class="button button-soft-danger week-clear" href="/?clear=1&amp;week=2026-11-02">`
 
 	if body := getWeek(t, h, "/").Body.String(); strings.Contains(body, link) {
 		t.Error("empty week has the clear link")
@@ -1855,12 +1856,12 @@ func TestWeekShowsImportButton(t *testing.T) {
 	body := getWeek(t, newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone)), "/").Body.String()
 
 	checkBody(t, body,
-		`<form method="post" action="/feasts/import" data-busy="Pobieram święta z GCatholic…">
+		`<form method="post" action="/feasts/import" data-busy="Pobieram święta…">
 				<input type="hidden" name="week" value="2026-11-02">
-				<button class="button button-icon" type="submit" title="Pobierz wspomnienia i święta z GCatholic.org (wymaga internetu)">`,
-		`<span class="visually-hidden">Pobierz święta</span>`,
-		`<button class="button button-icon" type="submit" title="Wczytaj godziny Mszy z wybranego porządku na ten tydzień">`,
-		`<span class="visually-hidden">Wczytaj godziny Mszy</span>`,
+				<button class="bar-action" type="submit" title="Pobierz wspomnienia i święta z GCatholic.org (wymaga internetu)">`,
+		`<span class="bar-action-text">Pobierz święta<br>i wspomnienia</span>`,
+		`<button class="bar-action" type="submit" title="Wczytaj godziny Mszy z wybranego porządku na ten tydzień">`,
+		`<span class="bar-action-text">Wczytaj<br>godziny Mszy</span>`,
 	)
 	if strings.Contains(body, "week-alert") {
 		t.Error("week view shows the import error without an import")
@@ -2987,7 +2988,7 @@ func TestImportFeastsMarksTheWeek(t *testing.T) {
 	}}, nil)
 
 	body := getWeek(t, h, "/?week=2026-11-02").Body.String()
-	checkBody(t, body, `<form method="post" action="/feasts/import" data-busy="Pobieram święta z GCatholic…">`)
+	checkBody(t, body, `<form method="post" action="/feasts/import" data-busy="Pobieram święta…">`)
 	if strings.Contains(body, "feast-done") {
 		t.Error("week shows a feast import that never happened")
 	}
@@ -2998,8 +2999,8 @@ func TestImportFeastsMarksTheWeek(t *testing.T) {
 
 	body = getWeek(t, h, "/?week=2026-11-02").Body.String()
 	checkBody(t, body,
-		`<button class="button button-icon feast-done" type="submit" title="Święta pobrane z GCatholic dziś, 14:32. Dopisano opisy do 2 dni. Kliknij, aby pobrać ponownie – uzupełni tylko puste dni.">`,
-		`<span class="visually-hidden">Święta pobrane – pobierz ponownie</span>`,
+		`<button class="bar-action feast-done" type="submit" title="Święta pobrane z GCatholic dziś, 14:32. Dopisano opisy do 2 dni. Kliknij, aby pobrać ponownie – uzupełni tylko puste dni.">`,
+		`<span class="bar-action-text">Święta pobrane<br><span class="bar-action-note">dziś, 14:32</span></span>`,
 	)
 	if other := getWeek(t, h, "/?week=2026-11-09").Body.String(); strings.Contains(other, "feast-done") {
 		t.Error("the marker leaks into another week")

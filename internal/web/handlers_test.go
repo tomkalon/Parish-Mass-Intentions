@@ -161,7 +161,7 @@ func TestWeekSelectedByQuery(t *testing.T) {
 		"W tym tygodniu nie ma jeszcze żadnych intencji.",
 		`<a class="button button-primary button-large" href="/?new=1&amp;week=2026-11-09">+ Dodaj intencję</a>`,
 		`<a class="button toolbar-print" href="/print?week=2026-11-09" title="Wydruk tego tygodnia">`,
-		"Drukuj\n\t\t</a>",
+		`<span class="toolbar-print-label">Drukuj</span>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body does not contain %q", want)

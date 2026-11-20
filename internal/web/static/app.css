@@ -629,6 +629,21 @@ h1 {
 	color: var(--accent);
 }
 
+@media (max-width: 1319px) {
+	.has-panel .toolbar-print {
+		padding: 0 11px;
+	}
+
+	.has-panel .toolbar-print-label {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
+}
+
 .button-icon {
 	padding: 0 11px;
 }

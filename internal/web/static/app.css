@@ -2161,7 +2161,8 @@ h1 {
 }
 
 .form-restored,
-.form-other-draft {
+.form-other-draft,
+.form-from-search {
 	margin: 0;
 	padding: 10px 12px;
 	border-radius: var(--radius);
@@ -2169,6 +2170,16 @@ h1 {
 	font-size: 15px;
 	line-height: 1.45;
 	overflow-wrap: anywhere;
+}
+
+.form-from-search {
+	background: var(--accent-soft);
+}
+
+.form-from-search a {
+	color: var(--accent);
+	font-weight: 600;
+	text-underline-offset: 3px;
 }
 
 [hidden] {
@@ -3252,6 +3263,35 @@ a.series-day:hover {
 .search-title {
 	margin: 0;
 	font: 700 26px/1.2 var(--font-serif);
+}
+
+.search-defaults {
+	margin-left: auto;
+}
+
+.search-saved {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 10px;
+	margin: 0 0 16px;
+	padding: 10px 14px;
+	border: 1px solid var(--free);
+	border-radius: var(--radius);
+	background: var(--free-bg);
+	color: var(--free-ink);
+	font-weight: 600;
+}
+
+.search-saved svg {
+	flex: none;
+	color: var(--free);
+}
+
+.search-saved a {
+	margin-left: auto;
+	color: var(--free-ink);
+	text-underline-offset: 3px;
 }
 
 .search {

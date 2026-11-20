@@ -68,6 +68,7 @@ type handler struct {
 	version           string
 	updater           *update.Updater
 	logFile           string
+	searches          searchMemory
 }
 
 type Options struct {
@@ -247,6 +248,9 @@ func (h *handler) week(w http.ResponseWriter, r *http.Request) {
 		f := newFormView(start, query.Get("day"), query.Get("time"))
 		if id, err := strconv.Atoi(query.Get("series")); err == nil && id > 0 {
 			f.SeriesID = id
+		}
+		if query.Get("from") == fromSearch {
+			h.openedFromSearch(&f)
 		}
 		state.form = &f
 	case query.Get("clear") == "1":
@@ -1172,6 +1176,9 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 		if token := r.PostForm.Get("draft_token"); len(token) <= maxDraftToken {
 			form.DraftToken = token
 		}
+		if r.PostForm.Get("from") == fromSearch {
+			h.openedFromSearch(&form)
+		}
 
 		h.renderWeek(w, http.StatusUnprocessableEntity, start, weekState{form: &form})
 		return
@@ -1230,6 +1237,11 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, intention intenti
 		query.Set("edit", strconv.Itoa(intention.ID))
 		query.Set("saved", strconv.Itoa(intention.ID))
 		http.Redirect(w, r, "/?"+query.Encode(), http.StatusSeeOther)
+		return
+	}
+
+	if r.PostForm.Get("from") == fromSearch {
+		http.Redirect(w, r, h.backToSearchURL(week, intention.ID), http.StatusSeeOther)
 		return
 	}
 
@@ -1300,6 +1312,7 @@ func (h *handler) renderWeek(w http.ResponseWriter, status int, start time.Time,
 	}
 
 	view := newWeekView(start, list)
+	view.SearchURL, view.SearchRemembered = h.searches.url(start.Format(intentions.DateLayout))
 	setFeasts(view.Days, feasts)
 	if last, ok, err := calendar.LastImport(h.db, start); err != nil {
 		log.Printf("error loading the feast import of week %s: %v", start.Format(intentions.DateLayout), err)

@@ -17,6 +17,9 @@
 	<nav class="toolbar search-toolbar" aria-label="Szukaj Mszy">
 		<a class="button" href="{{.BackURL}}" data-close>← Wróć do tygodnia</a>
 		<h1 class="search-title">Szukaj Mszy</h1>
+		{{- with .DefaultsURL}}
+		<a class="link-action search-defaults" href="{{.}}" title="Wyczyść filtry, tekst i okres – zacznij wyszukiwanie od nowa">Ustawienia domyślne</a>
+		{{- end}}
 	</nav>
 
 	<div class="search">
@@ -96,6 +99,13 @@
 		{{- end}}
 
 		<main class="search-results">
+			{{- with .Saved}}
+			<p class="search-saved" role="status">
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+				<span>Zapisano intencję: {{.Label}}.</span>
+				<a href="{{.WeekURL}}">Zobacz w tygodniu</a>
+			</p>
+			{{- end}}
 			<form class="search-text" method="get" action="/search" role="search">
 				{{- range .TextFields}}
 				<input type="hidden" name="{{.Name}}" value="{{.Value}}">

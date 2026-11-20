@@ -133,7 +133,7 @@ func TestSearchDefaultsShowFreeLoadedMasses(t *testing.T) {
 		`<p class="search-total">Znaleziono 1 Mszę</p>`,
 		`<p class="search-subtotal">w 1 dniu · kliknij Mszę, aby dodać intencję</p>`,
 		`<input type="checkbox" id="f-planned" name="planned" value="1" data-autosubmit><span class="facet-label">Pokaż Msze planowane`,
-		`<a class="mass-chip is-free" href="/?day=2026-11-23&amp;new=1&amp;time=06%3A30&amp;week=2026-11-23"`,
+		`<a class="mass-chip is-free" href="/?day=2026-11-23&amp;new=1&amp;time=06%3A30&amp;week=2026-11-23&amp;from=search"`,
 	)
 	for _, unwanted := range []string{`id="f-schedule"`, "planowana", `class="search-day-planned"`} {
 		if strings.Contains(body, unwanted) {
@@ -163,9 +163,9 @@ func TestSearchWithPlannedMasses(t *testing.T) {
 		`<a class="search-filter-chip" href="/search?period=m3&amp;planned=1&amp;schedule=1&amp;skipgreg=1&amp;week=2026-11-23" aria-label="Usuń filtr: Wolne">Wolne`,
 		`<h2>Listopad 2026</h2>`,
 		`<a href="/?week=2026-11-16#d-2026-11-22">Nd 22.11</a>`,
-		`<a class="mass-chip is-planned" href="/?day=2026-11-22&amp;new=1&amp;time=07%3A00&amp;week=2026-11-16" title="Dodaj intencję: niedziela 22.11, godz. 7:00"><b>7:00</b><span>planowana</span></a>`,
+		`<a class="mass-chip is-planned" href="/?day=2026-11-22&amp;new=1&amp;time=07%3A00&amp;week=2026-11-16&amp;from=search" title="Dodaj intencję: niedziela 22.11, godz. 7:00"><b>7:00</b><span>planowana</span></a>`,
 		`<span class="search-day-planned">godziny wg porządku „Porządek zwykły”</span>`,
-		`<a class="mass-chip is-free" href="/?day=2026-11-23&amp;new=1&amp;time=06%3A30&amp;week=2026-11-23" title="Dodaj intencję: poniedziałek 23.11, godz. 6:30"><b>6:30</b><span>wolna</span></a>`,
+		`<a class="mass-chip is-free" href="/?day=2026-11-23&amp;new=1&amp;time=06%3A30&amp;week=2026-11-23&amp;from=search" title="Dodaj intencję: poniedziałek 23.11, godz. 6:30"><b>6:30</b><span>wolna</span></a>`,
 		`<span>2 Msze</span><span aria-hidden="true">·</span><span>1 intencja</span><span aria-hidden="true">·</span>
 	<span class="day-free">1 wolna</span>
 	<i class="day-outside">(&#43;1 poza parafią)</i>`,
@@ -186,7 +186,7 @@ func TestSearchFiltersByCountWeekdayAndTime(t *testing.T) {
 	checkBody(t, body,
 		`<p class="search-total">Znaleziono 1 Mszę</p>`,
 		`<p class="search-subtotal">w 1 dniu`,
-		`<a class="mass-chip is-one" href="/?day=2026-11-23&amp;new=1&amp;time=18%3A00&amp;week=2026-11-23" title="Dodaj intencję: poniedziałek 23.11, godz. 18:00"><b>18:00</b><span>1 intencja</span><i>(&#43;1 poza parafią)</i></a>`,
+		`<a class="mass-chip is-one" href="/?day=2026-11-23&amp;new=1&amp;time=18%3A00&amp;week=2026-11-23&amp;from=search" title="Dodaj intencję: poniedziałek 23.11, godz. 18:00"><b>18:00</b><span>1 intencja</span><i>(&#43;1 poza parafią)</i></a>`,
 	)
 
 	body = getSearch(t, h, "/search?period=m1&n=0&dow=0&time=10:00&planned=1&schedule=1")
@@ -342,7 +342,7 @@ func TestCreateSlotsMarksWeekAndClearUnmarks(t *testing.T) {
 
 	body := getSearch(t, h, "/search?period=m1&n=0&schedule=1&planned=1")
 	if strings.Contains(body, `<a href="/?week=2026-11-30#d-2026-11-30">`) && strings.Contains(body, "Pn 30.11</a>") {
-		checkBody(t, body, `href="/?day=2026-11-30&amp;new=1&amp;time=06%3A30&amp;week=2026-11-30" title="Dodaj intencję: poniedziałek 30.11, godz. 6:30"><b>6:30</b><span>wolna</span>`)
+		checkBody(t, body, `href="/?day=2026-11-30&amp;new=1&amp;time=06%3A30&amp;week=2026-11-30&amp;from=search" title="Dodaj intencję: poniedziałek 30.11, godz. 6:30"><b>6:30</b><span>wolna</span>`)
 	} else {
 		t.Error("loaded empty slot on 30.11 not listed as free")
 	}

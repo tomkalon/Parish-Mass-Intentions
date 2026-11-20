@@ -43,6 +43,7 @@ type formView struct {
 	DraftToken string
 	Restored   string
 	OtherDraft *draftNotice
+	FromSearch bool
 
 	dayIndex    int
 	placeholder bool

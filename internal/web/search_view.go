@@ -285,10 +285,12 @@ func (q searchQuery) matches(m masses.Mass, skip string) bool {
 }
 
 type searchView struct {
-	Topbar    topbarView
-	BackURL   string
-	Week      string
-	RangeText string
+	Topbar      topbarView
+	BackURL     string
+	DefaultsURL string
+	Saved       *searchSaved
+	Week        string
+	RangeText   string
 
 	Periods       []searchOption
 	Counts        []facetOption
@@ -642,7 +644,7 @@ func newSearchMass(m masses.Mass, week, date string) searchMass {
 	mass := searchMass{
 		Time:    clock,
 		Outside: outsideLabel(m.Outside, m.Parish > 0),
-		URL:     newIntentionURL(week, date, m.At.Format("15:04")),
+		URL:     searchMassURL(week, date, m.At.Format("15:04")),
 		Title:   "Dodaj intencję: " + strings.ToLower(weekdayNames[m.At.Weekday()]) + " " + m.At.Format("2.1") + ", godz. " + clock,
 		Kind:    countKinds[countBucket(m.Parish)],
 	}
@@ -677,6 +679,16 @@ func (h *handler) search(w http.ResponseWriter, r *http.Request) {
 	}
 
 	q := parseSearchQuery(r.URL.Query(), h.now(), setting.SelectedScheduleID, schedules)
+	h.searches.remember(q)
+	defaults := parseSearchQuery(url.Values{"week": {q.Week}}, h.now(), setting.SelectedScheduleID, schedules)
+	finish := func(view *searchView) {
+		view.Topbar = newTopbarView(setting, h.backups.State(), h.now())
+		view.Topbar.Draft = h.draftNotice()
+		view.Saved = h.searchSaved(r.URL.Query().Get("saved"))
+		if q.values().Encode() != defaults.values().Encode() {
+			view.DefaultsURL = "/search?week=" + q.Week
+		}
+	}
 
 	now := h.now().In(intentions.TimeZone)
 	today := startOfDay(now)
@@ -700,8 +712,7 @@ func (h *handler) search(w http.ResponseWriter, r *http.Request) {
 
 		view := newSearchFrame(q, start, to, today)
 		addTextSearch(&view, q, upcoming, past, loaded)
-		view.Topbar = newTopbarView(setting, h.backups.State(), h.now())
-		view.Topbar.Draft = h.draftNotice()
+		finish(&view)
 		render(w, http.StatusOK, searchTemplate, view)
 		return
 	}
@@ -730,8 +741,7 @@ func (h *handler) search(w http.ResponseWriter, r *http.Request) {
 	}
 
 	view := newSearchView(q, list, feasts, schedules, start, to, today)
-	view.Topbar = newTopbarView(setting, h.backups.State(), h.now())
-	view.Topbar.Draft = h.draftNotice()
+	finish(&view)
 
 	render(w, http.StatusOK, searchTemplate, view)
 }

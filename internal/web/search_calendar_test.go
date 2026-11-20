@@ -80,7 +80,7 @@ func TestSearchCalendarSelectedDay(t *testing.T) {
 						<b>18:00</b>
 						<span class="search-preview-status is-one">1 intencja</span>
 						<span class="search-preview-note"><i>(&#43;1 poza parafią)</i> </span>`,
-		`href="/?day=2026-11-23&amp;new=1&amp;time=18%3A00&amp;week=2026-11-23" aria-label="Dodaj intencję na godz. 18:00">+ Dodaj</a>`,
+		`href="/?day=2026-11-23&amp;new=1&amp;time=18%3A00&amp;week=2026-11-23&amp;from=search" aria-label="Dodaj intencję na godz. 18:00">+ Dodaj</a>`,
 		`<a class="scal-cell has-tip is-match is-selected" href="/search?day=2026-11-23&amp;`,
 	)
 

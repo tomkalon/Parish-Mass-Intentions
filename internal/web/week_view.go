@@ -18,6 +18,9 @@ type weekView struct {
 	Schedules   []masses.Schedule
 	Topbar      topbarView
 
+	SearchURL        string
+	SearchRemembered bool
+
 	SelectedScheduleID int
 	ParishName         string
 	Address            string
@@ -139,10 +142,6 @@ func (v weekView) ClearURL() string {
 
 func (v weekView) CalendarURL() string {
 	return calendarURL(v.Week(), v.Start.Year())
-}
-
-func (v weekView) SearchURL() string {
-	return "/search?week=" + v.Week()
 }
 
 func (v weekView) HasDialog() bool {

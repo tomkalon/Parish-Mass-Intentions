@@ -24,6 +24,10 @@
 			{{- end}}
 
 			<input type="hidden" name="week" value="{{.Week}}">
+			{{- if .FromSearch}}
+			<input type="hidden" name="from" value="search">
+			<p class="form-from-search">Z wyszukiwania – po zapisaniu wrócisz do wyników. <a href="{{.CloseURL}}" data-discard>Wróć bez zapisywania</a></p>
+			{{- end}}
 			{{- if .SeriesLocked}}
 			<input type="hidden" name="series" value="{{.SeriesID}}">
 			{{- end}}

@@ -43,6 +43,7 @@ func feastURL(week, date string) string {
 
 type feastImportView struct {
 	Title string
+	When  string
 }
 
 func newFeastImportView(last calendar.FeastImport, now time.Time) *feastImportView {
@@ -54,5 +55,5 @@ func newFeastImportView(last calendar.FeastImport, now time.Time) *feastImportVi
 		title += "Nic nie dopisano – dni miały już opisy albo GCatholic nie ma dla nich obchodów."
 	}
 
-	return &feastImportView{Title: title + " Kliknij, aby pobrać ponownie – uzupełni tylko puste dni."}
+	return &feastImportView{Title: title + " Kliknij, aby pobrać ponownie – uzupełni tylko puste dni.", When: when}
 }

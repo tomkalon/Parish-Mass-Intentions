@@ -48,7 +48,10 @@
 				{{- end}}
 			</a>
 		</div>
-		<a class="button toolbar-print" href="{{.PrintURL}}">Drukuj / PDF</a>
+		<a class="button toolbar-print" href="{{.PrintURL}}" title="Wydruk tego tygodnia">
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7 8.5v-5h10v5M7 17H5a2 2 0 0 1-2-2v-4.5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2V15a2 2 0 0 1-2 2h-2"/><rect x="7" y="13.5" width="10" height="7" rx="1"/></svg>
+			Drukuj
+		</a>
 		<a class="button button-primary toolbar-add" href="{{.NewURL}}" title="Dodaj intencję">+ Intencja</a>
 		<a class="button button-icon" href="{{.SettingsURL}}" aria-label="Ustawienia" title="Ustawienia">
 			<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -111,28 +114,31 @@
 					<option value="{{.ID}}"{{if eq .ID $.SelectedScheduleID}} selected{{end}}>{{.Name}}</option>
 					{{- end}}
 				</select>
-				<button class="button button-icon" type="submit" title="Wczytaj godziny Mszy z wybranego porządku na ten tydzień">
-					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
-					<span class="visually-hidden">Wczytaj godziny Mszy</span>
+				<button class="bar-action" type="submit" title="Wczytaj godziny Mszy z wybranego porządku na ten tydzień">
+					<span class="bar-action-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></span>
+					<span class="bar-action-text">Wczytaj<br>godziny Mszy</span>
 				</button>
 			</form>
 			{{- end}}
-			<form method="post" action="/feasts/import" data-busy="Pobieram święta z GCatholic…">
+			<form method="post" action="/feasts/import" data-busy="Pobieram święta…">
 				<input type="hidden" name="week" value="{{.Week}}">
 				{{- with .FeastImport}}
-				<button class="button button-icon feast-done" type="submit" title="{{.Title}}">
-					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4M8.5 15l2.5 2.5 4.5-4.5"/></svg>
-					<span class="visually-hidden">Święta pobrane – pobierz ponownie</span>
+				<button class="bar-action feast-done" type="submit" title="{{.Title}}">
+					<span class="bar-action-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4M8.5 15l2.5 2.5 4.5-4.5"/></svg></span>
+					<span class="bar-action-text">Święta pobrane<br><span class="bar-action-note">{{.When}}</span></span>
 				</button>
 				{{- else}}
-				<button class="button button-icon" type="submit" title="Pobierz wspomnienia i święta z GCatholic.org (wymaga internetu)">
-					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4M12 12.5v5M9.5 15l2.5 2.5 2.5-2.5"/></svg>
-					<span class="visually-hidden">Pobierz święta</span>
+				<button class="bar-action" type="submit" title="Pobierz wspomnienia i święta z GCatholic.org (wymaga internetu)">
+					<span class="bar-action-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4M12 12.5v5M9.5 15l2.5 2.5 2.5-2.5"/></svg></span>
+					<span class="bar-action-text">Pobierz święta<br>i wspomnienia</span>
 				</button>
 				{{- end}}
 			</form>
 			{{- if not .IsEmpty}}
-			<a class="delete-link" href="{{.ClearURL}}">Wyczyść tydzień</a>
+			<a class="button button-soft-danger week-clear" href="{{.ClearURL}}">
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 6.5h16M9.5 6.5V4h5v2.5M6.5 6.5l.9 12.6A1.5 1.5 0 0 0 8.9 20.5h6.2a1.5 1.5 0 0 0 1.5-1.4l.9-12.6M10 10.5v6M14 10.5v6"/></svg>
+				Wyczyść tydzień
+			</a>
 			{{- end}}
 		</div>
 

@@ -148,7 +148,7 @@ func TestFixedPage(t *testing.T) {
 		`ukryta na wydruku</span>`,
 		`href="/settings/schedules/1/fixed?edit=` + strconv.Itoa(novena.ID) + `&amp;week=2026-11-02#formularz"`,
 		`href="/settings/schedules/1/fixed?delete=` + strconv.Itoa(novena.ID) + `&amp;week=2026-11-02"`,
-		`href="/settings/schedules/1/fixed?mass=1-06%3A30&amp;week=2026-11-02#formularz">+ Dodaj</a>`,
+		`<a class="button-small fixed-add" href="/settings/schedules/1/fixed?mass=1-06%3A30&amp;week=2026-11-02#formularz">+ Dodaj</a>`,
 		`<form class="settings-form" id="formularz" method="post" action="/settings/schedules/1/fixed">`,
 		`<legend>Dodaj stałą intencję</legend>`,
 		`<option value="0-10:00" selected>Niedziela, 10:00</option>`,
@@ -327,8 +327,8 @@ func TestSettingsListShowsFixedIntentions(t *testing.T) {
 	body := serveRouter(t, h.db, http.MethodGet, "/settings?week=2026-11-02", nil).Body.String()
 	for _, want := range []string{
 		`<p class="schedule-fixed" title="Pn 18:00 – Intencje nowennowe · Nd 10:00 – Za parafian">Stałe intencje: Pn 18:00 – Intencje nowennowe · Nd 10:00 – Za parafian</p>`,
-		`<a class="link-action" href="/settings/schedules/1/fixed?week=2026-11-02" aria-label="Stałe intencje porządku Porządek zwykły">Stałe intencje</a>`,
-		`<a class="link-action" href="/settings/schedules/2/fixed?week=2026-11-02" aria-label="Stałe intencje porządku Wakacje">Stałe intencje</a>`,
+		`<a class="button-small" href="/settings/schedules/1/fixed?week=2026-11-02" aria-label="Stałe intencje porządku Porządek zwykły">`,
+		`<a class="button-small" href="/settings/schedules/2/fixed?week=2026-11-02" aria-label="Stałe intencje porządku Wakacje">`,
 		`Godziny Mszy i stałe intencje wczytywane przyciskiem`,
 	} {
 		if !strings.Contains(body, want) {

@@ -72,7 +72,8 @@ func TestSearchCalendarSelectedDay(t *testing.T) {
 
 	checkBody(t, body,
 		`<h2>Poniedziałek 23.11.2026</h2>`,
-		`<a class="search-preview-week" href="/?week=2026-11-23#d-2026-11-23">Otwórz tydzień →</a>`,
+		`<a class="button-small search-preview-week" href="/?week=2026-11-23#d-2026-11-23">`,
+		`Otwórz tydzień<svg`,
 		`<li class="search-preview-row">
 						<b>6:30</b>
 						<span class="search-preview-status is-free">wolna</span>`,

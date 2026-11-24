@@ -156,9 +156,9 @@
 								{{- end}}
 							</div>
 							<span class="settings-row-actions">
-								<a class="link-action" href="{{.EditURL}}" aria-label="Zmień porządek {{.Name}}">Zmień</a>
-								<a class="link-action" href="{{.FixedURL}}" aria-label="Stałe intencje porządku {{.Name}}">Stałe intencje</a>
-								<a class="link-action is-danger" href="{{.DeleteURL}}" aria-label="Usuń porządek {{.Name}}">Usuń</a>
+								<a class="button-small" href="{{.EditURL}}" aria-label="Zmień porządek {{.Name}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>Zmień</a>
+								<a class="button-small" href="{{.FixedURL}}" aria-label="Stałe intencje porządku {{.Name}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M17 2.5l3 3-3 3"/><path d="M4 11.5v-2a4 4 0 0 1 4-4h12"/><path d="M7 21.5l-3-3 3-3"/><path d="M20 12.5v2a4 4 0 0 1-4 4H4"/></svg>Stałe intencje</a>
+								<a class="button-small is-danger" href="{{.DeleteURL}}" aria-label="Usuń porządek {{.Name}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 6.5h16M9.5 6.5V4h5v2.5M6.5 6.5l.9 12.6A1.5 1.5 0 0 0 8.9 20.5h6.2a1.5 1.5 0 0 0 1.5-1.4l.9-12.6M10 10.5v6M14 10.5v6"/></svg>Usuń</a>
 							</span>
 						</div>
 						{{- else}}

@@ -682,6 +682,35 @@ h1 {
 	background: var(--accent-soft);
 }
 
+.button-small svg {
+	flex: none;
+}
+
+.button-small:has(svg) {
+	gap: 6px;
+}
+
+.button-small.is-danger {
+	border-color: var(--danger-line);
+	color: var(--danger);
+}
+
+.button-small.is-danger:hover {
+	border-color: var(--danger);
+	background: var(--danger-bg);
+}
+
+.settings-row-actions:has(.button-small) {
+	gap: 8px;
+}
+
+.settings-row-actions .button-small {
+	min-height: 34px;
+	margin-left: 0;
+	padding: 0 10px;
+	font-size: 14px;
+}
+
 /* Masses and intentions */
 
 .mass {
@@ -1892,7 +1921,7 @@ h1 {
 }
 
 .fixed-time {
-	padding: 4px 0 4px 6px;
+	padding: 8px 0 4px 6px;
 	font-variant-numeric: tabular-nums;
 	font-weight: 600;
 }
@@ -1924,8 +1953,13 @@ h1 {
 }
 
 .fixed-add {
-	margin-left: 3px;
-	color: var(--accent);
+	min-height: 32px;
+	margin: 4px 0 2px 3px;
+	font-size: 14px;
+}
+
+.fixed-item {
+	align-items: center;
 }
 
 #formularz {
@@ -2298,34 +2332,13 @@ h1 {
 	margin: 0;
 }
 
-.button-back {
+.button-return {
 	gap: 8px;
-	border-color: var(--accent);
-	background: var(--surface);
-	color: var(--accent);
 }
 
-.button-back:hover {
-	border-color: var(--accent-hover);
-	background: var(--accent-soft);
-	color: var(--accent-hover);
-}
-
-.toolbar-back {
-	padding: 0 12px 0 10px;
-}
-
-.toolbar:has(.toolbar-back) .toolbar-print {
-	padding: 0 11px;
-}
-
-.toolbar:has(.toolbar-back) .toolbar-print-label {
-	position: absolute;
-	width: 1px;
-	height: 1px;
-	overflow: hidden;
-	clip-path: inset(50%);
-	white-space: nowrap;
+.toolbar-return {
+	display: flex;
+	flex-basis: 100%;
 }
 
 [hidden] {
@@ -4032,10 +4045,8 @@ a.series-day:hover {
 }
 
 .search-preview-week {
+	align-self: center;
 	margin-left: auto;
-	color: var(--accent);
-	font-size: 15px;
-	font-weight: 600;
 }
 
 .search-preview-rows {

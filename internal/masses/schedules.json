@@ -9,7 +9,11 @@
       "piątek":       ["6:30", "18:00"],
       "sobota":       ["6:30", "18:00"],
       "niedziela":    ["7:00", "8:30", "10:00", "11:30", "15:00", "18:00"]
-    }
+    },
+    "fixed": [
+      {"day": "środa",  "time": "18:00", "content": "Intencje nowennowe"},
+      {"day": "piątek", "time": "18:00", "content": "Intencje zbiorowe za zmarłych", "deceased": true}
+    ]
   },
   {
     "name": "Wakacje",
@@ -21,6 +25,10 @@
       "piątek":       ["6:30", "18:00"],
       "sobota":       ["6:30", "18:00"],
       "niedziela":    ["7:00", "9:00", "11:00", "15:00"]
-    }
+    },
+    "fixed": [
+      {"day": "środa",  "time": "18:00", "content": "Intencje nowennowe"},
+      {"day": "piątek", "time": "18:00", "content": "Intencje zbiorowe za zmarłych", "deceased": true}
+    ]
   }
 ]

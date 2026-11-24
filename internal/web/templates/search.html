@@ -18,7 +18,10 @@
 		<a class="button" href="{{.BackURL}}" data-close>← Wróć do tygodnia</a>
 		<h1 class="search-title">Szukaj Mszy</h1>
 		{{- with .DefaultsURL}}
-		<a class="link-action search-defaults" href="{{.}}" title="Wyczyść filtry, tekst i okres – zacznij wyszukiwanie od nowa">Ustawienia domyślne</a>
+		<a class="button button-primary search-defaults" href="{{.}}" title="Wyczyść filtry, tekst i okres – zacznij wyszukiwanie od nowa">
+			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3.5 3.5v5h5"/></svg>
+			Ustawienia domyślne
+		</a>
 		{{- end}}
 	</nav>
 

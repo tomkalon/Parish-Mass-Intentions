@@ -1941,7 +1941,6 @@ h1 {
 	padding-left: 20px;
 }
 
-
 .trash-row {
 	display: flex;
 	align-items: flex-start;
@@ -2289,10 +2288,44 @@ h1 {
 	background: var(--accent-soft);
 }
 
-.form-from-search a {
+.form-from-search {
+	display: grid;
+	justify-items: start;
+	gap: 10px;
+}
+
+.form-from-search p {
+	margin: 0;
+}
+
+.button-back {
+	gap: 8px;
+	border-color: var(--accent);
+	background: var(--surface);
 	color: var(--accent);
-	font-weight: 600;
-	text-underline-offset: 3px;
+}
+
+.button-back:hover {
+	border-color: var(--accent-hover);
+	background: var(--accent-soft);
+	color: var(--accent-hover);
+}
+
+.toolbar-back {
+	padding: 0 12px 0 10px;
+}
+
+.toolbar:has(.toolbar-back) .toolbar-print {
+	padding: 0 11px;
+}
+
+.toolbar:has(.toolbar-back) .toolbar-print-label {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
 }
 
 [hidden] {
@@ -3379,6 +3412,7 @@ a.series-day:hover {
 }
 
 .search-defaults {
+	gap: 8px;
 	margin-left: auto;
 }
 

@@ -1502,7 +1502,7 @@ func TestWeekShowsFeast(t *testing.T) {
 	body := getWeek(t, h, "/").Body.String()
 
 	want := `<h2 class="day-name">Środa 4.11.</h2>
-					<span class="feast">wspomnienie św. Karola Boromeusza</span>`
+						<span class="feast">wspomnienie św. Karola Boromeusza</span>`
 	if !strings.Contains(body, want) {
 		t.Errorf("body does not contain %q", want)
 	}

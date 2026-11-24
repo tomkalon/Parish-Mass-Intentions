@@ -558,11 +558,46 @@ h1 {
 }
 
 .day-header {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	grid-template-areas:
+		"title actions"
+		"meta actions";
+	align-items: start;
+	gap: 4px 20px;
+	margin-bottom: 12px;
+}
+
+.day-title {
 	display: flex;
 	flex-wrap: wrap;
+	grid-area: title;
+	align-items: baseline;
+	gap: 2px 12px;
+	min-width: 0;
+}
+
+.day-actions {
+	display: flex;
+	grid-area: actions;
+	align-items: center;
+	gap: 8px;
+}
+
+.day-actions .button-small {
+	margin-left: 0;
+}
+
+.day-meta {
+	display: flex;
+	flex-wrap: wrap;
+	grid-area: meta;
 	align-items: center;
 	gap: 6px 12px;
-	margin-bottom: 8px;
+}
+
+.day-meta .series-due {
+	margin-left: 0;
 }
 
 .day-name {
@@ -715,7 +750,7 @@ h1 {
 
 .mass {
 	display: grid;
-	grid-template-columns: 76px 1fr;
+	grid-template-columns: 104px 1fr;
 }
 
 .mass + .mass {
@@ -724,9 +759,10 @@ h1 {
 
 .mass-side {
 	display: flex;
-	flex-direction: column;
-	align-items: flex-start;
-	gap: 4px;
+	align-self: start;
+	align-items: center;
+	gap: 10px;
+	min-height: 38px;
 }
 
 .add-mass {
@@ -755,9 +791,8 @@ h1 {
 }
 
 .mass-time {
+	min-width: 52px;
 	margin: 0;
-	/* Same top offset and line height as the first intention next to it. */
-	padding-top: 5px;
 	font: 700 19px/26px var(--font-serif);
 }
 
@@ -3474,23 +3509,10 @@ a.series-day:hover {
 	font-size: 14px;
 }
 
-.day-header .day-stats {
-	margin-left: auto;
-}
-
-.day-header .day-stats ~ .series-due,
-.day-header .day-stats ~ .button-small {
-	margin-left: 0;
-}
-
 .day-print {
 	justify-content: center;
 	width: 36px;
 	padding: 0;
-}
-
-.day-print + .button-small {
-	margin-left: 0;
 }
 
 .day-free {

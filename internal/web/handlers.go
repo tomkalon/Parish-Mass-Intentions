@@ -347,6 +347,11 @@ func (h *handler) printPreview(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	opts.Day, ok = parsePrintDay(query.Get("day"), start)
+	if !ok {
+		http.Error(w, "nieprawidłowy dzień wydruku, oczekiwano RRRR-MM-DD w wybranym tygodniu", http.StatusBadRequest)
+		return
+	}
 
 	render(w, http.StatusOK, printTemplate, newPrintView(start, list, opts, schedules))
 }
@@ -416,13 +421,18 @@ func (h *handler) pdf(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	options.Day, ok = parsePrintDay(query.Get("day"), start)
+	if !ok {
+		http.Error(w, "nieprawidłowy dzień wydruku, oczekiwano RRRR-MM-DD w wybranym tygodniu", http.StatusBadRequest)
+		return
+	}
 	planned, err := h.plannedForPrint(start, options, schedules)
 	if err != nil {
 		log.Printf("error loading planned masses for week %s: %v", start.Format(intentions.DateLayout), err)
 		serverError(w)
 		return
 	}
-	opts := pdfOptions{showHidden: options.ShowHidden, planned: planned}
+	opts := pdfOptions{hidden: options.Hidden, day: options.Day, planned: planned}
 	if options.Blanks {
 		opts.blanks = options.Lines
 		opts.extra = options.Extra
@@ -463,10 +473,7 @@ func (h *handler) pdf(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filename := "intencje-" + start.Format(intentions.DateLayout) + ".pdf"
-	if options.Blanks {
-		filename = "intencje-" + start.Format(intentions.DateLayout) + "-do-wpisania.pdf"
-	}
+	filename := printFileName(start, options)
 	w.Header().Set("Content-Type", "application/pdf")
 	w.Header().Set("Content-Disposition", `inline; filename="`+filename+`"`)
 

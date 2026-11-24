@@ -118,7 +118,7 @@ func TestLayoutYearHiddenIntentions(t *testing.T) {
 	if pages := layoutYear(2025, weeks, pdfOptions{}, fakeMeasurer{}); !slices.Contains(pageTexts(pages[0]), "Brak intencji w roku 2025.") {
 		t.Error("hidden intention printed without showHidden")
 	}
-	if pages := layoutYear(2025, weeks, pdfOptions{showHidden: true}, fakeMeasurer{}); !slices.Contains(pageTexts(pages[0]), "Intencja 2025-05-06 18:00") {
+	if pages := layoutYear(2025, weeks, pdfOptions{hidden: hiddenInclude}, fakeMeasurer{}); !slices.Contains(pageTexts(pages[0]), "Intencja 2025-05-06 18:00") {
 		t.Error("hidden intention missing with showHidden")
 	}
 }

@@ -11,8 +11,50 @@ import (
 
 const maxBlankLines = 3
 
+type hiddenMode int
+
+const (
+	hiddenSkip hiddenMode = iota
+	hiddenInclude
+	hiddenOnly
+)
+
+func parseHiddenMode(value string) hiddenMode {
+	switch value {
+	case "1":
+		return hiddenInclude
+	case "only":
+		return hiddenOnly
+	default:
+		return hiddenSkip
+	}
+}
+
+func (m hiddenMode) param() string {
+	switch m {
+	case hiddenInclude:
+		return "1"
+	case hiddenOnly:
+		return "only"
+	default:
+		return ""
+	}
+}
+
+func (m hiddenMode) prints(hidden bool) bool {
+	switch m {
+	case hiddenInclude:
+		return true
+	case hiddenOnly:
+		return hidden
+	default:
+		return !hidden
+	}
+}
+
 type printOptions struct {
-	ShowHidden bool
+	Hidden     hiddenMode
+	Day        time.Time
 	Blanks     bool
 	Lines      int
 	Extra      bool
@@ -22,7 +64,7 @@ type printOptions struct {
 
 func parsePrintOptions(query url.Values, selectedSchedule int, schedules []masses.Schedule) printOptions {
 	opts := printOptions{
-		ShowHidden: query.Get("hidden") == "1",
+		Hidden:     parseHiddenMode(query.Get("hidden")),
 		Blanks:     query.Get("blanks") == "1",
 		Lines:      1,
 		Extra:      query.Get("extra") == "1",
@@ -35,14 +77,33 @@ func parsePrintOptions(query url.Values, selectedSchedule int, schedules []masse
 	if query.Get("set") == "1" {
 		opts.Planned = query.Get("planned") == "1"
 	}
+	if opts.Hidden == hiddenOnly {
+		opts.Blanks = false
+	}
 
 	return opts
 }
 
+func parsePrintDay(value string, start time.Time) (time.Time, bool) {
+	if value == "" {
+		return time.Time{}, true
+	}
+
+	day, err := time.ParseInLocation(intentions.DateLayout, value, intentions.TimeZone)
+	if err != nil || day.Before(start) || !day.Before(start.AddDate(0, 0, 7)) {
+		return time.Time{}, false
+	}
+
+	return day, true
+}
+
 func (o printOptions) query(week string) string {
 	query := "week=" + url.QueryEscape(week)
-	if o.ShowHidden {
-		query += "&hidden=1"
+	if !o.Day.IsZero() {
+		query += "&day=" + o.Day.Format(intentions.DateLayout)
+	}
+	if param := o.Hidden.param(); param != "" {
+		query += "&hidden=" + param
 	}
 	if !o.Blanks {
 		return query
@@ -74,7 +135,7 @@ type printView struct {
 func newPrintView(start time.Time, list []intentions.Intention, opts printOptions, schedules []masses.Schedule) printView {
 	view := printView{weekView: newWeekView(start, nil), Options: opts}
 	for _, intention := range list {
-		if intention.IsHidden {
+		if intention.IsHidden && !intention.IsPlaceholder && (opts.Day.IsZero() || sameDay(intention.MassAt, opts.Day)) {
 			view.HiddenCount++
 		}
 	}
@@ -89,10 +150,83 @@ func newPrintView(start time.Time, list []intentions.Intention, opts printOption
 	return view
 }
 
-func (v printView) ShowHidden() bool {
-	return v.Options.ShowHidden
+func sameDay(at, day time.Time) bool {
+	return at.In(intentions.TimeZone).Format(intentions.DateLayout) == day.Format(intentions.DateLayout)
 }
 
 func (v printView) PDFURL() string {
 	return "/pdf?" + v.Options.query(v.Week())
+}
+
+func (v printView) IsDay() bool {
+	return !v.Options.Day.IsZero()
+}
+
+func (v printView) Day() string {
+	if !v.IsDay() {
+		return ""
+	}
+
+	return v.Options.Day.Format(intentions.DateLayout)
+}
+
+func (v printView) Title() string {
+	if !v.IsDay() {
+		return v.Range
+	}
+
+	return v.Options.Day.Format("2.1.2006") + " r."
+}
+
+func (v printView) Note() string {
+	if !v.IsDay() {
+		return v.Range
+	}
+
+	return weekdayNames[v.Options.Day.Weekday()] + ", " + v.Options.Day.Format("2.1.2006") + " r."
+}
+
+func (v printView) BackURL() string {
+	if !v.IsDay() {
+		return v.WeekURL()
+	}
+
+	return v.WeekURL() + "#d-" + v.Day()
+}
+
+func (v printView) HiddenModes() []searchOption {
+	modes := []struct {
+		mode  hiddenMode
+		label string
+	}{
+		{hiddenSkip, "Bez ukrytych"},
+		{hiddenInclude, "Z ukrytymi"},
+		{hiddenOnly, "Tylko ukryte"},
+	}
+
+	options := make([]searchOption, 0, len(modes))
+	for _, m := range modes {
+		options = append(options, searchOption{Value: m.mode.param(), Label: m.label, Selected: m.mode == v.Options.Hidden})
+	}
+
+	return options
+}
+
+func printFileName(start time.Time, opts printOptions) string {
+	name := "intencje-" + start.Format(intentions.DateLayout)
+	if !opts.Day.IsZero() {
+		name = "intencje-" + opts.Day.Format(intentions.DateLayout)
+	}
+	if opts.Hidden == hiddenOnly {
+		name += "-ukryte"
+	}
+	if opts.Blanks {
+		name += "-do-wpisania"
+	}
+
+	return name + ".pdf"
+}
+
+func (v printView) OnlyHidden() bool {
+	return v.Options.Hidden == hiddenOnly
 }

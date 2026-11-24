@@ -138,7 +138,11 @@ func (h *handler) yearPDFBytes(year int, showHidden bool) (*bytes.Buffer, error)
 	}
 
 	var buf bytes.Buffer
-	err = writeYearPDF(&buf, year, weeks, pdfOptions{showHidden: showHidden})
+	hidden := hiddenSkip
+	if showHidden {
+		hidden = hiddenInclude
+	}
+	err = writeYearPDF(&buf, year, weeks, pdfOptions{hidden: hidden})
 	if err != nil {
 		return nil, err
 	}

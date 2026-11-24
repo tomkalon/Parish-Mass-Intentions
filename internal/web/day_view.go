@@ -24,6 +24,7 @@ type dayView struct {
 	Feast    string
 	FeastURL string
 	NewURL   string
+	PrintURL string
 	Masses   []massView
 
 	SeriesDue []seriesDue
@@ -182,6 +183,7 @@ func newDayView(day time.Time, list []intentions.Intention) dayView {
 		Label:    dayLabel(day),
 		FeastURL: feastURL(week, date),
 		NewURL:   newIntentionURL(week, date, ""),
+		PrintURL: "/print?week=" + week + "&day=" + date,
 		Masses:   masses,
 	}
 }

@@ -24,6 +24,7 @@ type Setting struct {
 	SelectedScheduleID int                 `json:"selected_schedule_id"`
 	FeastImport        FeastImport         `json:"feast_import" gorm:"embedded;embeddedPrefix:feast_import_"`
 	QuickAmounts       []intentions.Grosze `json:"quick_amounts" gorm:"serializer:json"`
+	PrintHidden        string              `json:"print_hidden" gorm:"not null;default:''"`
 }
 
 type FeastImport struct {
@@ -49,6 +50,10 @@ func Load(db *gorm.DB) (Setting, error) {
 
 func SaveSchedule(db *gorm.DB, id int) error {
 	return upsert(db, Setting{SelectedScheduleID: id}, "selected_schedule_id")
+}
+
+func SavePrintHidden(db *gorm.DB, value string) error {
+	return upsert(db, Setting{PrintHidden: value}, "print_hidden")
 }
 
 func SaveParish(db *gorm.DB, setting Setting) error {

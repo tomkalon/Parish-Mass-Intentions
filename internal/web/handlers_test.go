@@ -238,11 +238,11 @@ func TestWeekShowsIntentions(t *testing.T) {
 		`<h3 class="mass-time">6:30</h3>`,
 		// html/template escapes "+" as "&#43;"; the browser still shows "+".
 		`<span>&#43;&#43; Jan i Rozalia Leżanka</span>`,
-		`<a class="action" href="/?edit=1&amp;week=2026-11-02" aria-label="Edytuj intencję 1. z godz. 6:30">Edytuj</a>`,
-		`<a class="action action-delete" href="/?delete=1&amp;week=2026-11-02" aria-label="Usuń intencję 1. z godz. 6:30">Usuń</a>`,
+		`<a class="action" href="/?edit=1&amp;week=2026-11-02" aria-label="Edytuj intencję 1. z godz. 6:30"><svg`,
+		`<a class="action action-delete" href="/?delete=1&amp;week=2026-11-02" aria-label="Usuń intencję 1. z godz. 6:30"><svg`,
 		`<p class="outside-label">Poza Parafią:</p>`,
 		`<span>&#43; Anna Kutyba (greg.)</span>`,
-		`<a class="action" href="/?edit=2&amp;week=2026-11-02" aria-label="Edytuj intencję poza parafią 1. z godz. 6:30">Edytuj</a>`,
+		`<a class="action" href="/?edit=2&amp;week=2026-11-02" aria-label="Edytuj intencję poza parafią 1. z godz. 6:30"><svg`,
 		`<h3 class="mass-time">18:00</h3>`,
 		"&lt;script&gt;alert(1)&lt;/script&gt;",
 		`<a class="button button-primary toolbar-add" href="/?new=1&amp;week=2026-11-02" title="Dodaj intencję">+ Intencja</a>`,
@@ -901,7 +901,8 @@ func TestPrintPreview(t *testing.T) {
 	for _, want := range []string{
 		`<a class="button" href="/?week=2026-11-02" data-close>← Wróć do tygodnia</a>`,
 		`<iframe class="print-preview" src="/pdf?week=2026-11-02" title="Podgląd PDF: intencje 2.11.2026 r. – 8.11.2026 r."></iframe>`,
-		`<input type="checkbox" name="hidden" value="1" disabled data-autosubmit> Pokaż ukryte intencje (0)`,
+		`<fieldset class="print-hidden" disabled title="W tym tygodniu nie ma ukrytych intencji">`,
+		`<legend class="print-hidden-label">Ukryte intencje (0)</legend>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body does not contain %q", want)
@@ -1114,8 +1115,8 @@ func TestWeekShowsPlaceholder(t *testing.T) {
 	for _, want := range []string{
 		`<span class="number"></span>`,
 		`<span class="placeholder">do uzupełnienia</span>`,
-		`<a class="action" href="/?day=2026-11-02&amp;new=1&amp;time=06%3A30&amp;week=2026-11-02" aria-label="Uzupełnij intencję z godz. 6:30">Uzupełnij</a>`,
-		fmt.Sprintf(`<a class="action action-delete" href="/?delete=%d&amp;week=2026-11-02" aria-label="Usuń nieuzupełnioną intencję z godz. 6:30">Usuń</a>`, id),
+		`<a class="action" href="/?day=2026-11-02&amp;new=1&amp;time=06%3A30&amp;week=2026-11-02" aria-label="Uzupełnij intencję z godz. 6:30"><svg`,
+		fmt.Sprintf(`<a class="action action-delete" href="/?delete=%d&amp;week=2026-11-02" aria-label="Usuń nieuzupełnioną intencję z godz. 6:30"><svg`, id),
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body does not contain %q", want)
@@ -1133,7 +1134,7 @@ func TestWeekNumbersIntentionsWithoutPlaceholders(t *testing.T) {
 
 	body := getWeek(t, h, "/").Body.String()
 
-	if !strings.Contains(body, `aria-label="Edytuj intencję 1. z godz. 18:00">Edytuj</a>`) {
+	if !strings.Contains(body, `aria-label="Edytuj intencję 1. z godz. 18:00"><svg`) {
 		t.Error("the only real intention is not number 1")
 	}
 	if strings.Contains(body, "intencję 2.") {
@@ -2359,7 +2360,7 @@ func TestWeekShowsOutsideOnlyMassAsEmpty(t *testing.T) {
 		`<p class="week-notice" role="status"><span>1 msza nie ma uzupełnionej intencji.</span> <a href="#d-2026-11-03">Pokaż</a></p>`,
 		`<li class="intention">`,
 		`<span class="placeholder">do uzupełnienia</span>`,
-		`<a class="action" href="/?day=2026-11-03&amp;new=1&amp;time=18%3A00&amp;week=2026-11-02" aria-label="Uzupełnij intencję z godz. 18:00">Uzupełnij</a>`,
+		`<a class="action" href="/?day=2026-11-03&amp;new=1&amp;time=18%3A00&amp;week=2026-11-02" aria-label="Uzupełnij intencję z godz. 18:00"><svg`,
 		`<span class="day-free">1 wolna</span>`,
 	)
 	if strings.Contains(body, `aria-label="Usuń nieuzupełnioną intencję z godz. 18:00"`) {
@@ -2911,7 +2912,13 @@ func TestPrintPreviewWithHiddenIntentions(t *testing.T) {
 			want: []string{
 				`<form class="print-options" method="get" action="/print">`,
 				`<input type="hidden" name="week" value="2026-11-02">`,
-				`<input type="checkbox" name="hidden" value="1" data-autosubmit> Pokaż ukryte intencje (2)`,
+				`<legend class="print-hidden-label">Ukryte intencje (2)</legend>`,
+				`<input type="radio" id="p-hidden-0" name="hidden" value="" checked data-autosubmit>`,
+				`<label for="p-hidden-0">Bez ukrytych</label>`,
+				`<input type="radio" id="p-hidden-1" name="hidden" value="1" data-autosubmit>`,
+				`<label for="p-hidden-1">Z ukrytymi</label>`,
+				`<input type="radio" id="p-hidden-2" name="hidden" value="only" data-autosubmit>`,
+				`<label for="p-hidden-2">Tylko ukryte</label>`,
 				`<iframe class="print-preview" src="/pdf?week=2026-11-02" title=`,
 			},
 		},
@@ -2919,7 +2926,7 @@ func TestPrintPreviewWithHiddenIntentions(t *testing.T) {
 			name:   "shown on request",
 			target: "/print?week=2026-11-02&hidden=1",
 			want: []string{
-				`<input type="checkbox" name="hidden" value="1" checked data-autosubmit> Pokaż ukryte intencje (2)`,
+				`<input type="radio" id="p-hidden-1" name="hidden" value="1" checked data-autosubmit>`,
 				`<iframe class="print-preview" src="/pdf?week=2026-11-02&amp;hidden=1" title=`,
 			},
 		},

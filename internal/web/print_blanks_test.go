@@ -93,7 +93,7 @@ func TestPrintableDaysHiddenIntentionIsNotABlank(t *testing.T) {
 		t.Errorf("a Mass with a hidden intention should only get the extra line: %q", got)
 	}
 
-	shown := describeMasses(printableDays(blankTestWeek(t), pdfOptions{blanks: 1, showHidden: true}))
+	shown := describeMasses(printableDays(blankTestWeek(t), pdfOptions{blanks: 1, hidden: hiddenInclude}))
 	if !slices.Contains(shown, "04.11 6:30 ukryta") {
 		t.Errorf("hidden intention not printed with showHidden: %q", shown)
 	}
@@ -193,18 +193,18 @@ func TestParsePrintOptions(t *testing.T) {
 		{"", printOptions{Lines: 1, Planned: true, ScheduleID: 2}},
 		{"blanks=1", printOptions{Blanks: true, Lines: 1, Planned: true, ScheduleID: 2}},
 		{"blanks=1&set=1&lines=3&extra=1&schedule=1", printOptions{Blanks: true, Lines: 3, Extra: true, ScheduleID: 1}},
-		{"blanks=1&set=1&planned=1&lines=9&hidden=1&schedule=77", printOptions{ShowHidden: true, Blanks: true, Lines: 1, Planned: true, ScheduleID: 2}},
+		{"blanks=1&set=1&planned=1&lines=9&hidden=1&schedule=77", printOptions{Hidden: hiddenInclude, Blanks: true, Lines: 1, Planned: true, ScheduleID: 2}},
 	}
 
 	for _, tt := range tests {
 		query, _ := url.ParseQuery(tt.raw)
-		got := parsePrintOptions(query, 2, schedules)
+		got := parsePrintOptions(query, 2, schedules, hiddenSkip)
 		if got != tt.want {
 			t.Errorf("parse(%q) = %+v, want %+v", tt.raw, got, tt.want)
 		}
 
 		again, _ := url.ParseQuery(got.query("2026-11-02"))
-		if back := parsePrintOptions(again, 2, schedules); back != got {
+		if back := parsePrintOptions(again, 2, schedules, hiddenSkip); back != got {
 			t.Errorf("query(%+v) does not round-trip: %+v", got, back)
 		}
 	}

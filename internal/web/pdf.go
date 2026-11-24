@@ -96,10 +96,11 @@ type pdfRule struct {
 }
 
 type pdfOptions struct {
-	showHidden bool
-	blanks     int
-	extra      bool
-	planned    map[string][]time.Time
+	hidden  hiddenMode
+	day     time.Time
+	blanks  int
+	extra   bool
+	planned map[string][]time.Time
 }
 
 const blankLineScale = 1.5
@@ -131,6 +132,9 @@ func (p *pdfPage) place(block pdfBlock, top float64) {
 
 func writeWeekPDF(w io.Writer, view weekView, opts pdfOptions) error {
 	title := "Intencje mszy świętych – " + weekInWords(view.Start)
+	if !opts.day.IsZero() {
+		title = "Intencje mszy świętych – " + rangeInWords(opts.day, opts.day)
+	}
 
 	return writePDF(w, title, gopdf.PageSizeA4, func(m textMeasurer) []pdfPage {
 		return layoutWeek(view, opts, m)
@@ -252,7 +256,19 @@ func (m *gopdfMeasurer) width(text string, font pdfFont, size, spacing float64) 
 }
 
 func layoutWeek(view weekView, opts pdfOptions, m textMeasurer) []pdfPage {
-	return layoutPrintedDays(layoutHeader(view, m), printableDays(view, opts), m)
+	days := printableDays(view, opts)
+	if opts.day.IsZero() {
+		return layoutPrintedDays(layoutHeader(view, m), days, m)
+	}
+
+	days = slices.DeleteFunc(days, func(d printedDay) bool {
+		return !d.date.Equal(opts.day)
+	})
+	for i := range days {
+		days[i].ruleBelow = false
+	}
+
+	return layoutPrintedDays(layoutHeaderRange(view, rangeInWords(opts.day, opts.day), m), days, m)
 }
 
 func layoutPrintedDays(header pdfBlock, days []printedDay, m textMeasurer) []pdfPage {
@@ -541,8 +557,8 @@ func (d printedDay) split(n int) (printedDay, printedDay) {
 func printableMasses(masses []massView, opts pdfOptions) []printedMass {
 	var result []printedMass
 	for _, mass := range masses {
-		parish := printedGroup(mass.Parish, false, opts.showHidden)
-		outside := printedGroup(mass.Outside, true, opts.showHidden)
+		parish := printedGroup(mass.Parish, false, opts.hidden)
+		outside := printedGroup(mass.Outside, true, opts.hidden)
 		numbered := len(parish) > 1 || len(outside) > 1
 
 		if opts.blanks > 0 {
@@ -568,10 +584,10 @@ func printableMasses(masses []massView, opts pdfOptions) []printedMass {
 	return result
 }
 
-func printedGroup(list []intentionView, outside, showHidden bool) []printedIntention {
+func printedGroup(list []intentionView, outside bool, hidden hiddenMode) []printedIntention {
 	var printed []printedIntention
 	for _, intention := range list {
-		if !intention.IsPlaceholder && (showHidden || !intention.IsHidden) {
+		if !intention.IsPlaceholder && hidden.prints(intention.IsHidden) {
 			printed = append(printed, printedIntention{content: printedContent(intention), outside: outside})
 		}
 	}

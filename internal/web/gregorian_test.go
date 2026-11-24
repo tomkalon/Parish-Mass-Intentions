@@ -112,7 +112,7 @@ func TestFillingPlaceholdersBuildsSeries(t *testing.T) {
 
 	fill := "/?day=2026-11-09&new=1&time=18%3A00&week=2026-11-09"
 	checkBody(t, getWeek(t, h, "/?week=2026-11-09").Body.String(),
-		`<a class="action" href="/?day=2026-11-09&amp;new=1&amp;time=18%3A00&amp;week=2026-11-09" aria-label="Uzupełnij intencję z godz. 18:00">Uzupełnij</a>`,
+		`<a class="action" href="/?day=2026-11-09&amp;new=1&amp;time=18%3A00&amp;week=2026-11-09" aria-label="Uzupełnij intencję z godz. 18:00"><svg`,
 	)
 	checkBody(t, getWeek(t, h, fill).Body.String(),
 		`<form class="panel-form" method="post" action="/intentions" data-new>`,

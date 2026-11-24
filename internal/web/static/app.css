@@ -735,17 +735,23 @@ h1 {
 	justify-content: center;
 	width: 32px;
 	height: 32px;
-	border: 1px solid var(--line-strong);
+	border: 1px solid var(--free);
 	border-radius: var(--radius);
-	color: var(--accent);
-	font-size: 20px;
+	background: var(--free);
+	color: #fff;
+	font-size: 22px;
 	font-weight: 600;
 	line-height: 1;
 	text-decoration: none;
 }
 
 .add-mass:hover {
-	background: var(--accent-soft);
+	border-color: var(--free-ink);
+	background: var(--free-ink);
+}
+
+.add-mass:focus-visible {
+	outline-color: var(--free-ink);
 }
 
 .mass-time {
@@ -867,28 +873,46 @@ h1 {
 .intention-actions {
 	display: flex;
 	align-items: flex-start;
-	gap: 2px;
+	gap: 6px;
 	margin-left: 12px;
 }
 
 .action {
-	padding: 2px 8px;
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	min-height: 28px;
+	padding: 0 9px 0 8px;
+	border: 1px solid var(--line-strong);
 	border-radius: var(--radius);
-	color: var(--muted);
+	background: var(--surface);
+	color: var(--accent);
 	font-size: 14px;
-	line-height: 22px;
+	font-weight: 600;
+	line-height: 1;
 	text-decoration: none;
 	white-space: nowrap;
 }
 
+.action svg {
+	flex: none;
+}
+
 .action:hover {
-	background: #EFE7DA;
-	color: var(--ink);
+	border-color: var(--accent);
+	background: var(--accent-soft);
+	color: var(--accent-hover);
+}
+
+.action-delete {
+	border-color: var(--danger-line);
+	color: var(--danger);
 }
 
 .action-delete:hover {
+	border-color: var(--danger);
 	background: var(--danger-bg);
-	color: var(--danger);
+	color: var(--danger-hover);
 }
 
 .action-delete:focus-visible {
@@ -1578,6 +1602,75 @@ h1 {
 	align-items: center;
 	gap: 4px 12px;
 	margin-left: auto;
+}
+
+.print-hidden {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+.print-hidden-label {
+	float: left;
+	padding: 0;
+	font-size: 15px;
+}
+
+.print-hidden:disabled {
+	opacity: .55;
+}
+
+.segmented {
+	display: inline-flex;
+	overflow: hidden;
+	border: 1px solid var(--line-strong);
+	border-radius: var(--radius);
+	background: var(--surface);
+}
+
+.segmented input {
+	position: absolute;
+	opacity: 0;
+	pointer-events: none;
+}
+
+.segmented label {
+	display: inline-flex;
+	align-items: center;
+	min-height: 34px;
+	padding: 0 12px;
+	font-size: 14px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.segmented label + input + label {
+	border-left: 1px solid var(--line-strong);
+}
+
+.segmented label:hover {
+	background: var(--accent-soft);
+}
+
+.segmented input:checked + label {
+	background: var(--accent);
+	color: #fff;
+}
+
+.segmented input:focus-visible + label {
+	outline: 2px solid var(--accent);
+	outline-offset: -3px;
+}
+
+.print-hidden:disabled .segmented label {
+	cursor: default;
+}
+
+.print-hidden:disabled .segmented label:hover {
+	background: none;
 }
 
 .print-field {
@@ -3387,6 +3480,16 @@ a.series-day:hover {
 
 .day-header .day-stats ~ .series-due,
 .day-header .day-stats ~ .button-small {
+	margin-left: 0;
+}
+
+.day-print {
+	justify-content: center;
+	width: 36px;
+	padding: 0;
+}
+
+.day-print + .button-small {
 	margin-left: 0;
 }
 

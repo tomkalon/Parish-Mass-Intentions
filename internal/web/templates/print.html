@@ -2,19 +2,30 @@
 <html lang="pl">
 <head>
 	<meta charset="utf-8">
-	<title>Wydruk {{.Range}} – Go Parafia</title>
+	<title>Wydruk {{.Title}} – Go Parafia</title>
 	<link rel="icon" href="/static/logo.svg" type="image/svg+xml">
 	<link rel="stylesheet" href="/static/app.css">
 	<script src="/static/app.js" defer></script>
 </head>
 <body class="print-page">
 	<nav class="toolbar" aria-label="Wydruk">
-		<a class="button" href="{{.WeekURL}}" data-close>← Wróć do tygodnia</a>
-		<span class="print-note">INTENCJE MSZY ŚWIĘTYCH – {{.Range}} · A4 pionowo · czarno-biały</span>
+		<a class="button" href="{{.BackURL}}" data-close>← Wróć do tygodnia</a>
+		<span class="print-note">INTENCJE MSZY ŚWIĘTYCH – {{.Note}} · A4 pionowo · czarno-biały</span>
 		<form class="print-options" method="get" action="/print">
 			<input type="hidden" name="week" value="{{.Week}}">
-			<label class="checkbox"><input type="checkbox" name="hidden" value="1"{{if .ShowHidden}} checked{{end}}{{if not .HiddenCount}} disabled{{end}} data-autosubmit> Pokaż ukryte intencje ({{.HiddenCount}})</label>
-			<label class="checkbox" title="Wykropkowane linie na Msze bez intencji, do wpisania długopisem"><input type="checkbox" id="p-blanks" name="blanks" value="1"{{if .Options.Blanks}} checked{{end}} data-autosubmit> Miejsca do wpisania</label>
+			{{- with .Day}}
+			<input type="hidden" name="day" value="{{.}}">
+			{{- end}}
+			<fieldset class="print-hidden"{{if not .HiddenCount}} disabled title="W tym {{if .IsDay}}dniu{{else}}tygodniu{{end}} nie ma ukrytych intencji"{{end}}>
+				<legend class="print-hidden-label">Ukryte intencje ({{.HiddenCount}})</legend>
+				<div class="segmented">
+					{{- range $i, $mode := .HiddenModes}}
+					<input type="radio" id="p-hidden-{{$i}}" name="hidden" value="{{$mode.Value}}"{{if $mode.Selected}} checked{{end}} data-autosubmit>
+					<label for="p-hidden-{{$i}}">{{$mode.Label}}</label>
+					{{- end}}
+				</div>
+			</fieldset>
+			<label class="checkbox" title="{{if .OnlyHidden}}Niedostępne przy wydruku tylko ukrytych intencji{{else}}Wykropkowane linie na Msze bez intencji, do wpisania długopisem{{end}}"><input type="checkbox" id="p-blanks" name="blanks" value="1"{{if .Options.Blanks}} checked{{end}}{{if .OnlyHidden}} disabled{{end}} data-autosubmit> Miejsca do wpisania</label>
 			{{- if .Options.Blanks}}
 			<input type="hidden" name="set" value="1">
 			<label class="print-field" for="p-lines">Linii na pustą Mszę
@@ -37,6 +48,6 @@
 			<noscript><button class="button" type="submit">Odśwież</button></noscript>
 		</form>
 	</nav>
-	<iframe class="print-preview" src="{{.PDFURL}}" title="Podgląd PDF: intencje {{.Range}}"></iframe>
+	<iframe class="print-preview" src="{{.PDFURL}}" title="Podgląd PDF: intencje {{.Note}}"></iframe>
 </body>
 </html>

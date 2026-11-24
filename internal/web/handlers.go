@@ -343,20 +343,30 @@ func (h *handler) printPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	opts, schedules, ok := h.printOptions(w, query)
-	if !ok {
-		return
-	}
-	opts.Day, ok = parsePrintDay(query.Get("day"), start)
+	day, ok := parsePrintDay(query.Get("day"), start)
 	if !ok {
 		http.Error(w, "nieprawidłowy dzień wydruku, oczekiwano RRRR-MM-DD w wybranym tygodniu", http.StatusBadRequest)
 		return
 	}
 
+	setting, schedules, ok := h.printSettings(w)
+	if !ok {
+		return
+	}
+	opts := parsePrintOptions(query, setting.SelectedScheduleID, schedules, rememberedHidden(setting.PrintHidden, countHidden(list, day)))
+	opts.Day = day
+
+	if query.Has("hidden") && opts.Hidden.param() != setting.PrintHidden {
+		err = settings.SavePrintHidden(h.db, opts.Hidden.param())
+		if err != nil {
+			log.Printf("error saving the hidden intentions print choice: %v", err)
+		}
+	}
+
 	render(w, http.StatusOK, printTemplate, newPrintView(start, list, opts, schedules))
 }
 
-func (h *handler) printOptions(w http.ResponseWriter, query url.Values) (printOptions, []masses.Schedule, bool) {
+func (h *handler) printSettings(w http.ResponseWriter) (settings.Setting, []masses.Schedule, bool) {
 	setting, err := settings.Load(h.db)
 	if err != nil {
 		log.Printf("error loading settings: %v", err)
@@ -366,10 +376,10 @@ func (h *handler) printOptions(w http.ResponseWriter, query url.Values) (printOp
 	if err != nil {
 		log.Printf("error loading schedules: %v", err)
 		serverError(w)
-		return printOptions{}, nil, false
+		return settings.Setting{}, nil, false
 	}
 
-	return parsePrintOptions(query, setting.SelectedScheduleID, schedules), schedules, true
+	return setting, schedules, true
 }
 
 func (h *handler) plannedForPrint(start time.Time, opts printOptions, schedules []masses.Schedule) (map[string][]time.Time, error) {
@@ -417,10 +427,11 @@ func (h *handler) pdf(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	options, schedules, ok := h.printOptions(w, query)
+	setting, schedules, ok := h.printSettings(w)
 	if !ok {
 		return
 	}
+	options := parsePrintOptions(query, setting.SelectedScheduleID, schedules, hiddenSkip)
 	options.Day, ok = parsePrintDay(query.Get("day"), start)
 	if !ok {
 		http.Error(w, "nieprawidłowy dzień wydruku, oczekiwano RRRR-MM-DD w wybranym tygodniu", http.StatusBadRequest)
@@ -445,7 +456,7 @@ func (h *handler) pdf(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setting, err := settings.Load(h.db)
+	setting, err = settings.Load(h.db)
 	if err != nil {
 		log.Printf("error loading settings: %v", err)
 		serverError(w)

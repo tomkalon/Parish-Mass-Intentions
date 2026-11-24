@@ -62,9 +62,14 @@ type printOptions struct {
 	ScheduleID int
 }
 
-func parsePrintOptions(query url.Values, selectedSchedule int, schedules []masses.Schedule) printOptions {
+func parsePrintOptions(query url.Values, selectedSchedule int, schedules []masses.Schedule, fallback hiddenMode) printOptions {
+	hidden := fallback
+	if query.Has("hidden") {
+		hidden = parseHiddenMode(query.Get("hidden"))
+	}
+
 	opts := printOptions{
-		Hidden:     parseHiddenMode(query.Get("hidden")),
+		Hidden:     hidden,
 		Blanks:     query.Get("blanks") == "1",
 		Lines:      1,
 		Extra:      query.Get("extra") == "1",
@@ -133,12 +138,7 @@ type printView struct {
 }
 
 func newPrintView(start time.Time, list []intentions.Intention, opts printOptions, schedules []masses.Schedule) printView {
-	view := printView{weekView: newWeekView(start, nil), Options: opts}
-	for _, intention := range list {
-		if intention.IsHidden && !intention.IsPlaceholder && (opts.Day.IsZero() || sameDay(intention.MassAt, opts.Day)) {
-			view.HiddenCount++
-		}
-	}
+	view := printView{weekView: newWeekView(start, nil), Options: opts, HiddenCount: countHidden(list, opts.Day)}
 
 	for n := 1; n <= maxBlankLines; n++ {
 		view.Lines = append(view.Lines, searchOption{Value: strconv.Itoa(n), Label: strconv.Itoa(n), Selected: n == opts.Lines})
@@ -148,6 +148,26 @@ func newPrintView(start time.Time, list []intentions.Intention, opts printOption
 	}
 
 	return view
+}
+
+func countHidden(list []intentions.Intention, day time.Time) int {
+	count := 0
+	for _, intention := range list {
+		if intention.IsHidden && !intention.IsPlaceholder && (day.IsZero() || sameDay(intention.MassAt, day)) {
+			count++
+		}
+	}
+
+	return count
+}
+
+func rememberedHidden(saved string, hiddenCount int) hiddenMode {
+	mode := parseHiddenMode(saved)
+	if mode == hiddenOnly && hiddenCount == 0 {
+		return hiddenSkip
+	}
+
+	return mode
 }
 
 func sameDay(at, day time.Time) bool {

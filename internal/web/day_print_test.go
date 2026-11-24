@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"go-parafia/internal/intentions"
+	"go-parafia/internal/settings"
 )
 
 var dayPrintNow = time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone)
@@ -43,7 +44,7 @@ func TestHiddenModes(t *testing.T) {
 func TestPrintOnlyHiddenIgnoresBlanks(t *testing.T) {
 	query, _ := url.ParseQuery("hidden=only&blanks=1&lines=2")
 
-	opts := parsePrintOptions(query, 0, nil)
+	opts := parsePrintOptions(query, 0, nil, hiddenSkip)
 
 	if opts.Hidden != hiddenOnly || opts.Blanks {
 		t.Errorf("options = %+v, want only hidden without blanks", opts)
@@ -210,5 +211,68 @@ func TestDayPDF(t *testing.T) {
 		if !slices.Equal(rec.Body.Bytes()[:5], []byte("%PDF-")) {
 			t.Errorf("GET %s: body is not a PDF", tt.target)
 		}
+	}
+}
+
+func TestParsePrintOptionsUsesFallbackOnlyWithoutParam(t *testing.T) {
+	absent, _ := url.ParseQuery("week=2026-11-02")
+	explicit, _ := url.ParseQuery("week=2026-11-02&hidden=")
+
+	if got := parsePrintOptions(absent, 0, nil, hiddenOnly).Hidden; got != hiddenOnly {
+		t.Errorf("without hidden: mode = %d, want the fallback %d", got, hiddenOnly)
+	}
+	if got := parsePrintOptions(explicit, 0, nil, hiddenOnly).Hidden; got != hiddenSkip {
+		t.Errorf("with an empty hidden: mode = %d, want %d (Bez ukrytych chosen)", got, hiddenSkip)
+	}
+}
+
+func TestPrintRemembersHiddenChoice(t *testing.T) {
+	h := newTestHandler(t, dayPrintNow)
+	seedIntention(t, h.db, "2026-11-04 18:00", false, "+ Jan Kowalski")
+	seedHidden(t, h.db, "2026-11-04 18:00", "+ Anna Nowak")
+
+	saved := func() string {
+		t.Helper()
+		setting, err := settings.Load(h.db)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return setting.PrintHidden
+	}
+
+	getPrint(t, h, "/print?week=2026-11-02&day=2026-11-04&hidden=only")
+	if got := saved(); got != "only" {
+		t.Fatalf("saved = %q, want %q", got, "only")
+	}
+
+	body := getPrint(t, h, "/print?week=2026-11-02").Body.String()
+	for _, want := range []string{
+		`<input type="radio" id="p-hidden-2" name="hidden" value="only" checked data-autosubmit>`,
+		`src="/pdf?week=2026-11-02&amp;hidden=only"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("week print after reopening does not contain %q", want)
+		}
+	}
+
+	body = getPrint(t, h, "/print?week=2026-11-02&day=2026-11-03").Body.String()
+	if !strings.Contains(body, `src="/pdf?week=2026-11-02&amp;day=2026-11-03"`) {
+		t.Error("a day without hidden intentions should not print an empty page for the remembered Tylko ukryte")
+	}
+	if got := saved(); got != "only" {
+		t.Errorf("saved = %q after opening a day without hidden intentions, want it unchanged", got)
+	}
+
+	getPrint(t, h, "/print?week=2026-11-02&hidden=")
+	if got := saved(); got != "" {
+		t.Errorf("saved = %q after choosing Bez ukrytych, want empty", got)
+	}
+	getPrint(t, h, "/print?week=2026-11-02&hidden=1")
+	if got := saved(); got != "1" {
+		t.Errorf("saved = %q after choosing Z ukrytymi, want %q", got, "1")
+	}
+
+	if rec := getPDF(t, h, "/pdf?week=2026-11-02&day=2026-11-04"); rec.Header().Get("Content-Disposition") != `inline; filename="intencje-2026-11-04.pdf"` {
+		t.Errorf("pdf without hidden used the remembered choice: %q", rec.Header().Get("Content-Disposition"))
 	}
 }

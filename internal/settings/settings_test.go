@@ -239,3 +239,32 @@ func TestQuickAmountsColumnIsJSON(t *testing.T) {
 		t.Errorf("quick_amounts column = %q, want %q", raw, "[5000,15050]")
 	}
 }
+
+func TestSavePrintHiddenKeepsOtherSettings(t *testing.T) {
+	db := newTestDB(t)
+
+	err := SaveParish(db, Setting{ParishName: "Parafia św. Jana"})
+	if err != nil {
+		t.Fatalf("SaveParish: %v", err)
+	}
+	err = SaveSchedule(db, 3)
+	if err != nil {
+		t.Fatalf("SaveSchedule: %v", err)
+	}
+	err = SavePrintHidden(db, "only")
+	if err != nil {
+		t.Fatalf("SavePrintHidden: %v", err)
+	}
+	err = SaveParish(db, Setting{ParishName: "Parafia św. Jana"})
+	if err != nil {
+		t.Fatalf("SaveParish: %v", err)
+	}
+
+	got, err := Load(db)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got.PrintHidden != "only" || got.ParishName != "Parafia św. Jana" || got.SelectedScheduleID != 3 {
+		t.Errorf("setting = %+v, want PrintHidden only, the parish name and schedule 3 kept", got)
+	}
+}

@@ -198,13 +198,13 @@ func TestParsePrintOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		query, _ := url.ParseQuery(tt.raw)
-		got := parsePrintOptions(query, 2, schedules)
+		got := parsePrintOptions(query, 2, schedules, hiddenSkip)
 		if got != tt.want {
 			t.Errorf("parse(%q) = %+v, want %+v", tt.raw, got, tt.want)
 		}
 
 		again, _ := url.ParseQuery(got.query("2026-11-02"))
-		if back := parsePrintOptions(again, 2, schedules); back != got {
+		if back := parsePrintOptions(again, 2, schedules, hiddenSkip); back != got {
 			t.Errorf("query(%+v) does not round-trip: %+v", got, back)
 		}
 	}

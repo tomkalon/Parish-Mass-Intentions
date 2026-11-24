@@ -75,14 +75,16 @@ func TestSearchMassOpensPanelThatReturnsToSearch(t *testing.T) {
 		`<input type="hidden" name="from" value="search">`,
 		`Z wyszukiwania – po zapisaniu wrócisz do wyników.`,
 		`<a class="button" href="`+html.EscapeString(back)+`" data-discard>Anuluj</a>`,
-		`<a class="button button-back" href="`+html.EscapeString(back)+`" data-discard>`,
-		`<a class="button button-back toolbar-back" href="`+html.EscapeString(back)+`" title="Wróć do wyników wyszukiwania bez zapisywania" data-discard>`,
+		`<a class="button button-primary button-return" href="`+html.EscapeString(back)+`" data-discard>`,
+		`<div class="toolbar-return">
+			<a class="button button-primary button-return" href="`+html.EscapeString(back)+`" title="Wróć do wyników wyszukiwania bez zapisywania" data-discard>`,
 	)
-	if strings.Index(panel, "toolbar-back") > strings.Index(panel, "toolbar-print") || strings.Index(panel, "toolbar-back") < strings.Index(panel, "toolbar-gregorian") {
-		t.Error("the way back to search is not between the view icons and Drukuj")
+	toolbarEnd := strings.Index(panel, "</nav>")
+	if i := strings.Index(panel, "toolbar-return"); i < strings.Index(panel, `aria-label="Ustawienia"`) || i > toolbarEnd {
+		t.Error("the way back to search is not on its own line at the end of the toolbar")
 	}
 
-	if plain := getWeek(t, h, "/?day=2026-12-01&new=1&time=18%3A00&week=2026-11-30").Body.String(); strings.Contains(plain, `name="from"`) || strings.Contains(plain, "toolbar-back") {
+	if plain := getWeek(t, h, "/?day=2026-12-01&new=1&time=18%3A00&week=2026-11-30").Body.String(); strings.Contains(plain, `name="from"`) || strings.Contains(plain, "toolbar-return") {
 		t.Error("panel opened from the week offers a way back to search")
 	}
 }

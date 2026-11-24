@@ -234,6 +234,9 @@ func TestPrepareImportMigratesOldSchema(t *testing.T) {
 	if !migrated.Migrator().HasColumn(&intentions.Intention{}, "SeriesID") || !migrated.Migrator().HasTable("gregorian_series") {
 		t.Error("intentions.series_id or the gregorian_series table missing after PrepareImport")
 	}
+	if !migrated.Migrator().HasColumn(&intentions.Intention{}, "FixedID") || !migrated.Migrator().HasTable("fixed_intentions") {
+		t.Error("intentions.fixed_id or the fixed_intentions table missing after PrepareImport")
+	}
 	if !migrated.Migrator().HasColumn(&intentions.Intention{}, "Amount") {
 		t.Fatal("intentions.amount missing after PrepareImport")
 	}
@@ -336,6 +339,47 @@ func TestRestoreCopiesPayments(t *testing.T) {
 	}
 	if !slices.Equal(setting.QuickAmounts, quick) {
 		t.Errorf("restored quick amounts = %v, want %v", setting.QuickAmounts, quick)
+	}
+}
+
+func TestRestoreCopiesFixedIntentions(t *testing.T) {
+	dir := t.TempDir()
+	db := openTestDB(t, filepath.Join(dir, "data.db"))
+
+	importPath := filepath.Join(dir, "import.db")
+	source := openTestDB(t, importPath)
+	id, err := masses.Save(source, masses.Schedule{Name: "Dni powszednie", Masses: [7][]string{time.Wednesday: {"18:00"}}})
+	if err != nil {
+		t.Fatalf("saving schedule: %v", err)
+	}
+	fixed := masses.FixedIntention{ScheduleID: id, Weekday: time.Wednesday, Time: "18:00", Content: "Intencje nowennowe", IsDeceased: true}
+	err = masses.SaveFixed(source, &fixed)
+	if err != nil {
+		t.Fatalf("saving fixed intention: %v", err)
+	}
+	loaded := intentions.Intention{MassAt: time.Date(2026, 11, 4, 18, 0, 0, 0, intentions.TimeZone), Content: fixed.Content, FixedID: fixed.ID}
+	err = intentions.Save(source, &loaded)
+	if err != nil {
+		t.Fatalf("saving intention: %v", err)
+	}
+	mustClose(t, source)
+
+	err = Restore(db, importPath, filepath.Join(dir, "data.db.bak"))
+	if err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+
+	schedule, err := masses.Find(db, id)
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if len(schedule.Fixed) != 1 || schedule.Fixed[0] != fixed {
+		t.Errorf("restored fixed = %+v, want %+v", schedule.Fixed, fixed)
+	}
+	var restored intentions.Intention
+	err = db.First(&restored).Error
+	if err != nil || restored.FixedID != fixed.ID {
+		t.Errorf("restored intention = %+v (%v), want fixed_id %d", restored, err, fixed.ID)
 	}
 }
 

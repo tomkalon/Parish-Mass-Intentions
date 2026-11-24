@@ -35,6 +35,7 @@ type Schedule struct {
 	ID     int
 	Name   string
 	Masses [7][]string
+	Fixed  []FixedIntention
 }
 
 func Default() ([]Schedule, error) {

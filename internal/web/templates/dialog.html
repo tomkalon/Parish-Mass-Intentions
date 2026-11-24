@@ -1,0 +1,13 @@
+{{define "dialog" -}}
+<div class="dialog-backdrop">
+		<div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dialog-title" aria-describedby="dialog-content">
+			<h2 class="dialog-title" id="dialog-title">{{.Title}}</h2>
+			<p class="dialog-content" id="dialog-content">{{.Text}}</p>
+			<form class="dialog-actions" method="post" action="{{.Action}}">
+				<input type="hidden" name="week" value="{{.Week}}">
+				<button class="button {{if .Safe}}button-primary{{else}}button-danger{{end}}" type="submit">{{.Button}}</button>
+				<a class="button" href="{{.CloseURL}}" data-close autofocus>Anuluj</a>
+			</form>
+		</div>
+	</div>
+{{- end}}

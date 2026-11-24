@@ -13,9 +13,10 @@ var (
 
 type scheduleRow struct {
 	ID       int
-	Name     string    `gorm:"not null;uniqueIndex"`
-	Position int       `gorm:"not null"`
-	Masses   []massRow `gorm:"foreignKey:ScheduleID"`
+	Name     string           `gorm:"not null;uniqueIndex"`
+	Position int              `gorm:"not null"`
+	Masses   []massRow        `gorm:"foreignKey:ScheduleID"`
+	Fixed    []FixedIntention `gorm:"foreignKey:ScheduleID"`
 }
 
 func (scheduleRow) TableName() string {
@@ -34,7 +35,7 @@ func (massRow) TableName() string {
 }
 
 func Migrate(db *gorm.DB) error {
-	return db.AutoMigrate(&scheduleRow{}, &massRow{}, &loadedWeek{})
+	return db.AutoMigrate(&scheduleRow{}, &massRow{}, &FixedIntention{}, &loadedWeek{})
 }
 
 func Load(db *gorm.DB) ([]Schedule, error) {
@@ -100,7 +101,12 @@ func Save(db *gorm.DB, s Schedule) (int, error) {
 			}
 		}
 
-		return insertMasses(tx, s.ID, s.Masses)
+		err = insertMasses(tx, s.ID, s.Masses)
+		if err != nil {
+			return err
+		}
+
+		return deleteOrphans(tx, s.ID, s.Masses)
 	})
 
 	return s.ID, err
@@ -116,6 +122,11 @@ func NameTaken(db *gorm.DB, name string, exceptID int) (bool, error) {
 func Delete(db *gorm.DB, id int) error {
 	return db.Transaction(func(tx *gorm.DB) error {
 		err := tx.Where("schedule_id = ?", id).Delete(&massRow{}).Error
+		if err != nil {
+			return err
+		}
+
+		err = tx.Where("schedule_id = ?", id).Delete(&FixedIntention{}).Error
 		if err != nil {
 			return err
 		}
@@ -146,7 +157,12 @@ func SeedDefaults(db *gorm.DB) error {
 
 func RestoreDefaults(db *gorm.DB) error {
 	return db.Transaction(func(tx *gorm.DB) error {
-		err := tx.Where("1 = 1").Delete(&massRow{}).Error
+		err := tx.Where("1 = 1").Delete(&FixedIntention{}).Error
+		if err != nil {
+			return err
+		}
+
+		err = tx.Where("1 = 1").Delete(&massRow{}).Error
 		if err != nil {
 			return err
 		}
@@ -210,15 +226,22 @@ func nextPosition(tx *gorm.DB) (int, error) {
 }
 
 func withMasses(db *gorm.DB) *gorm.DB {
-	return db.Preload("Masses", func(tx *gorm.DB) *gorm.DB {
-		return tx.Order("weekday, time")
-	})
+	return db.
+		Preload("Masses", func(tx *gorm.DB) *gorm.DB {
+			return tx.Order("weekday, time")
+		}).
+		Preload("Fixed", func(tx *gorm.DB) *gorm.DB {
+			return tx.Order("weekday, time, id")
+		})
 }
 
 func (row scheduleRow) schedule() Schedule {
 	s := Schedule{ID: row.ID, Name: row.Name}
 	for _, mass := range row.Masses {
 		s.Masses[mass.Weekday] = append(s.Masses[mass.Weekday], mass.Time)
+	}
+	if len(row.Fixed) > 0 {
+		s.Fixed = row.Fixed
 	}
 
 	return s

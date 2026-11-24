@@ -48,6 +48,12 @@
 				{{- end}}
 			</a>
 		</div>
+		{{- with .Form}}{{if .FromSearch}}
+		<a class="button button-back toolbar-back" href="{{.CloseURL}}" title="Wróć do wyników wyszukiwania bez zapisywania" data-discard>
+			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
+			Wyniki
+		</a>
+		{{- end}}{{end}}
 		<a class="button toolbar-print" href="{{.PrintURL}}" title="Wydruk tego tygodnia">
 			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7 8.5v-5h10v5M7 17H5a2 2 0 0 1-2-2v-4.5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2V15a2 2 0 0 1-2 2h-2"/><rect x="7" y="13.5" width="10" height="7" rx="1"/></svg>
 			<span class="toolbar-print-label">Drukuj</span>
@@ -114,7 +120,7 @@
 					<option value="{{.ID}}"{{if eq .ID $.SelectedScheduleID}} selected{{end}}>{{.Name}}</option>
 					{{- end}}
 				</select>
-				<button class="bar-action" type="submit" title="Wczytaj godziny Mszy z wybranego porządku na ten tydzień">
+				<button class="bar-action" type="submit" title="Wczytaj godziny Mszy i stałe intencje z wybranego porządku na ten tydzień">
 					<span class="bar-action-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></span>
 					<span class="bar-action-text">Wczytaj<br>godziny Mszy</span>
 				</button>

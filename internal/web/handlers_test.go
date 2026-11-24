@@ -1860,7 +1860,7 @@ func TestWeekShowsImportButton(t *testing.T) {
 				<input type="hidden" name="week" value="2026-11-02">
 				<button class="bar-action" type="submit" title="Pobierz wspomnienia i święta z GCatholic.org (wymaga internetu)">`,
 		`<span class="bar-action-text">Pobierz święta<br>i wspomnienia</span>`,
-		`<button class="bar-action" type="submit" title="Wczytaj godziny Mszy z wybranego porządku na ten tydzień">`,
+		`<button class="bar-action" type="submit" title="Wczytaj godziny Mszy i stałe intencje z wybranego porządku na ten tydzień">`,
 		`<span class="bar-action-text">Wczytaj<br>godziny Mszy</span>`,
 	)
 	if strings.Contains(body, "week-alert") {

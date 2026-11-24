@@ -28,8 +28,26 @@
 		</div>
 		{{- end}}
 
+		{{- with .Drops}}
+		<div class="form-alert form-confirm" role="alert">
+			<span class="form-alert-icon" aria-hidden="true">!</span>
+			<div>
+				<p>Nie zapisano. Tych Mszy nie ma już w porządku, więc zapisanie usunie przypięte do nich stałe intencje:</p>
+				<ul class="drop-list">
+					{{- range .}}
+					<li>{{.Label}}</li>
+					{{- end}}
+				</ul>
+				<p>Kliknij „Zapisz” jeszcze raz, aby potwierdzić, albo przywróć te godziny.</p>
+			</div>
+		</div>
+		{{- end}}
+
 		<form class="settings-form" method="post" action="{{.Action}}">
 			<input type="hidden" name="week" value="{{.Week}}">
+			{{- range .Drops}}
+			<input type="hidden" name="drop" value="{{.ID}}">
+			{{- end}}
 
 			<fieldset class="settings-section">
 				<legend>Porządek</legend>

@@ -14,6 +14,7 @@ type Intention struct {
 	Amount          Grosze    `json:"amount" gorm:"not null;default:0"`
 	SeriesID        int       `json:"series_id" gorm:"index:idx_intentions_series_mass,priority:1;not null;default:0"`
 	AcceptedOn      string    `json:"accepted_on" gorm:"not null;default:''"`
+	FixedID         int       `json:"fixed_id" gorm:"not null;default:0"`
 }
 
 type Input struct {

@@ -21,7 +21,9 @@ var formWeekdays = []time.Weekday{time.Monday, time.Tuesday, time.Wednesday, tim
 type scheduleItem struct {
 	Name      string
 	Summary   string
+	Fixed     string
 	EditURL   string
+	FixedURL  string
 	DeleteURL string
 }
 
@@ -41,7 +43,9 @@ func scheduleItems(schedules []masses.Schedule, week string) []scheduleItem {
 		items = append(items, scheduleItem{
 			Name:      s.Name,
 			Summary:   scheduleSummary(s),
+			Fixed:     fixedSummary(s.Fixed),
 			EditURL:   withWeek("/settings/schedules/"+strconv.Itoa(s.ID), week),
+			FixedURL:  fixedPageURL(s.ID, week),
 			DeleteURL: withWeek("/settings?delete_schedule="+strconv.Itoa(s.ID), week),
 		})
 	}
@@ -75,6 +79,15 @@ func scheduleSummary(s masses.Schedule) string {
 	return strings.Join(parts, " · ")
 }
 
+func scheduleDeleteText(s masses.Schedule) string {
+	text := fmt.Sprintf("„%s” (%s).", s.Name, scheduleSummary(s))
+	if n := len(s.Fixed); n > 0 {
+		text += fmt.Sprintf(" Jego stałe intencje (%d) też zostaną usunięte.", n)
+	}
+
+	return text + " Intencje i godziny już wczytane do tygodni zostaną bez zmian."
+}
+
 func displayTimes(times []string) string {
 	shown := make([]string, 0, len(times))
 	for _, t := range times {
@@ -91,6 +104,7 @@ type scheduleFormView struct {
 	BackURL string
 	Name    string
 	Days    []scheduleDay
+	Drops   []fixedDrop
 	Errors  map[string]string
 	Topbar  topbarView
 }

@@ -751,6 +751,47 @@ func TestRoutesTrackChanges(t *testing.T) {
 	}
 }
 
+func TestFixedIntentionRoutesTrackChanges(t *testing.T) {
+	db := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone)).db
+	backups, err := backup.Load(db, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = backups.SetDir(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	router := chi.NewRouter()
+	RegisterRoutes(router, db, Options{DataDir: t.TempDir(), Backups: backups})
+	serve := func(target string, form url.Values) int {
+		req := httptest.NewRequest(http.MethodPost, target, strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	for _, request := range []struct {
+		target string
+		form   url.Values
+	}{
+		{"/settings/schedules/1/fixed", url.Values{"mass": {"1-18:00"}, "content": {"Intencje nowennowe"}}},
+		{"/settings/schedules/1/fixed/1", url.Values{"mass": {"1-06:30"}, "content": {"Intencje nowennowe"}}},
+		{"/settings/schedules/1/fixed/1/delete", url.Values{}},
+	} {
+		if serve("/backup", url.Values{}) != http.StatusSeeOther || backups.Pending() {
+			t.Fatal("backup failed")
+		}
+		if code := serve(request.target, request.form); code != http.StatusSeeOther {
+			t.Fatalf("POST %s: status = %d, want %d", request.target, code, http.StatusSeeOther)
+		}
+		if !backups.Pending() {
+			t.Errorf("POST %s did not mark the data as changed", request.target)
+		}
+	}
+}
+
 func TestSetDailyBackupCopies(t *testing.T) {
 	h := newTestHandler(t, time.Date(2026, 10, 29, 10, 0, 0, 0, intentions.TimeZone))
 

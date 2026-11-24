@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="pl">
+<head>
+	<meta charset="utf-8">
+	<title>Stałe intencje – {{.ScheduleName}} – Go Parafia</title>
+	<link rel="icon" href="/static/logo.svg" type="image/svg+xml">
+	<link rel="stylesheet" href="/static/app.css">
+	<script src="/static/app.js" defer></script>
+</head>
+<body>
+	<header class="topbar"{{if .Dialog}} inert{{end}}>
+		{{template "topbar" .Topbar}}
+	</header>
+	{{- if and .Topbar.Draft (not .Dialog)}}
+	{{template "draftbar" .Topbar.Draft}}
+	{{- end}}
+	<nav class="toolbar" aria-label="Stałe intencje"{{if .Dialog}} inert{{end}}>
+		<a class="button" href="{{.BackURL}}" data-close>← Wróć do ustawień</a>
+	</nav>
+
+	<main class="settings"{{if .Dialog}} inert{{end}}>
+		<div class="fixed-head">
+			<h1>Stałe intencje</h1>
+			<p class="fixed-schedule">Porządek: <strong>{{.ScheduleName}}</strong></p>
+			<p class="hint">Intencje, które są przy tej Mszy w każdym tygodniu. Program dodaje je do tygodnia razem z godzinami Mszy (przycisk „Wczytaj godziny Mszy”). Ponowne wczytanie ich nie podwaja, a w tygodniu można je zmienić lub usunąć jak każdą intencję.</p>
+		</div>
+
+		<section class="settings-section" aria-labelledby="fixed-masses-title">
+			<h2 class="settings-heading" id="fixed-masses-title">Msze</h2>
+			{{- range .Days}}
+			<div class="fixed-day">
+				<h3 class="fixed-day-name">{{.Label}}</h3>
+				{{- range .Masses}}
+				<div class="fixed-mass" id="{{.Anchor}}">
+					<span class="fixed-time">{{.Time}}</span>
+					<div class="fixed-list">
+						{{- range .Intentions}}
+						<div class="fixed-item{{if .Editing}} is-editing{{end}}">
+							<p class="fixed-content">{{if .IsOutsideParish}}<span class="badge badge-outside">poza parafią</span> {{end}}{{.Content}}{{template "badges" .}}</p>
+							<span class="settings-row-actions">
+								<a class="link-action" href="{{.EditURL}}" aria-label="Zmień stałą intencję {{.Content}}">Zmień</a>
+								<a class="link-action is-danger" href="{{.DeleteURL}}" aria-label="Usuń stałą intencję {{.Content}}">Usuń</a>
+							</span>
+						</div>
+						{{- end}}
+						<a class="link-action fixed-add" href="{{.AddURL}}">+ Dodaj</a>
+					</div>
+				</div>
+				{{- end}}
+			</div>
+			{{- else}}
+			<p class="empty">Ten porządek nie ma jeszcze żadnej Mszy. Najpierw dodaj godziny w ustawieniach („Zmień”).</p>
+			{{- end}}
+		</section>
+
+		{{- if .Masses}}
+		<form class="settings-form" id="formularz" method="post" action="{{.Action}}">
+			<input type="hidden" name="week" value="{{.Week}}">
+
+			<fieldset class="settings-section">
+				<legend>{{.FormTitle}}</legend>
+
+				{{- if .Errors}}
+				<div class="form-alert" role="alert">
+					<span class="form-alert-icon" aria-hidden="true">!</span>
+					<p>Nie zapisano. Popraw zaznaczone pola — pozostałe dane zostały zachowane.</p>
+				</div>
+				{{- end}}
+
+				<div class="field">
+					<label class="label" for="mass">Msza</label>
+					<select class="select{{if .Errors.mass}} is-invalid{{end}}" id="mass" name="mass" required{{if .Errors.mass}} aria-invalid="true" aria-describedby="mass-error"{{end}}>
+						<option value="">wybierz</option>
+						{{- range .Masses}}
+						<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
+						{{- end}}
+					</select>
+					{{- with .Errors.mass}}
+					<p class="field-error" id="mass-error">{{.}}</p>
+					{{- end}}
+				</div>
+
+				<div class="field">
+					<label class="label" for="content">Treść intencji</label>
+					<textarea class="textarea{{if .Errors.content}} is-invalid{{end}}" id="content" name="content" maxlength="{{.MaxLength}}" required{{if .Errors.content}} aria-invalid="true" aria-describedby="content-error"{{end}}>{{.Content}}</textarea>
+					{{- with .Errors.content}}
+					<p class="field-error" id="content-error">{{.}}</p>
+					{{- end}}
+				</div>
+
+				<div class="checkboxes">
+					<label class="checkbox"><input type="checkbox" name="outside"{{if .IsOutsideParish}} checked{{end}}> Poza parafią</label>
+					<label class="checkbox"><input type="checkbox" name="deceased"{{if .IsDeceased}} checked{{end}}> Za zmarłych</label>
+					<label class="checkbox checkbox-print"><input type="checkbox" name="hidden"{{if .IsHidden}} checked{{end}}> Ukryj na wydruku</label>
+				</div>
+
+				<div class="schedule-actions">
+					<button class="button button-primary" type="submit">Zapisz</button>
+					{{- if .Editing}}
+					<a class="button" href="{{.CancelURL}}">Anuluj</a>
+					{{- end}}
+				</div>
+			</fieldset>
+		</form>
+		{{- end}}
+	</main>
+
+	{{- with .Dialog}}
+	{{template "dialog" .}}
+	{{- end}}
+</body>
+</html>

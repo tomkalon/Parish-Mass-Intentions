@@ -47,9 +47,11 @@ var searchTemplate = template.Must(template.ParseFS(templateFS, "templates/searc
 
 var printTemplate = template.Must(template.ParseFS(templateFS, "templates/print.html"))
 
-var settingsTemplate = template.Must(template.ParseFS(templateFS, "templates/settings.html", "templates/topbar.html"))
+var settingsTemplate = template.Must(template.ParseFS(templateFS, "templates/settings.html", "templates/topbar.html", "templates/dialog.html"))
 
 var scheduleTemplate = template.Must(template.ParseFS(templateFS, "templates/schedule.html", "templates/topbar.html"))
+
+var fixedTemplate = template.Must(template.ParseFS(templateFS, "templates/fixed.html", "templates/topbar.html", "templates/dialog.html", "templates/badges.html"))
 
 var startTemplate = template.Must(template.ParseFS(templateFS, "templates/start.html", "templates/topbar.html"))
 
@@ -125,6 +127,9 @@ func RegisterRoutes(router chi.Router, db *gorm.DB, opts Options) {
 		r.Post("/settings/schedules/restore", h.restoreSchedules)
 		r.Post("/settings/schedules/{id}", h.saveSchedule)
 		r.Post("/settings/schedules/{id}/delete", h.deleteSchedule)
+		r.Post("/settings/schedules/{id}/fixed", h.saveFixed)
+		r.Post("/settings/schedules/{id}/fixed/{fid}", h.saveFixed)
+		r.Post("/settings/schedules/{id}/fixed/{fid}/delete", h.deleteFixed)
 		r.Post("/settings/import/confirm", h.confirmImport)
 	})
 
@@ -139,6 +144,7 @@ func RegisterRoutes(router chi.Router, db *gorm.DB, opts Options) {
 	router.Get("/settings", h.settingsPage)
 	router.Get("/settings/schedules/new", h.scheduleForm)
 	router.Get("/settings/schedules/{id}", h.scheduleForm)
+	router.Get("/settings/schedules/{id}/fixed", h.fixedPage)
 	router.Post("/settings/export", h.exportData)
 	router.Post("/settings/import", h.importData)
 	router.Post("/settings/backup/dir", h.setBackupDir)
@@ -566,7 +572,7 @@ func (h *handler) settingsPage(w http.ResponseWriter, r *http.Request) {
 
 		view.Dialog = &settingsDialog{
 			Title:    "Usunąć porządek mszy?",
-			Text:     fmt.Sprintf("„%s” (%s). Intencje i godziny już wczytane do tygodni zostaną bez zmian.", schedule.Name, scheduleSummary(schedule)),
+			Text:     scheduleDeleteText(schedule),
 			Action:   "/settings/schedules/" + strconv.Itoa(id) + "/delete",
 			Button:   "Usuń porządek",
 			Week:     view.Week,
@@ -575,7 +581,7 @@ func (h *handler) settingsPage(w http.ResponseWriter, r *http.Request) {
 	case query.Get("restore") == "1":
 		view.Dialog = &settingsDialog{
 			Title:    "Przywrócić domyślne porządki?",
-			Text:     "Wszystkie porządki mszy zostaną zastąpione domyślnymi z programu. Własne zmiany w porządkach przepadną.",
+			Text:     "Wszystkie porządki mszy zostaną zastąpione domyślnymi z programu. Własne zmiany w porządkach i stałe intencje przepadną.",
 			Action:   "/settings/schedules/restore",
 			Button:   "Przywróć domyślne",
 			Week:     view.Week,
@@ -702,7 +708,25 @@ func (h *handler) saveSchedule(w http.ResponseWriter, r *http.Request) {
 			errs["name"] = duplicateScheduleMessage
 		}
 	}
-	if len(errs) == 0 {
+	var drops []fixedDrop
+	if len(errs) == 0 && id != 0 {
+		current, err := masses.Find(h.db, id)
+		switch {
+		case errors.Is(err, masses.ErrScheduleNotFound):
+			http.Error(w, "nie znaleziono porządku mszy", http.StatusNotFound)
+			return
+		case err != nil:
+			log.Printf("error loading schedule %d: %v", id, err)
+			serverError(w)
+			return
+		}
+
+		orphans := masses.Orphans(current.Fixed, schedule.Masses)
+		if unconfirmedDrops(orphans, r.PostForm["drop"]) {
+			drops = fixedDrops(orphans)
+		}
+	}
+	if len(errs) == 0 && len(drops) == 0 {
 		_, err = masses.Save(h.db, schedule)
 		switch {
 		case errors.Is(err, masses.ErrDuplicateName):
@@ -717,14 +741,17 @@ func (h *handler) saveSchedule(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if len(errs) > 0 {
+	if len(errs) > 0 || len(drops) > 0 {
 		view := newScheduleFormView(schedule, week)
 		view.Name = r.PostForm.Get("name")
 		for i := range view.Days {
 			view.Days[i].Value = r.PostForm.Get(view.Days[i].Field)
 			view.Days[i].Error = errs[view.Days[i].Field]
 		}
-		view.Errors = errs
+		if len(errs) > 0 {
+			view.Errors = errs
+		}
+		view.Drops = drops
 		h.renderSchedule(w, http.StatusUnprocessableEntity, view)
 		return
 	}
@@ -999,10 +1026,25 @@ func (h *handler) createSlots(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slots := schedule.Slots(start, existing)
+	var placeholders, fixed []intentions.Intention
+	for _, slot := range schedule.Slots(start, existing) {
+		if slot.IsPlaceholder {
+			placeholders = append(placeholders, slot)
+		} else {
+			fixed = append(fixed, slot)
+		}
+	}
+
 	err = h.db.Transaction(func(tx *gorm.DB) error {
-		if len(slots) > 0 {
-			err := tx.Create(&slots).Error
+		if len(placeholders) > 0 {
+			err := tx.Create(&placeholders).Error
+			if err != nil {
+				return err
+			}
+		}
+
+		for i := range fixed {
+			err := intentions.Save(tx, &fixed[i])
 			if err != nil {
 				return err
 			}

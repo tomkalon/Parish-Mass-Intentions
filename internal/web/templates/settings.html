@@ -143,7 +143,7 @@
 				<section class="settings-section schedules" id="porzadki" aria-labelledby="schedules-title">
 					<header class="settings-section-head">
 						<h2 class="settings-heading" id="schedules-title">Porządki Mszy</h2>
-						<p class="hint">Godziny Mszy wczytywane przyciskiem „Wczytaj godziny mszy” w widoku tygodnia.</p>
+						<p class="hint">Godziny Mszy i stałe intencje wczytywane przyciskiem „Wczytaj godziny Mszy” w widoku tygodnia.</p>
 					</header>
 					<div class="settings-list">
 						{{- range .Schedules}}
@@ -151,9 +151,13 @@
 							<div>
 								<p class="schedule-name">{{.Name}}</p>
 								<p class="schedule-summary">{{.Summary}}</p>
+								{{- with .Fixed}}
+								<p class="schedule-fixed" title="{{.}}">Stałe intencje: {{.}}</p>
+								{{- end}}
 							</div>
 							<span class="settings-row-actions">
 								<a class="link-action" href="{{.EditURL}}" aria-label="Zmień porządek {{.Name}}">Zmień</a>
+								<a class="link-action" href="{{.FixedURL}}" aria-label="Stałe intencje porządku {{.Name}}">Stałe intencje</a>
 								<a class="link-action is-danger" href="{{.DeleteURL}}" aria-label="Usuń porządek {{.Name}}">Usuń</a>
 							</span>
 						</div>
@@ -334,17 +338,7 @@
 	{{- end}}
 
 	{{- with .Dialog}}
-	<div class="dialog-backdrop">
-		<div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dialog-title" aria-describedby="dialog-content">
-			<h2 class="dialog-title" id="dialog-title">{{.Title}}</h2>
-			<p class="dialog-content" id="dialog-content">{{.Text}}</p>
-			<form class="dialog-actions" method="post" action="{{.Action}}">
-				<input type="hidden" name="week" value="{{.Week}}">
-				<button class="button {{if .Safe}}button-primary{{else}}button-danger{{end}}" type="submit">{{.Button}}</button>
-				<a class="button" href="{{.CloseURL}}" data-close autofocus>Anuluj</a>
-			</form>
-		</div>
-	</div>
+	{{template "dialog" .}}
 	{{- end}}
 </body>
 </html>

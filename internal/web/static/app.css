@@ -2328,6 +2328,12 @@ h1 {
 	white-space: nowrap;
 }
 
+@media (max-width: 1439px) {
+	.toolbar:has(.toolbar-back) .toolbar-add {
+		display: none;
+	}
+}
+
 [hidden] {
 	display: none !important;
 }

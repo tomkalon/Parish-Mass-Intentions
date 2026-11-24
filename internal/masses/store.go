@@ -2,6 +2,7 @@ package masses
 
 import (
 	"errors"
+	"slices"
 
 	"gorm.io/gorm"
 )
@@ -35,7 +36,14 @@ func (massRow) TableName() string {
 }
 
 func Migrate(db *gorm.DB) error {
-	return db.AutoMigrate(&scheduleRow{}, &massRow{}, &FixedIntention{}, &loadedWeek{})
+	firstFixed := !db.Migrator().HasTable(&FixedIntention{})
+
+	err := db.AutoMigrate(&scheduleRow{}, &massRow{}, &FixedIntention{}, &loadedWeek{})
+	if err != nil || !firstFixed {
+		return err
+	}
+
+	return addDefaultFixed(db)
 }
 
 func Load(db *gorm.DB) ([]Schedule, error) {
@@ -192,9 +200,63 @@ func insertDefaults(tx *gorm.DB) error {
 		if err != nil {
 			return err
 		}
+
+		err = insertFixed(tx, id, s.Fixed)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
+}
+
+func insertFixed(tx *gorm.DB, scheduleID int, fixed []FixedIntention) error {
+	if len(fixed) == 0 {
+		return nil
+	}
+
+	rows := slices.Clone(fixed)
+	for i := range rows {
+		rows[i].ID = 0
+		rows[i].ScheduleID = scheduleID
+	}
+
+	return tx.Create(&rows).Error
+}
+
+func addDefaultFixed(db *gorm.DB) error {
+	defaults, err := Default()
+	if err != nil {
+		return err
+	}
+
+	return db.Transaction(func(tx *gorm.DB) error {
+		schedules, err := Load(tx)
+		if err != nil {
+			return err
+		}
+
+		for _, s := range schedules {
+			i := slices.IndexFunc(defaults, func(d Schedule) bool { return d.Name == s.Name })
+			if i < 0 {
+				continue
+			}
+
+			var fixed []FixedIntention
+			for _, f := range defaults[i].Fixed {
+				if s.HasMass(f.Weekday, f.Time) {
+					fixed = append(fixed, f)
+				}
+			}
+
+			err = insertFixed(tx, s.ID, fixed)
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
 }
 
 func insertSchedule(tx *gorm.DB, name string, position int) (int, error) {

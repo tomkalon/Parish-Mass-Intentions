@@ -75,7 +75,9 @@ func TestSearchMassOpensPanelThatReturnsToSearch(t *testing.T) {
 		`<input type="hidden" name="from" value="search">`,
 		`Z wyszukiwania – po zapisaniu wrócisz do wyników.`,
 		`<a class="button" href="`+html.EscapeString(back)+`" data-discard>Anuluj</a>`,
-		`<a class="button button-primary button-return" href="`+html.EscapeString(back)+`" data-discard>`,
+		`<div class="form-from-search">
+				<p>Z wyszukiwania – po zapisaniu wrócisz do wyników.</p>
+				<a class="button button-primary button-return" href="`+html.EscapeString(back)+`" title="Wróć do wyników wyszukiwania bez zapisywania" data-discard>`,
 		`<div class="toolbar-return">
 			<a class="button button-primary button-return" href="`+html.EscapeString(back)+`" title="Wróć do wyników wyszukiwania bez zapisywania" data-discard>`,
 	)

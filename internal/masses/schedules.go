@@ -29,6 +29,16 @@ var defaultFile []byte
 type scheduleFile struct {
 	Name   string              `json:"name"`
 	Masses map[string][]string `json:"masses"`
+	Fixed  []fixedFile         `json:"fixed"`
+}
+
+type fixedFile struct {
+	Day      string `json:"day"`
+	Time     string `json:"time"`
+	Content  string `json:"content"`
+	Outside  bool   `json:"outside"`
+	Deceased bool   `json:"deceased"`
+	Hidden   bool   `json:"hidden"`
 }
 
 type Schedule struct {
@@ -96,6 +106,33 @@ func parseSchedule(file scheduleFile) (Schedule, error) {
 		if _, ok := file.Masses[name]; !ok {
 			return Schedule{}, fmt.Errorf("missing day %q", name)
 		}
+	}
+
+	for _, f := range file.Fixed {
+		day, ok := weekdays[f.Day]
+		if !ok {
+			return Schedule{}, fmt.Errorf("fixed intention: unknown day %q", f.Day)
+		}
+
+		times, err := parseTimes([]string{f.Time})
+		if err != nil {
+			return Schedule{}, fmt.Errorf("fixed intention: %w", err)
+		}
+		if !schedule.HasMass(day, times[0]) {
+			return Schedule{}, fmt.Errorf("fixed intention: no mass on %s at %s", f.Day, f.Time)
+		}
+		if strings.TrimSpace(f.Content) == "" {
+			return Schedule{}, fmt.Errorf("fixed intention on %s at %s without content", f.Day, f.Time)
+		}
+
+		schedule.Fixed = append(schedule.Fixed, FixedIntention{
+			Weekday:         day,
+			Time:            times[0],
+			Content:         f.Content,
+			IsOutsideParish: f.Outside,
+			IsDeceased:      f.Deceased,
+			IsHidden:        f.Hidden,
+		})
 	}
 
 	return schedule, nil

@@ -223,20 +223,103 @@ func TestDeleteScheduleDeletesFixed(t *testing.T) {
 	}
 }
 
-func TestRestoreDefaultsClearsFixed(t *testing.T) {
+func TestRestoreDefaultsReplacesFixed(t *testing.T) {
 	db := newTestDB(t)
 	id := saveSchedule(t, db, weekdaySchedule)
-	saveFixed(t, db, FixedIntention{ScheduleID: id, Weekday: time.Wednesday, Time: "18:00", Content: "Intencje nowennowe"})
+	saveFixed(t, db, FixedIntention{ScheduleID: id, Weekday: time.Wednesday, Time: "06:30", Content: "Własna"})
 
 	err := RestoreDefaults(db)
 	if err != nil {
 		t.Fatalf("RestoreDefaults: %v", err)
 	}
 
-	var count int64
-	err = db.Model(&FixedIntention{}).Count(&count).Error
-	if err != nil || count != 0 {
-		t.Errorf("fixed intentions = %d (%v), want 0", count, err)
+	for _, s := range load(t, db) {
+		want := []string{"Intencje nowennowe", "Intencje zbiorowe za zmarłych"}
+		if got := contents(s.Fixed); !slices.Equal(got, want) {
+			t.Errorf("%s: fixed = %q, want the defaults %q", s.Name, got, want)
+		}
+	}
+}
+
+func TestDefaultFixedIntentions(t *testing.T) {
+	defaults, err := Default()
+	if err != nil {
+		t.Fatalf("Default: %v", err)
+	}
+
+	want := []FixedIntention{
+		{Weekday: time.Wednesday, Time: "18:00", Content: "Intencje nowennowe"},
+		{Weekday: time.Friday, Time: "18:00", Content: "Intencje zbiorowe za zmarłych", IsDeceased: true},
+	}
+	for _, s := range defaults {
+		if !slices.Equal(s.Fixed, want) {
+			t.Errorf("%s: fixed = %+v, want %+v", s.Name, s.Fixed, want)
+		}
+	}
+}
+
+func TestSeedDefaultsAddsFixed(t *testing.T) {
+	db := newTestDB(t)
+
+	err := SeedDefaults(db)
+	if err != nil {
+		t.Fatalf("SeedDefaults: %v", err)
+	}
+
+	for _, s := range load(t, db) {
+		if len(s.Fixed) != 2 || s.Fixed[0].ScheduleID != s.ID || s.Fixed[0].ID == 0 {
+			t.Errorf("%s: fixed = %+v, want the two defaults stored for this schedule", s.Name, s.Fixed)
+		}
+	}
+}
+
+func TestMigrateAddsDefaultFixedOnce(t *testing.T) {
+	db := newTestDB(t)
+	err := db.Migrator().DropTable(&FixedIntention{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldSchedule := func(position int, s Schedule) int {
+		id, err := insertSchedule(db, s.Name, position)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = insertMasses(db, id, s.Masses)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	ordinary := oldSchedule(1, Schedule{Name: "Porządek zwykły", Masses: [7][]string{time.Wednesday: {"18:00"}, time.Friday: {"18:00"}}})
+	summer := oldSchedule(2, Schedule{Name: "Wakacje", Masses: [7][]string{time.Wednesday: {"19:00"}, time.Friday: {"18:00"}}})
+	own := oldSchedule(3, Schedule{Name: "Własny", Masses: [7][]string{time.Wednesday: {"18:00"}, time.Friday: {"18:00"}}})
+
+	err = Migrate(db)
+	if err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
+
+	if got := contents(find(t, db, ordinary).Fixed); !slices.Equal(got, []string{"Intencje nowennowe", "Intencje zbiorowe za zmarłych"}) {
+		t.Errorf("Porządek zwykły: fixed = %q, want both defaults", got)
+	}
+	if got := contents(find(t, db, summer).Fixed); !slices.Equal(got, []string{"Intencje zbiorowe za zmarłych"}) {
+		t.Errorf("Wakacje: fixed = %q, want only Friday (no Wednesday 18:00)", got)
+	}
+	if got := find(t, db, own).Fixed; got != nil {
+		t.Errorf("own schedule: fixed = %+v, want none (not a default schedule)", got)
+	}
+
+	first := find(t, db, ordinary).Fixed[0]
+	err = DeleteFixed(db, ordinary, first.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = Migrate(db)
+	if err != nil {
+		t.Fatalf("second Migrate: %v", err)
+	}
+	if got := contents(find(t, db, ordinary).Fixed); !slices.Equal(got, []string{"Intencje zbiorowe za zmarłych"}) {
+		t.Errorf("after deleting and migrating again: fixed = %q, want the deleted one to stay deleted", got)
 	}
 }
 

@@ -14,6 +14,22 @@ func scheduleJSON(name, sunday string) string {
 	return fmt.Sprintf(`{"name": %q, "masses": {%s, "niedziela": %s}}`, name, otherDays, sunday)
 }
 
+func fixedJSON(fixed string) string {
+	return fmt.Sprintf(`[{"name": "A", "masses": {%s, "niedziela": []}, "fixed": [%s]}]`, otherDays, fixed)
+}
+
+func TestParseSchedulesFixed(t *testing.T) {
+	got, err := ParseSchedules([]byte(fixedJSON(`{"day": "poniedziałek", "time": "6:30", "content": "Za parafian", "outside": true, "deceased": true, "hidden": true}`)))
+	if err != nil {
+		t.Fatalf("ParseSchedules: %v", err)
+	}
+
+	want := []FixedIntention{{Weekday: time.Monday, Time: "06:30", Content: "Za parafian", IsOutsideParish: true, IsDeceased: true, IsHidden: true}}
+	if !slices.Equal(got[0].Fixed, want) {
+		t.Errorf("fixed = %+v, want %+v", got[0].Fixed, want)
+	}
+}
+
 func TestParseSchedules(t *testing.T) {
 	data := "[" + scheduleJSON("Porządek zwykły", `["18:00", "7:00", "10:15"]`) + ", " + scheduleJSON("Wakacje", `[]`) + "]"
 
@@ -70,6 +86,11 @@ func TestParseSchedulesErrors(t *testing.T) {
 		{name: "not a quarter hour", data: "[" + scheduleJSON("A", `["6:10"]`) + "]", want: `not a full quarter hour "6:10"`},
 		{name: "duplicate time", data: "[" + scheduleJSON("A", `["18:00", "18:00"]`) + "]", want: `duplicate time "18:00"`},
 		{name: "duplicate after normalization", data: "[" + scheduleJSON("A", `["6:30", "06:30"]`) + "]", want: `duplicate time "06:30"`},
+		{name: "fixed on unknown day", data: fixedJSON(`{"day": "sroda", "time": "18:00", "content": "x"}`), want: `fixed intention: unknown day "sroda"`},
+		{name: "fixed with invalid time", data: fixedJSON(`{"day": "poniedziałek", "time": "18", "content": "x"}`), want: `fixed intention: invalid time "18"`},
+		{name: "fixed without its mass", data: fixedJSON(`{"day": "wtorek", "time": "18:00", "content": "x"}`), want: "fixed intention: no mass on wtorek at 18:00"},
+		{name: "fixed without content", data: fixedJSON(`{"day": "poniedziałek", "time": "18:00", "content": " "}`), want: "without content"},
+		{name: "fixed with unknown field", data: fixedJSON(`{"day": "poniedziałek", "time": "18:00", "content": "x", "gregorian": true}`), want: `unknown field "gregorian"`},
 	}
 
 	for _, tt := range tests {
